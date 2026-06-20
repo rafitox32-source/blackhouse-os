@@ -1,0 +1,27 @@
+📄 CONTRATO DE LICENCIA DE USUARIO FINAL (EULA) - BLACKHOUSE OS
+1. ACEPTACIÓN DE LOS TÉRMINOS
+Al instalar y utilizar BlackHouse OS (en adelante, "el Software"), el usuario (dueño de taller o técnico) acepta cumplir con todos los términos de este contrato. Si no está de acuerdo, debe cancelar la instalación.
+
+2. PROPIEDAD INTELECTUAL
+BlackHouse OS es propiedad intelectual de su desarrollador. Se otorga una licencia de uso personal/comercial, pero no el derecho de revender el código fuente, modificarlo sin autorización o distribuirlo como propio.
+
+3. RESPONSABILIDAD SOBRE LOS DATOS
+
+Privacidad: El Software utiliza servicios en la nube (Supabase) para el almacenamiento de datos. El usuario es responsable de mantener la confidencialidad de sus credenciales de acceso.
+
+Pérdida de Información: Aunque el sistema cuenta con respaldos en la nube, el desarrollador no se hace responsable por la pérdida accidental de datos debido a fallos de internet, eliminación manual por parte del usuario o ataques cibernéticos externos.
+
+4. LIMITACIÓN DE RESPONSABILIDAD (EQUIPOS FÍSICOS)
+El Software es una herramienta de gestión administrativa. El desarrollador de BlackHouse OS NO se hace responsable por:
+
+Daños físicos, pérdida o robo de equipos de clientes dentro del taller del usuario.
+
+Errores técnicos cometidos por el personal del taller durante la reparación de un equipo.
+
+Disputas legales entre el taller y sus clientes finales.
+
+5. USO DE LA VERSIÓN BETA
+Si el usuario utiliza la versión "Beta", acepta que el software puede contener errores menores y que su propósito es de prueba. El desarrollador se reserva el derecho de suspender el acceso a funciones específicas sin previo aviso.
+
+6. MODIFICACIONES Y ACTUALIZACIONES
+El desarrollador podrá lanzar actualizaciones para mejorar la seguridad o añadir funciones. Es responsabilidad del usuario mantener la aplicación actualizada para el correcto funcionamiento de la base de datos.
