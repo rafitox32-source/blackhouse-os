@@ -1,0 +1,57 @@
+589: <button class="bh-btn-purple" style="width:100%; height:45px; font-size:15px;" onclick="iniciarSesion()">Ingresar al Sistema</button>
+593: <button class="bh-btn-white" style="width:100%; margin-bottom: 15px; background:rgba(16, 185, 129, 0.1); border-color:var(--success); color:var(--success); font-weight:bold;" onclick="entrarModoBeta()">⚡ Probar MODO BETA</button>
+596: <button class="bh-btn-white" style="width:100%; border-color:var(--bh-purple); color:white;" onclick="mostrarRegistro()">+ Registrar mi Negocio</button>
+615: <button class="bh-btn-purple" style="width:100%; height:45px; font-size:15px; background: #10b981;" onclick="registrarNuevoNegocio()">Verificar y Crear Cuenta</button>
+616: <button class="bh-btn-white" style="width:100%; margin-top: 10px;" onclick="ocultarRegistro()">← Volver al Login</button>
+648: <button id="btn-quick-add" class="btn-glow" onclick="showView('recepcion', document.getElementById('nav-recep'))" title="Crear Orden">
+702: <button class="bh-btn-white" id="btn-timer" onclick="toggleTimer()" style="border-color:var(--info); color:var(--info);">▶ Iniciar Tiempo</button>
+724: <button class="bh-btn-white" style="margin-top: 8px; border-color: var(--bh-purple); color: var(--bh-purple);" onclick="consultarCopilotoLab()">
+745: <button class="bh-btn-purple" style="background:var(--success);" onclick="guardarReparacionLab()">✅ Marcar como Reparado</button>
+761: <button class="bh-btn-white" style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"><i class='bx bx-map-alt'></i> Visor de Esquemáticos</button>
+762: <button class="bh-btn-white" style="width:100%; margin-bottom:10px; text-align:left; padding:12px;" onclick="document.getElementById('modal-ohm').style.display='flex'">
+766: <button class="bh-btn-white" style="width:100%; text-align:left; padding:12px;"><i class='bx bx-hdd'></i> Repositorio de Firmware</button>
+767: <button class="bh-btn-purple" style="width:100%; margin-bottom:15px; text-align:left; padding:12px; background: linear-gradient(135deg, #10b981 0%, #047857 100%);" onclick="toggleChat()">
+802: <button id="btn-cam" class="bh-btn-white" onclick="toggleCamara()" style="font-size:11px;">Activar Cámara</button>
+814: <button class="bh-btn-purple" onclick="tomarFoto()">Capturar Evidencia ⚡</button>
+817: <button class="bh-btn-white" onclick="retomarFoto()">🗑️ Borrar y Tomar Otra</button>
+834: <button class="bh-btn-white" onclick="limpiarFirma()" style="font-size:11px; padding:5px 10px;">Borrar Firma ❌</button>
+838: <button class="bh-btn-purple" style="padding: 15px 40px; font-size:16px;" onclick="guardarOrden()">Generar Orden</button>
+846: <div style="display:flex; gap:10px;"><button class="bh-btn-white">Filtrar</button></div>
+861: <button class="bh-btn-purple" onclick="document.getElementById('modal-cliente').style.display='flex'">+ Nuevo</button>
+879: <button id="btn-add-prod" class="bh-btn-purple" onclick="showView('agregar-producto-view', null)">+ Agregar</button>
+893: <button onclick="showView('inventario', null)" style="background:none; border:none; color:var(--bh-purple); cursor:pointer; margin-bottom:20px; font-size:16px; display:flex; align-items:center; gap:5px;">← Volver</button>
+905: <button class="bh-btn-purple" onclick="guardarProducto()">Guardar</button>
+915: <button class="bh-btn-purple" style="background: linear-gradient(135deg, #10b981 0%, #047857 100%); font-size: 13px;" onclick="generarResumenIA()">
+918: <button class="bh-btn-white">Hoy</button>
+923: <button onclick="document.getElementById('ai-finance-box').style.display='none'" style="position: absolute; top: 15px; right: 15px; background: transparent; border: none; color: #aaa; font-size: 18px; cursor: pointer; transition: 0.3s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#aaa'">✖</button>
+929: <div style="display:flex; gap:10px;"><button class="bh-btn-white">Hoy</button></div>
+944: <button class="bh-btn-white" onclick="alert('Exportación en desarrollo')">📥 Exportar a Excel</button>
+1010: <button class="bh-btn-purple" onclick="guardarMiPerfil()">Guardar Mi Perfil</button>
+1042: <button class="bh-btn-purple" onclick="guardarDatosEmpresa()">Guardar Cambios</button>
+1059: <button class="bh-btn-purple" style="background: var(--success); height: 44px;" onclick="generarNuevaLicencia()">Generar Código</button>
+1066: <button class="bh-btn-white" id="btn-copiar-licencia" style="height: 46px; margin: 0; padding: 0 15px; border-color: var(--success); color: var(--success); background: transparent; font-weight: bold;" onclick="copiarCodigoManual()">📋 Copiar</button>
+1082: <button class="bh-btn-purple" onclick="guardarPersonalizacion()">Aplicar Cambios</button>
+1088: <button class="bh-btn-purple" onclick="document.getElementById('modal-usuario').style.display='flex'">+ Crear Usuario</button>
+1100: <button class="bh-btn-purple" onclick="generarQR()">Generar Código QR</button>
+1121: <button class="bh-btn-purple" style="margin-top:20px; background:#10b981;" onclick="guardarConfigWA()">Guardar WhatsApp</button>
+1126: <button class="bh-btn-white" onclick="alert('Requiere API Key de Google')">Sincronizar Google Calendar</button>
+1163: <button class="bh-btn-white" onclick="document.getElementById('modal-cliente').style.display='none'">Cancelar</button>
+1164: <button class="bh-btn-purple" onclick="guardarCliente()">Guardar Cliente</button>
+1184: <button class="bh-btn-white" onclick="document.getElementById('modal-usuario').style.display='none'">Cancelar</button>
+1185: <button class="bh-btn-purple" onclick="crearUsuario()">Crear Usuario</button>
+1199: <button class="bh-btn-white" onclick="procesarDecision(false)">Solo Orden</button>
+1200: <button class="bh-btn-purple" onclick="procesarDecision(true)">Sí, Registrar</button>
+1211: <button class="bh-btn-white" onclick="document.getElementById('modal-confirm-ai').style.display='none'">Cancelar</button>
+1212: <button class="bh-btn-purple" onclick="confirmarImportacionIA()">Sí, Añadir Todo</button>
+1252: <button class="bh-btn-white" onclick="document.getElementById('modal-facturacion').style.display='none'">Cancelar</button>
+1253: <button class="bh-btn-purple" style="background: var(--info);" onclick="emitirFactura()">Generar y Descargar</button>
+1279: <button class="bh-btn-white" onclick="limpiarOhm()">Limpiar</button>
+1280: <button class="bh-btn-purple" onclick="document.getElementById('modal-ohm').style.display='none'">Cerrar</button>
+1298: <button class="chat-btn btn-action" onclick="toggleChat()" style="color:rgba(255,255,255,0.6); font-size: 22px; transition: 0.3s; padding: 5px; background: transparent; border: none; cursor: pointer;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='rgba(255,255,255,0.6)'">
+1311: <button class="chat-btn btn-action" style="background: transparent; border: none; color: white; font-size: 20px; cursor: pointer;" onclick="alert('Subir archivo en desarrollo 📎')"><i class='bx bx-paperclip'></i></button>
+1313: <button class="chat-btn btn-action" style="background: transparent; border: none; color: white; font-size: 20px; cursor: pointer;" onclick="alert('Grabar nota de voz en desarrollo 🎤')"><i class='bx bx-microphone'></i></button>
+1314: <button class="chat-btn btn-send" style="background: var(--bh-purple); border: none; color: white; font-size: 20px; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="enviarMensajeChat()"><i class='bx bx-send'></i></button>
+1810: <button class="bh-btn-white" style="border-color: var(--info); color: var(--info); padding: 4px 8px; font-size: 11px;"
+1897: else { body.innerHTML = rows.map(c => `<tr><td>${c.nombre}</td><td>${c.ultima_visita||'-'}</td><td><button class="bh-btn-white">Enviar Promo</button></td></tr>`).join(''); }
+1904: else { tbody.innerHTML = rows.map(c => `<tr><td style="font-weight:bold; color:white;">${c.nombre || 'Sin Nombre'}</td><td>${c.telefono || '-'}</td><td>${c.email || '-'}</td><td><button class="bh-btn-white" onclick="window.open('https://wa.me/51${c.telefono}')">WhatsApp 💬</button></td></tr>`).join(''); }
+1925: <button class="bh-btn-white" style="border-color:var(--danger); color:var(--danger); padding:4px 10px;" onclick="alert('Función para desactivar en desarrollo')">Desactivar</button>

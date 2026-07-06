@@ -1,0 +1,2 @@
+902:                             <div class="input-group"><label>Proveedor</label><input type="text" id="reg-proveedor" class="bh-input"></div>
+1695:                 proveedor: document.getElementById('reg-proveedor').value

@@ -1,0 +1,38 @@
+192: const tabResellers = document.getElementById('config-item-resellers');
+195: if (tabResellers) tabResellers.style.display = 'none';
+200: if (tabResellers) tabResellers.style.display = 'block';
+2537: // --- LOGICA DE DISTRIBUIDORES (RESELLERS) ---
+2538: function cargarResellersAdmin() {
+2539: if(isElectron) ipcRenderer.send('obtener-resellers-admin');
+2543: ipcRenderer.on('resellers-admin-respuesta', (e, res) => {
+2545: const tbody = document.getElementById('tabla-resellers');
+2563: <button class="bh-btn-white" style="padding:4px 8px; font-size:12px; margin:0 3px;" onclick="editarReseller(${JSON.stringify(r).replace(/"/g, '&quot;')})">✏️ Editar</button>
+2564: <button class="bh-btn-white" style="padding:4px 8px; font-size:12px; margin:0 3px; border-color:#ef4444; color:#ef4444; background:transparent;" onclick="eliminarReseller(${r.id})">🗑️ Eliminar</button>
+2575: ipcRenderer.on('guardar-reseller-respuesta', (e, res) => {
+2578: document.getElementById('modal-reseller').style.display = 'none';
+2579: cargarResellersAdmin();
+2585: ipcRenderer.on('eliminar-reseller-respuesta', (e, res) => {
+2588: cargarResellersAdmin();
+2595: function abrirModalReseller() {
+2596: document.getElementById('reseller-id').value = '';
+2597: document.getElementById('reseller-nombre').value = '';
+2598: document.getElementById('reseller-tel').value = '';
+2599: document.getElementById('reseller-avatar').value = '';
+2600: document.getElementById('reseller-estado').value = 'activo';
+2601: document.getElementById('modal-reseller').style.display = 'flex';
+2604: function editarReseller(r) {
+2605: document.getElementById('reseller-id').value = r.id;
+2606: document.getElementById('reseller-nombre').value = r.nombre_completo;
+2607: document.getElementById('reseller-tel').value = r.nickname;
+2608: document.getElementById('reseller-avatar').value = r.avatar || '';
+2609: document.getElementById('reseller-estado').value = r.estado;
+2610: document.getElementById('modal-reseller').style.display = 'flex';
+2613: function guardarResellerAdmin() {
+2614: const id = document.getElementById('reseller-id').value;
+2615: const nombre = document.getElementById('reseller-nombre').value;
+2616: const tel = document.getElementById('reseller-tel').value;
+2617: const avatar = document.getElementById('reseller-avatar').value;
+2618: const estado = document.getElementById('reseller-estado').value;
+2633: if(isElectron) ipcRenderer.send('guardar-reseller-admin', data);
+2636: function eliminarReseller(id) {
+2638: if(isElectron) ipcRenderer.send('eliminar-reseller-admin', id);

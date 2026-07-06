@@ -1,2 +1,4 @@
+.env
+token gibhut.txt
 node_modules/
 dist/

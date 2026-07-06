@@ -1,0 +1,9 @@
+2576: showToast(res.msg, 'success');
+2577: document.getElementById('modal-reseller').style.display = 'none';
+2578: cargarResellersAdmin();
+2599: document.getElementById('reseller-estado').value = 'activo';
+2600: document.getElementById('modal-reseller').style.display = 'flex';
+2601: }
+2608: document.getElementById('reseller-estado').value = r.estado;
+2609: document.getElementById('modal-reseller').style.display = 'flex';
+2610: }

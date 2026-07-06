@@ -1,0 +1,32 @@
+LICENCIA DE USO DE SOFTWARE - BLACKHOUSE OS
+1. ACEPTACIÓN DE LOS TÉRMINOS
+Al instalar, copiar o utilizar de cualquier otro modo el software BlackHouse OS ("el Software"), usted acepta quedar obligado por los términos de esta licencia. Si no acepta estos términos, no instale ni utilice el Software.
+
+2. CONCESIÓN DE LICENCIA
+El autor otorga al usuario una licencia limitada, no exclusiva e intransferible para instalar y utilizar una copia del Software en un único equipo destinado a la gestión de talleres y servicios técnicos.
+
+3. RESTRICCIONES DE USO
+Queda estrictamente prohibido:
+
+La ingeniería inversa, descompilación o intento de extraer el código fuente del Software.
+
+La distribución, reventa o sublicencia del Software a terceros sin autorización previa por escrito.
+
+La eliminación de cualquier aviso de derechos de autor o identificación del producto.
+
+4. PROPIEDAD INTELECTUAL
+Todos los derechos de propiedad intelectual, diseño y código fuente son propiedad exclusiva de J.P. (JHONNATAN PRIMERA). Este Software está protegido por las leyes de propiedad intelectual vigentes.
+
+5. LIMITACIÓN DE RESPONSABILIDAD
+El Software se entrega "tal cual". El autor no se hace responsable de daños indirectos, pérdida de datos o interrupciones de negocio derivadas del uso del mismo. Se recomienda al usuario realizar copias de seguridad periódicas de sus datos.
+
+6. VIGENCIA
+Esta licencia es válida desde el momento de la instalación y permanecerá vigente hasta que sea rescindida por incumplimiento de cualquiera de sus cláusulas.
+
+AUTORIZADO POR:
+
+(Firma)
+
+J.P. (JHONNATAN PRIMERA)
+Desarrollador y Fundador de BlackHouse OS
+Lima, Perú | 2026

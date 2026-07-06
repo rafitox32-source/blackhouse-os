@@ -1,0 +1,38 @@
+411: // === PROVEEDORES (PERSISTENCIA SEGURA EN SUPABASE + CONTROL DE FALLOS) ===
+412: ipcMain.on('guardar-proveedor-db', async (event, prov) => {
+414: await supabase.from('proveedores').insert([{
+424: console.warn("Tabla 'proveedores' no disponible en base de datos. Guardado local activo.");
+428: ipcMain.on('obtener-proveedores-db', async (event) => {
+430: const { data, error } = await supabase.from('proveedores')
+435: event.reply('proveedores-db-respuesta', data || []);
+437: console.warn("Tabla 'proveedores' no disponible. Usando LocalStorage.");
+438: event.reply('proveedores-db-respuesta', []);
+442: ipcMain.on('eliminar-proveedor-db', async (event, data) => {
+444: await supabase.from('proveedores').delete().eq('id', data.id);
+446: console.warn("Error al eliminar proveedor de la BD:", e.message);
+459: proveedor: prod.proveedor,
+1159: // === HANDLER: Gestión de Resellers (Global) ===
+1160: ipcMain.on('obtener-resellers-admin', async (event) => {
+1165: .eq('rol', 'reseller')
+1168: event.reply('resellers-admin-respuesta', { success: true, data: data || [] });
+1170: event.reply('resellers-admin-respuesta', { success: false, msg: e.message });
+1174: ipcMain.on('guardar-reseller-admin', async (event, reseller) => {
+1176: if (reseller.id) {
+1180: nombre_completo: reseller.nombre_completo,
+1181: nickname: reseller.nickname,
+1182: avatar: reseller.avatar,
+1183: estado: reseller.estado
+1185: .eq('id', reseller.id);
+1187: event.reply('guardar-reseller-respuesta', { success: true, msg: 'Distribuidor actualizado con éxito' });
+1190: const hashedPassword = await bcrypt.hash('reseller_default_pass_123', salt);
+1191: const username = 'reseller_' + Date.now();
+1198: rol: 'reseller',
+1199: estado: reseller.estado,
+1200: nombre_completo: reseller.nombre_completo,
+1201: nickname: reseller.nickname,
+1202: avatar: reseller.avatar
+1205: event.reply('guardar-reseller-respuesta', { success: true, msg: 'Distribuidor creado con éxito' });
+1208: event.reply('guardar-reseller-respuesta', { success: false, msg: e.message });
+1212: ipcMain.on('eliminar-reseller-admin', async (event, id) => {
+1219: event.reply('eliminar-reseller-respuesta', { success: true, msg: 'Distribuidor eliminado con éxito' });
+1221: event.reply('eliminar-reseller-respuesta', { success: false, msg: e.message });

@@ -1,0 +1,18 @@
+Paso 3: ¿Y cómo subo la actualización luego?
+Una vez que tu código ya viva en GitHub, el ciclo para lanzar una actualización para tus técnicos y dueños de talleres será este:
+
+Haces cambios en tu código en VS Code.
+
+Ejecutas el comando de construcción que configuramos:
+
+Bash
+npm run build
+Esto generará la carpeta dist. Adentro habrá un archivo .exe (el instalador) y un archivo llamado latest.yml (el que avisa que hay una nueva versión).
+
+Vas a tu repositorio en GitHub, a la derecha verás una sección llamada Releases. Haces clic en Create a new release.
+
+Creas una etiqueta (Tag) llamada v1.0.1.
+
+Arrastras el .exe y el latest.yml a esa página y le das a publicar.
+
+En cuanto le des a publicar, el BlackHouse OS que tengan instalado tus clientes detectará ese archivo en tu GitHub y comenzará a descargar la actualización en segundo plano.
