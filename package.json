@@ -9,11 +9,11 @@
     "build": "electron-builder --win"
   },
   "build": {
-    "appId": "com.rafitox.app",
+    "appId": "com.blackhouse.os",
     "productName": "BlackHouse OS",
     "win": {
       "target": "nsis",
-      "icon": "icon.ico"
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -25,7 +25,8 @@
       {
         "provider": "github",
         "owner": "rafitox32-source",
-        "repo": "blackhouse-os"
+        "repo": "blackhouse-os",
+        "releaseType": "release"
       }
     ],
     "directories": {
