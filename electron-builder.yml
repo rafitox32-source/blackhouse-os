@@ -15,3 +15,4 @@ publish:
   provider: github
   owner: rafitox32-source
   repo: blackhouse-os
+  releaseType: release
