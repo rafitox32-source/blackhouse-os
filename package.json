@@ -1,6 +1,6 @@
 {
   "name": "app-de-rafitox",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "main.js",
   "author": "J.P",
   "description": "Sistema de Gestión Profesional",
@@ -37,7 +37,10 @@
       "!dist/*",
       "!**/*.ts",
       "!*.map",
-      "!.git/*"
+      "!.git/*",
+      "!icono/**/*",
+      "!Firmware/**/*",
+      "!Dump/**/*"
     ]
   },
   "dependencies": {
@@ -53,6 +56,12 @@
   },
   "devDependencies": {
     "electron": "^42.5.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "semantic-release": "^22.0.12",
+    "@semantic-release/commit-analyzer": "^11.1.0",
+    "@semantic-release/release-notes-generator": "^12.1.0",
+    "@semantic-release/npm": "^11.0.2",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^9.2.6"
   }
 }

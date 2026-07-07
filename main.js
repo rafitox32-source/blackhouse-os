@@ -9,6 +9,7 @@ const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
 const bcrypt = require('bcryptjs');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const crypto = require('crypto');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
@@ -21,6 +22,14 @@ const supabase = createClient(
     process.env.SUPABASE_URL,
     process.env.SUPABASE_KEY
 );
+
+const DURACION_SESION_RECORDADA_DIAS = 30;
+async function emitirTokenSesion(usuarioId) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const expira = new Date(Date.now() + DURACION_SESION_RECORDADA_DIAS * 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from('usuarios').update({ session_token: token, session_expira: expira }).eq('id', usuarioId);
+    return token;
+}
 
 const fs = require('fs');
 let devicesCache = null;
@@ -81,25 +90,26 @@ app.whenReady().then(() => {
     // Configuración de actualizaciones automáticas
     autoUpdater.checkForUpdatesAndNotify();
 
-    autoUpdater.on('update-available', () => {
-        dialog.showMessageBox({
-            type: 'info',
-            title: 'Actualización Disponible',
-            message: 'Una nueva versión de BlackHouse OS está disponible. Se descargará en segundo plano.'
-        });
+    autoUpdater.on('update-available', (info) => {
+        if (mainWindow) mainWindow.webContents.send('actualizacion-disponible', { version: info.version });
     });
 
-    autoUpdater.on('update-downloaded', () => {
-        dialog.showMessageBox({
-            type: 'info',
-            title: 'Actualización Lista',
-            message: 'La actualización se ha descargado. Se instalará automáticamente la próxima vez que inicies la aplicación.'
-        });
+    autoUpdater.on('update-downloaded', (info) => {
+        if (mainWindow) mainWindow.webContents.send('actualizacion-lista', { version: info.version });
+    });
+
+    autoUpdater.on('error', (err) => {
+        console.warn('Error al buscar actualizaciones:', err.message);
     });
 
     // Exponer versión al frontend
     ipcMain.on('pedir-version', (event) => {
         event.reply('recibir-version', app.getVersion());
+    });
+
+    // Abrir la página de descarga en el navegador (usado por el aviso de actualización)
+    ipcMain.on('abrir-pagina-descarga', () => {
+        shell.openExternal('https://blackhouse-os-web.vercel.app');
     });
 
     // === CREAR CARPETAS FIRMWARE Y DUMP AL INICIAR ===
@@ -127,6 +137,22 @@ ipcMain.on('abrir-carpeta', (event, tipo) => {
 // === OBTENER MARCAS Y MODELOS DE DISPOSITIVOS ===
 ipcMain.on('obtener-marcas-modelos', (event) => {
     event.reply('marcas-modelos-respuesta', devicesCache || {});
+});
+
+// === AGREGAR MODELO NUEVO AL CATÁLOGO (cuando no existe uno que el usuario necesita) ===
+ipcMain.on('agregar-modelo-nuevo', (event, { marca, modelo }) => {
+    try {
+        if (!devicesCache) devicesCache = {};
+        if (!devicesCache[marca]) devicesCache[marca] = [];
+        if (!devicesCache[marca].some(m => m.toLowerCase() === modelo.toLowerCase())) {
+            devicesCache[marca].push(modelo);
+            devicesCache[marca].sort();
+            fs.writeFileSync(path.join(__dirname, 'devices_cache.json'), JSON.stringify(devicesCache, null, 2));
+        }
+        event.reply('marcas-modelos-respuesta', devicesCache);
+    } catch (e) {
+        console.warn('No se pudo guardar el modelo nuevo:', e.message);
+    }
 });
 
 // === 2. LOGIN INTELIGENTE (FILTRA POR EMPRESA Y FECHA) ===
@@ -227,6 +253,11 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
         empresaActual = users.empresa_id;
         rolActual = users.rol;
 
+        let sessionToken = null;
+        if (data.recordar) {
+            sessionToken = await emitirTokenSesion(users.id);
+        }
+
         // 6. Login Directo
         event.reply('login-respuesta', {
             success: true,
@@ -235,12 +266,91 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
             empresa_id: users.empresa_id,
             nombre_completo: users.nombre_completo || '',
             nickname: users.nickname || users.usuario,
-            avatar: users.avatar || ''
+            avatar: users.avatar || '',
+            sessionToken
         });
 
     } catch (err) {
         console.error("Error fatal en login:", err);
         event.reply('login-respuesta', { success: false, msg: 'Error de conexión al servidor' });
+    }
+});
+
+// === 2.0B LOGIN AUTOMATICO CON TOKEN DE SESION RECORDADA ===
+ipcMain.on('iniciar-sesion-token', async (event, data) => {
+    try {
+        const token = data && data.token;
+        if (!token) {
+            return event.reply('login-respuesta', { success: false, msg: 'Sin token' });
+        }
+
+        const { data: users, error } = await supabase
+            .from('usuarios')
+            .select('*')
+            .eq('session_token', token)
+            .eq('estado', 'activo')
+            .single();
+
+        if (error || !users) {
+            return event.reply('login-respuesta', { success: false, msg: 'Sesión guardada no válida' });
+        }
+
+        if (!users.session_expira || new Date() > new Date(users.session_expira)) {
+            await supabase.from('usuarios').update({ session_token: null, session_expira: null }).eq('id', users.id);
+            return event.reply('login-respuesta', { success: false, msg: 'Sesión guardada expirada' });
+        }
+
+        // Verificamos vencimiento de licencia de la empresa (mismo criterio que el login normal)
+        const { data: empresaData, error: errEmpresa } = await supabase
+            .from('empresas')
+            .select('fecha_de_vencimiento')
+            .eq('id', users.empresa_id)
+            .single();
+
+        if (errEmpresa || !empresaData) {
+            return event.reply('login-respuesta', { success: false, msg: 'Error al verificar la licencia del taller.' });
+        }
+
+        if (users.empresa_id !== 1 && empresaData.fecha_de_vencimiento) {
+            if (new Date() > new Date(empresaData.fecha_de_vencimiento)) {
+                return event.reply('login-respuesta', {
+                    success: false,
+                    msg: `⛔ Licencia Vencida. Tu acceso caducó el ${empresaData.fecha_de_vencimiento}. Escríbenos al WhatsApp para renovar.`
+                });
+            }
+        }
+
+        empresaActual = users.empresa_id;
+        rolActual = users.rol;
+
+        // Rotamos el token en cada login automático (mitiga robo/reuso del token guardado)
+        const nuevoToken = await emitirTokenSesion(users.id);
+
+        event.reply('login-respuesta', {
+            success: true,
+            usuario: users.usuario,
+            rol: users.rol,
+            empresa_id: users.empresa_id,
+            nombre_completo: users.nombre_completo || '',
+            nickname: users.nickname || users.usuario,
+            avatar: users.avatar || '',
+            sessionToken: nuevoToken
+        });
+    } catch (err) {
+        console.error('Error en login por token:', err);
+        event.reply('login-respuesta', { success: false, msg: 'Error de conexión al servidor' });
+    }
+});
+
+// === 2.0C CERRAR SESIÓN RECORDADA (invalida el token guardado) ===
+ipcMain.on('cerrar-sesion-token', async (event, data) => {
+    try {
+        const token = data && data.token;
+        if (token) {
+            await supabase.from('usuarios').update({ session_token: null, session_expira: null }).eq('session_token', token);
+        }
+    } catch (e) {
+        console.warn('No se pudo invalidar el token de sesión:', e.message);
     }
 });
 
@@ -268,6 +378,7 @@ ipcMain.on('verificar-2fa', async (event, data) => {
                 hashedOtp = dbUser.otp_hash;
                 otpExpiry = dbUser.otp_expiry;
                 userPayload = {
+                    id: dbUser.id,
                     usuario: dbUser.usuario,
                     rol: dbUser.rol,
                     empresa_id: dbUser.empresa_id,
@@ -319,10 +430,16 @@ ipcMain.on('verificar-2fa', async (event, data) => {
 
         console.log(`🔒 [2FA] Verificación exitosa para el usuario: ${usuario}`);
 
+        let sessionToken = null;
+        if (data.recordar && userPayload.id) {
+            sessionToken = await emitirTokenSesion(userPayload.id);
+        }
+
         // Enviamos el payload final al renderer
         event.reply('resultado-2fa', {
             success: true,
-            ...userPayload
+            ...userPayload,
+            sessionToken
         });
 
     } catch (err) {
@@ -396,6 +513,7 @@ ipcMain.on('nuevo-producto-sql', async (event, prod) => {
         const insertData = {
             nombre: prod.nombre,
             categoria: prod.categoria,
+            subcategoria: prod.subcategoria || null,
             costo: parseFloat(prod.costo) || 0,
             precio: parseFloat(prod.precio) || 0,
             stock: parseInt(prod.stock) || 0,
@@ -418,9 +536,40 @@ ipcMain.on('obtener-productos', async (event) => {
     event.reply('lista-de-productos', data || []);
 });
 
-// === 4B. IMPORTACIÓN DESDE EXCEL - PREVIEW ===
-ipcMain.on('preview-excel-inventario', async (event, productos) => {
+// === 4A. SUBCATEGORÍAS PERSONALIZADAS (editables por el usuario, ej. tipos de Micas) ===
+ipcMain.on('obtener-subcategorias-custom', async (event) => {
     try {
+        const { data } = await supabase.from('subcategorias_personalizadas')
+            .select('categoria, nombre')
+            .eq('empresa_id', String(empresaActual));
+        const agrupado = {};
+        (data || []).forEach(row => {
+            if (!agrupado[row.categoria]) agrupado[row.categoria] = [];
+            agrupado[row.categoria].push(row.nombre);
+        });
+        event.reply('subcategorias-custom-lista', agrupado);
+    } catch (e) {
+        console.warn('No se pudieron cargar subcategorías personalizadas:', e.message);
+        event.reply('subcategorias-custom-lista', {});
+    }
+});
+
+ipcMain.on('agregar-subcategoria-custom', async (event, payload) => {
+    try {
+        await supabase.from('subcategorias_personalizadas').insert([{
+            empresa_id: String(empresaActual),
+            categoria: payload.categoria,
+            nombre: payload.nombre
+        }]);
+    } catch (e) {
+        console.warn('No se pudo guardar la subcategoría personalizada (puede que ya exista):', e.message);
+    }
+});
+
+// === 4B. IMPORTACIÓN DESDE EXCEL - PREVIEW ===
+ipcMain.on('preview-excel-inventario', async (event, payload) => {
+    try {
+        const productos = payload.items || [];
         // Obtener todos los productos actuales de la empresa
         const { data: productosDB } = await supabase.from('productos')
             .select('*')
@@ -430,22 +579,83 @@ ipcMain.on('preview-excel-inventario', async (event, productos) => {
         const items = [];
         const errores = [];
 
+        // === LOGICA DE SUBCATEGORIAS PARA EXCEL ===
+        const SUBCATEGORIAS = {
+            'repuestos': [
+                'Batería', 'Flex de Carga', 'Flex de Volumen/Encendido', 'Placa de Carga (conector)',
+                'Flex de Huella Dactilar', 'Cámara Frontal', 'Cámara Trasera', 'Altavoz (Parlante)',
+                'Auricular (altavoz de llamada)', 'Micrófono', 'Vibrador (motor)', 'Antena/Módulo de Señal',
+                'Conector de Audífonos', 'Bandeja SIM', 'Botón de Encendido/Home', 'Otro'
+            ],
+            'repuestos de celulares': [
+                'Batería', 'Flex de Carga', 'Flex de Volumen/Encendido', 'Placa de Carga (conector)',
+                'Flex de Huella Dactilar', 'Cámara Frontal', 'Cámara Trasera', 'Altavoz (Parlante)',
+                'Auricular (altavoz de llamada)', 'Micrófono', 'Vibrador (motor)', 'Antena/Módulo de Señal',
+                'Conector de Audífonos', 'Bandeja SIM', 'Botón de Encendido/Home', 'Otro'
+            ],
+            'accesorios': [
+                'Auriculares (alámbricos)', 'Auriculares Bluetooth', 'Cargadores (pared/auto)',
+                'Cables (USB-C/Lightning/Micro USB)', 'Forros/Case', 'Stickers/Calcomanías',
+                'Soportes/Holders', 'Power Bank', 'Memorias/USB', 'Parlantes Bluetooth',
+                'Popsockets/Anillos', 'Protector de Cámara', 'Otro'
+            ],
+            'micas': [
+                'Vidrio 88D', 'Cerámica Matte', 'Cerámica Anti Espía', 'Vidrio Anti Espía', 'Vidrio de Tablet',
+                'Vidrio OG', 'Cerámica Brillosa', 'Flyer Sin Bordes', 'Flyer Super Gruesa Original',
+                'OG Sin Bordes', '21D', 'Otro'
+            ]
+        };
+
+        // Fusionar subcategorías personalizadas que el usuario haya agregado desde la app
+        const { data: customSub } = await supabase.from('subcategorias_personalizadas')
+            .select('categoria, nombre')
+            .eq('empresa_id', String(empresaActual));
+        (customSub || []).forEach(row => {
+            const key = (row.categoria || '').toLowerCase().trim();
+            if (!SUBCATEGORIAS[key]) SUBCATEGORIAS[key] = [];
+            if (!SUBCATEGORIAS[key].some(o => o.toLowerCase() === row.nombre.toLowerCase())) {
+                SUBCATEGORIAS[key].push(row.nombre);
+            }
+        });
+
+        const normalizarSub = (txt) => (txt || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
         for (const prod of productos) {
             let encontrado = null;
+
+            const normalizar = (txt) => (txt || '').replace(/\s+/g, ' ').trim().toUpperCase();
+
+            // VALIDACIÓN ESTRICTA DE SUBCATEGORÍA
+            const catClean = (prod.categoria || '').toLowerCase().trim();
+            if (SUBCATEGORIAS[catClean]) {
+                const subOriginal = (prod.subcategoria || '').trim();
+                const validOptions = SUBCATEGORIAS[catClean];
+                const validMatched = validOptions.find(o => o.toLowerCase() === subOriginal.toLowerCase());
+                
+                if (!validMatched) {
+                    errores.push(`"${prod.nombre}": Subcategoría inválida o ausente ("${subOriginal}").`);
+                    continue; // Ignorar fila
+                }
+                prod.subcategoria = validMatched; // Normalizamos con mayúsculas/minúsculas correctas
+            } else {
+                prod.subcategoria = null;
+            }
 
             // Buscar por SKU primero (si tiene)
             if (prod.sku) {
                 encontrado = existentes.find(e => 
                     e.sku && e.sku.toLowerCase() === prod.sku.toLowerCase()
                 );
+                if (encontrado) prod.metodoVinculacion = 'sku';
             }
 
             // Fallback: buscar por nombre + categoría
-            if (!encontrado) {
+            if (!encontrado && prod.nombre) {
                 encontrado = existentes.find(e =>
-                    e.nombre.toLowerCase().trim() === prod.nombre.toLowerCase().trim() &&
-                    (e.categoria || '').toLowerCase().trim() === (prod.categoria || '').toLowerCase().trim()
+                    normalizar(e.nombre) === normalizar(prod.nombre) &&
+                    normalizar(e.categoria) === normalizar(prod.categoria)
                 );
+                if (encontrado) prod.metodoVinculacion = 'nombre';
             }
 
             if (encontrado) {
@@ -453,7 +663,9 @@ ipcMain.on('preview-excel-inventario', async (event, productos) => {
                     ...prod,
                     accion: 'actualizar',
                     stockActual: encontrado.stock,
-                    productoId: encontrado.id
+                    productoId: encontrado.id,
+                    skuExistente: encontrado.sku,
+                    metodoVinculacion: prod.metodoVinculacion
                 });
             } else {
                 items.push({
@@ -465,72 +677,271 @@ ipcMain.on('preview-excel-inventario', async (event, productos) => {
             }
         }
 
-        event.reply('preview-excel-resultado', { items, errores });
+        event.reply('preview-excel-resultado', { hash: payload.hash, nombreArchivo: payload.nombreArchivo, items, errores });
     } catch (e) {
         console.error('Error en preview Excel:', e);
         event.reply('preview-excel-resultado', { items: [], errores: ['Error al consultar la base de datos: ' + e.message] });
     }
 });
 
-// === 4C. IMPORTACIÓN DESDE EXCEL - EJECUTAR UPSERT ===
-ipcMain.on('importar-excel-inventario', async (event, productos) => {
+// === 4C. IMPORTACIÓN DESDE EXCEL - EJECUTAR UPSERT ADITIVO ===
+ipcMain.on('importar-excel-inventario', async (event, payload) => {
     try {
-        let nuevos = 0;
+        const { hash, nombreArchivo, items: productos } = payload;
+        
         let actualizados = 0;
+        let nuevosCreados = 0;
+        let vinculadosCount = 0;
+        const movimientos = [];
         const erroresImport = [];
+
+        // 1. Verificar deduplicación por hash
+        if (hash) {
+            const { data: cargaExistente } = await supabase.from('cargas_procesadas')
+                .select('id, creado_en')
+                .eq('hash_archivo', hash)
+                .single();
+            if (cargaExistente) {
+                const fecha = new Date(cargaExistente.creado_en).toLocaleString();
+                event.reply('resultado-importacion-excel', { 
+                    success: false, 
+                    msg: `Este archivo ya fue procesado el ${fecha}. Se bloqueó para evitar duplicar el inventario.` 
+                });
+                return;
+            }
+        }
+
+        // Prefijos estrictos
+        const prefijosMap = {
+            'pantallas': 'PANT',
+            'accesorios': 'ACCE',
+            'repuestos de celulares': 'REPU',
+            'micas': 'MICA',
+            'celulares': 'CEL'
+        };
+
+        const proveedoresValidos = ['CAYCEL', 'SAMTEC', 'CYBERPHONE', 'AMOBILE'];
+
+        // Obtener SKUs máximos por prefijo de una sola vez
+        const { data: todosProductos } = await supabase.from('productos')
+            .select('sku')
+            .eq('empresa_id', empresaActual);
+            
+        const nextSkuByPrefix = {};
+        if (todosProductos) {
+            for (const p of todosProductos) {
+                if (p.sku && p.sku.includes('-')) {
+                    const parts = p.sku.split('-');
+                    const prefix = parts[0];
+                    const num = parseInt(parts[1], 10);
+                    if (!isNaN(num)) {
+                        if (!nextSkuByPrefix[prefix] || num > nextSkuByPrefix[prefix]) {
+                            nextSkuByPrefix[prefix] = num;
+                        }
+                    }
+                }
+            }
+        }
 
         for (const prod of productos) {
             try {
+                let skuFinal = prod.sku;
+                let proveedorClean = prod.proveedor;
+                let costoField = null;
+
+                // Validación exacta del proveedor para aplicar costos
+                if (proveedorClean && proveedoresValidos.includes(proveedorClean)) {
+                    costoField = `costo_${proveedorClean.toLowerCase()}`;
+                } else if (proveedorClean && proveedorClean !== 'OTRO') {
+                    erroresImport.push(`${prod.nombre}: Costo sin proveedor reconocido (${proveedorClean}), revisar manualmente.`);
+                }
+
                 if (prod.accion === 'actualizar' && prod.productoId) {
                     // ACTUALIZAR: Sumar cantidad al stock existente
                     const nuevoStock = (prod.stockActual || 0) + (prod.cantidad || 0);
                     const updateData = { stock: nuevoStock };
                     
-                    // Actualizar precio/costo solo si vienen con valor > 0
-                    if (prod.precio > 0) updateData.precio = prod.precio;
-                    if (prod.costo > 0) updateData.costo = prod.costo;
-                    if (prod.sku) updateData.sku = prod.sku;
+                    // GENERAR SKU si no tenía uno previamente
+                    if (!prod.skuExistente) {
+                        const catClean = (prod.categoria || '').toLowerCase().trim();
+                        const prefijo = prefijosMap[catClean];
+                        if (prefijo) {
+                            const currentNum = (nextSkuByPrefix[prefijo] || 0) + 1;
+                            nextSkuByPrefix[prefijo] = currentNum;
+                            skuFinal = `${prefijo}-${String(currentNum).padStart(4, '0')}`;
+                            updateData.sku = skuFinal;
+                        }
+                    }
 
-                    await supabase.from('productos')
+                    if (prod.metodoVinculacion === 'nombre') {
+                        vinculadosCount++;
+                    }
+                    
+                    // Actualizar costo del proveedor indicado
+                    if (costoField && prod.costo > 0) {
+                        updateData[costoField] = prod.costo;
+                    }
+                    
+                    // Actualizar precios opcionales
+                    if (prod.precio > 0) updateData.precio = prod.precio;
+                    if (prod.precio_mayor > 0) updateData.precio_mayor = prod.precio_mayor;
+                    
+                    // Guardar SKU por si lo necesitamos para movimientos_stock
+                    const { data: updatedProd, error: updateError } = await supabase.from('productos')
                         .update(updateData)
-                        .eq('id', prod.productoId);
+                        .eq('id', prod.productoId)
+                        .select('sku')
+                        .single();
+
+                    if (updateError) {
+                        erroresImport.push(`${prod.nombre}: no se pudo actualizar (${updateError.message}).`);
+                        continue;
+                    }
+                    if (updatedProd && updatedProd.sku) skuFinal = updatedProd.sku;
                     actualizados++;
                 } else {
                     // INSERTAR: Crear nuevo producto
+                    const catClean = (prod.categoria || '').toLowerCase().trim();
+                    const prefijo = prefijosMap[catClean];
+                    
+                    if (!prefijo) {
+                        erroresImport.push(`${prod.nombre}: Categoría '${prod.categoria}' sin prefijo conocido. Requiere revisión manual, no se generó SKU ni producto.`);
+                        continue; // Saltamos este producto
+                    }
+                    
+                    // Generar correlativo
+                    const currentNum = (nextSkuByPrefix[prefijo] || 0) + 1;
+                    nextSkuByPrefix[prefijo] = currentNum;
+                    skuFinal = `${prefijo}-${String(currentNum).padStart(4, '0')}`;
+
                     const insertData = {
                         nombre: prod.nombre,
                         categoria: prod.categoria,
+                        subcategoria: prod.subcategoria || null,
+                        modelo_compatible: prod.modelo_compatible || '',
+                        precio: prod.precio > 0 ? prod.precio : 0,
+                        precio_mayor: prod.precio_mayor > 0 ? prod.precio_mayor : null,
                         stock: prod.cantidad || 0,
-                        costo: prod.costo || 0,
-                        precio: prod.precio || 0,
-                        proveedor: '',
+                        sku: skuFinal,
                         empresa_id: empresaActual
                     };
-                    if (prod.sku) insertData.sku = prod.sku;
+                    
+                    if (costoField && prod.costo > 0) {
+                        insertData[costoField] = prod.costo;
+                    }
 
-                    await supabase.from('productos').insert([insertData]);
-                    nuevos++;
+                    const { error: insertError } = await supabase.from('productos').insert([insertData]);
+                    if (insertError) {
+                        erroresImport.push(`${prod.nombre}: no se pudo crear (${insertError.message}).`);
+                        continue;
+                    }
+                    nuevosCreados++;
                 }
-            } catch (rowErr) {
-                erroresImport.push(`Error con "${prod.nombre}": ${rowErr.message}`);
+
+                // Preparar movimiento de stock
+                if (prod.cantidad > 0 || (prod.costo > 0 && prod.proveedor)) {
+                    movimientos.push({
+                        empresa_id: empresaActual,
+                        sku: skuFinal,
+                        cantidad: prod.cantidad || 0,
+                        proveedor: prod.proveedor || null,
+                        costo: prod.costo > 0 ? prod.costo : null,
+                        nota: prod.nota || null,
+                        fecha_ingreso: prod.fecha_ingreso || null,
+                        nombre_archivo_origen: nombreArchivo
+                    });
+                }
+
+            } catch (e) {
+                console.error('Error insertando/actualizando prod:', prod.nombre, e);
+                erroresImport.push(`Error en "${prod.nombre}": ${e.message}`);
             }
         }
+        
+        // 2. Insertar historial de movimientos en bloque
+        if (movimientos.length > 0) {
+            await supabase.from('movimientos_stock').insert(movimientos);
+        }
 
-        event.reply('resultado-importacion-excel', {
-            success: true,
-            nuevos,
-            actualizados,
-            errores: erroresImport
+        // 3. Registrar archivo como procesado
+        if (hash) {
+            await supabase.from('cargas_procesadas').insert([{
+                empresa_id: empresaActual,
+                hash_archivo: hash,
+                nombre_archivo: nombreArchivo,
+                resumen: `Nuevos: ${nuevosCreados}, Actualizados: ${actualizados}, Errores: ${erroresImport.length}`
+            }]);
+        }
+
+        // Solo después de insertar movimientos y log, responder OK
+        event.reply('resultado-importacion-excel', { 
+            success: true, 
+            nuevos: nuevosCreados, 
+            actualizados, 
+            vinculados: vinculadosCount,
+            msg: `Proceso finalizado. Nuevos: ${nuevosCreados}, Actualizados: ${actualizados}, Vinculados por nombre: ${vinculadosCount}. Errores menores: ${erroresImport.length}` 
         });
-    } catch (e) {
-        console.error('Error en importación Excel:', e);
-        event.reply('resultado-importacion-excel', {
-            success: false,
-            msg: e.message
-        });
+    } catch (err) {
+        console.error('Error procesando Excel:', err);
+        event.reply('resultado-importacion-excel', { success: false, msg: err.message });
     }
 });
 
+// === 4D. HISTORIAL DE PRODUCTO ===
+ipcMain.handle('obtener-historial-producto', async (event, sku) => {
+    const { data, error } = await supabase
+        .from('movimientos_stock')
+        .select('*')
+        .eq('sku', sku)
+        .eq('empresa_id', empresaActual)
+        .order('creado_en', { ascending: false })
+        .limit(5);
+    if (error) throw error;
+    if (error) throw error;
+    return data;
+});
+
+ipcMain.handle('actualizar-producto-detalle', async (event, params) => {
+    const { id, updates } = params;
+    const { data, error } = await supabase
+        .from('productos')
+        .update(updates)
+        .eq('id', id)
+        .eq('empresa_id', empresaActual)
+        .select()
+        .single();
+    if (error) throw error;
+    return data;
+});
+
+ipcMain.handle('ajustar-stock-manual', async (event, params) => {
+    const { id, sku, nuevoStock, cantidadDiferencia, motivo } = params;
+    if (nuevoStock < 0) throw new Error("El stock no puede ser negativo.");
+
+    // Update product stock
+    const { data: prodData, error: prodErr } = await supabase
+        .from('productos')
+        .update({ stock: nuevoStock })
+        .eq('id', id)
+        .eq('empresa_id', empresaActual)
+        .select()
+        .single();
+    
+    if (prodErr) throw prodErr;
+
+    // Insert to historial
+    const { error: histErr } = await supabase.from('movimientos_stock').insert([{
+        empresa_id: empresaActual,
+        sku: sku,
+        cantidad: cantidadDiferencia,
+        proveedor: 'AJUSTE MANUAL',
+        nota: motivo
+    }]);
+
+    if (histErr) throw histErr;
+
+    return prodData;
+});
 
 // === 5. ORDENES/TALLER (SOLO DE MI EMPRESA) ===
 ipcMain.on('guardar-orden', async (event, orden) => {

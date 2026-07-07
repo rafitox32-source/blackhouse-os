@@ -1531,6 +1531,13 @@
                         data-i18n="login_ph_pass" onkeypress="if(event.key === 'Enter') iniciarSesion()">
                 </div>
 
+                <div style="text-align:left; margin-bottom:10px;">
+                    <label style="color:#aaa; font-size:12px; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="chk-recordar-sesion" style="width:auto; margin:0;">
+                        Recordar sesión en este equipo
+                    </label>
+                </div>
+
                 <div class="text-right mb-4">
                     <a href="#" onclick="toggleRecuperarPassword(true)"
                         class="text-sm text-bhPurple hover:text-purple-400 transition-colors font-semibold">
@@ -1650,6 +1657,12 @@
         </div>
     </div>
 
+    <div id="banner-actualizacion" style="display:none; position:fixed; top:0; left:0; right:0; z-index:99999; background:linear-gradient(90deg, #7c3aed, #4c1d95); color:white; padding:10px 20px; display:flex; align-items:center; justify-content:center; gap:15px; font-size:13px; box-shadow:0 2px 10px rgba(0,0,0,0.4);">
+        <span id="banner-actualizacion-msg">🎉 Hay una nueva versión disponible.</span>
+        <button onclick="irADescargarActualizacion()" style="background:white; color:#4c1d95; border:none; padding:6px 14px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">Descargar ahora</button>
+        <button onclick="document.getElementById('banner-actualizacion').style.display='none'" style="background:transparent; border:none; color:white; font-size:16px; cursor:pointer; opacity:0.8;">&times;</button>
+    </div>
+
     <div id="app-content">
         <div class="sidebar">
             <div class="logo-box" id="app-title-sidebar">BlackHouse<span style="color:var(--bh-purple)">OS</span></div>
@@ -1757,12 +1770,12 @@
                             style="background: linear-gradient(145deg, rgba(79,209,197,0.1), rgba(20,20,20,0.6)); border: 1px solid rgba(79,209,197,0.2);">
                             <h3 style="color:#81e6d9; margin:0; font-size:14px; text-transform:uppercase;">En Proceso
                             </h3>
-                            <div style="font-size:56px; font-weight:800; color:white; margin-top:15px;">0</div>
+                            <div style="font-size:56px; font-weight:800; color:white; margin-top:15px;" id="dash-proceso">0</div>
                         </div>
                         <div class="bh-card"
                             style="background: linear-gradient(145deg, rgba(124,58,237,0.1), rgba(20,20,20,0.6)); border: 1px solid rgba(124,58,237,0.2);">
                             <h3 style="color:#d8b4fe; margin:0; font-size:14px; text-transform:uppercase;">Listos</h3>
-                            <div style="font-size:56px; font-weight:800; color:white; margin-top:15px;">0</div>
+                            <div style="font-size:56px; font-weight:800; color:white; margin-top:15px;" id="dash-listos">0</div>
                         </div>
                     </div>
                 </div>
@@ -1846,6 +1859,77 @@
                                         onclick="guardarReparacionLab()">✅ Marcar como Reparado</button>
                                 </div>
                             </div>
+
+                            <!-- NUEVO: Ruta de Diagnóstico de Encendido -->
+                            <div class="bh-card" style="margin-bottom:0; padding:20px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                                    <h3 style="margin:0; color:var(--bh-purple); display:flex; align-items:center; gap:8px; font-size:16px;">
+                                        <i class='bx bx-git-repo-forked'></i> Ruta de Diagnóstico de Encendido
+                                    </h3>
+                                    <span id="diag-ruta-estado" style="font-size:12px; font-weight:bold; color:var(--warning);">Paso 1 de 4</span>
+                                </div>
+                                
+                                <!-- Progress Bar -->
+                                <div style="width:100%; background:#222; border-radius:10px; height:8px; margin-bottom:20px; overflow:hidden;">
+                                    <div id="diag-ruta-progreso" style="height:100%; width:25%; background:var(--bh-purple); transition:width 0.3s ease, background 0.3s ease;"></div>
+                                </div>
+
+                                <!-- Pasos -->
+                                <div id="diag-paso-1" class="diag-step-container active" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); transition:opacity 0.3s ease;">
+                                    <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
+                                        <i class='bx bx-plug'></i> 1. Validación Primaria (Standby)
+                                    </h4>
+                                    <p style="font-size:13px; color:#aaa; margin-bottom:15px;">Conectar fuente sin presionar Power. Medir ~4.2V en VPH_PWR / IF_PMIC.</p>
+                                    <div style="display:flex; gap:10px;">
+                                        <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(1, true)"><i class='bx bx-check'></i> Medición Correcta</button>
+                                        <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(1, false)"><i class='bx bx-x'></i> Falla Detectada</button>
+                                    </div>
+                                </div>
+
+                                <div id="diag-paso-2" class="diag-step-container" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); opacity:0.5; pointer-events:none; transition:opacity 0.3s ease;">
+                                    <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
+                                        <i class='bx bx-power-off'></i> 2. Despertar del Sistema
+                                    </h4>
+                                    <p style="font-size:13px; color:#aaa; margin-bottom:15px;">Presionar Power. Verificar que el consumo salga de 0 mA.</p>
+                                    <div style="display:flex; gap:10px;">
+                                        <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(2, true)"><i class='bx bx-check'></i> Medición Correcta</button>
+                                        <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(2, false)"><i class='bx bx-x'></i> Falla Detectada</button>
+                                    </div>
+                                </div>
+
+                                <div id="diag-paso-3" class="diag-step-container" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); opacity:0.5; pointer-events:none; transition:opacity 0.3s ease;">
+                                    <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
+                                        <i class='bx bx-microchip'></i> 3. Potencia CPU (Líneas BUCK)
+                                    </h4>
+                                    <p style="font-size:13px; color:#aaa; margin-bottom:5px;">Medir bobinas alrededor del PMIC.</p>
+                                    <div style="background:rgba(216,180,254,0.1); border-left:3px solid var(--bh-purple); padding:8px; font-size:12px; color:var(--bh-purple); margin-bottom:15px; border-radius:0 4px 4px 0;">
+                                        <strong>Ojo:</strong> 10 a 60 Ohmios es normal, NO es corto. Solo 0 Ohmios es corto.
+                                    </div>
+                                    <div style="display:flex; gap:10px;">
+                                        <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(3, true)"><i class='bx bx-check'></i> Medición Correcta</button>
+                                        <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(3, false)"><i class='bx bx-x'></i> Falla Detectada</button>
+                                    </div>
+                                </div>
+
+                                <div id="diag-paso-4" class="diag-step-container" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); opacity:0.5; pointer-events:none; transition:opacity 0.3s ease;">
+                                    <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
+                                        <i class='bx bx-pulse'></i> 4. Lógica LDO (1.8V)
+                                    </h4>
+                                    <p style="font-size:13px; color:#aaa; margin-bottom:15px;">Medir presencia de 1.8V en línea VDD_IO.</p>
+                                    <div style="display:flex; gap:10px;">
+                                        <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(4, true)"><i class='bx bx-check'></i> Medición Correcta</button>
+                                        <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(4, false)"><i class='bx bx-x'></i> Falla Detectada</button>
+                                    </div>
+                                </div>
+
+                                <!-- Resumen / Fin -->
+                                <div id="diag-resumen" style="display:none; padding:15px; border:1px solid var(--bh-purple); border-radius:8px; background:rgba(124,58,237,0.1); margin-top:20px; text-align:center;">
+                                    <h4 style="margin:0 0 10px 0; color:white;">Diagnóstico Finalizado</h4>
+                                    <p id="diag-resumen-texto" style="font-size:13px; color:#ddd; margin-bottom:15px;"></p>
+                                    <button class="bh-btn-purple" onclick="insertarRutaBitacora()" style="width:100%; margin-bottom:10px;"><i class='bx bx-message-square-add'></i> Añadir Resultado a Bitácora</button>
+                                    <button class="bh-btn-white" onclick="reiniciarRuta()" style="width:100%; border:none; background:transparent; color:#aaa; padding:10px;">Reiniciar Ruta</button>
+                                </div>
+                            </div>
                         </div>
 
                         <div style="display:flex; flex-direction:column; gap:20px;">
@@ -1871,6 +1955,11 @@
                                     style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
                                     onclick="document.getElementById('modal-ohm').style.display='flex'">
                                     <i class='bx bx-calculator'></i> Calculadora Ley de Ohm
+                                </button>
+                                <button class="bh-btn-white"
+                                    style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
+                                    onclick="abrirModalDiagnosticoConsumo()">
+                                    <i class='bx bx-bolt-circle'></i> Diagnóstico de Consumo
                                 </button>
 
                                 <button class="bh-btn-white" style="width:100%; text-align:left; padding:12px;"
@@ -2113,10 +2202,10 @@
                                     onchange="procesarImagenInventario(event)">
                             </label>
                             <label class="bh-btn-white"
-                                style="cursor:pointer; display:flex; align-items:center; gap:5px; border-color: var(--success); color: var(--success);">
+                                style="cursor:pointer; display:flex; align-items:center; gap:5px; border-color: var(--success); color: var(--success); margin:0; height:38px;">
                                 <i class='bx bx-spreadsheet'></i> Cargar Excel
-                                <input type="file" id="upload-excel-inv" accept=".xlsx,.csv" style="display:none;"
-                                    onchange="procesarExcelInventario(event)">
+                                <input type="file" id="input-excel-inventario" accept=".xlsx, .xls, .csv" style="display:none;"
+                                    onchange="abrirModalCategoriaExcel(event)">
                             </label>
                             <button id="btn-add-prod" class="bh-btn-purple"
                                 onclick="showView('agregar-producto-view', null)">+ Agregar</button>
@@ -2134,6 +2223,22 @@
                                 class='bx bx-mobile-alt'></i> Pantallas</button>
                         <button class="inv-tab" onclick="filtrarInventario('Micas', this)"><i
                                 class='bx bx-shield'></i> Micas</button>
+                        <button class="inv-tab" onclick="filtrarInventario('Celulares', this)"><i
+                                class='bx bx-mobile'></i> Celulares</button>
+                    </div>
+
+                    <div style="margin-bottom: 15px; position: relative; max-width: 400px; display: flex; gap: 10px;">
+                        <div style="position: relative; flex: 1;">
+                            <i class='bx bx-search' style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 18px;"></i>
+                            <input type="text" id="inv-buscador-texto" class="bh-input" placeholder="Buscar por nombre o SKU..." 
+                                style="padding-left: 40px; padding-right: 40px; width: 100%; box-sizing: border-box; background: #1a1a1a;" 
+                                oninput="renderizarProductosFiltrados()">
+                            <button onclick="document.getElementById('inv-buscador-texto').value=''; renderizarProductosFiltrados()" 
+                                style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px;" 
+                                title="Limpiar búsqueda">✕</button>
+                        </div>
+                        <select id="filtro-subcategoria" class="bh-input" style="display:none; max-width: 200px; background: #1a1a1a; color: white;" onchange="renderizarProductosFiltrados()">
+                        </select>
                     </div>
 
                     <div class="bh-card">
@@ -2144,6 +2249,7 @@
                                     <th>Categoría</th>
                                     <th>Precio</th>
                                     <th>Stock</th>
+                                    <th>Acción</th>
                                 </tr>
                             </thead>
                             <tbody id="tabla-productos">
@@ -2172,6 +2278,14 @@
                                     <option value="Micas">Micas (Protectores)</option>
                                 </select>
                             </div>
+                            <!-- ================= NUEVO BLOQUE ================= -->
+                            <div class="input-group" id="grupo-subcategoria" style="display:none;">
+                                <label>Subcategoría (Obligatorio)</label>
+                                <select id="reg-subcategoria" class="bh-input" style="background:#222; color:white;"
+                                    onchange="manejarSeleccionSubcategoria(this, 'reg-categoria')">
+                                </select>
+                            </div>
+                            <!-- ================================================= -->
                             <div class="input-group"><label>SKU / Código</label><input type="text"
                                     id="reg-sku" class="bh-input" placeholder="Ej: MIC-SAM-A54-001 (opcional)"></div>
                             <div class="input-group"><label>Nombre del Producto</label><input type="text"
@@ -2944,6 +3058,38 @@
             </div>
         </div>
     </div>
+    <!-- Modal de Selección de Categoría para Excel -->
+    <div id="modal-categoria-excel" class="modal-overlay excel-import-modal">
+        <div class="modal-content" style="max-width:400px; width:90%;">
+            <h2 style="margin-top:0; display:flex; align-items:center; gap:10px;">
+                <i class='bx bx-category' style="color:var(--bh-purple); font-size:28px;"></i>
+                ¿Qué estás subiendo?
+            </h2>
+            <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+                Selecciona la categoría que se aplicará a todos los productos de este archivo Excel.
+            </p>
+            
+            <div class="input-group" style="margin-bottom: 25px;">
+                <label>CATEGORÍA A APLICAR</label>
+                <select id="select-categoria-excel" class="bh-input">
+                    <option value="Celulares">Celulares</option>
+                    <option value="Pantallas">Pantallas</option>
+                    <option value="Micas">Micas</option>
+                    <option value="Repuestos">Repuestos de Celulares</option>
+                    <option value="Accesorios">Accesorios</option>
+                </select>
+            </div>
+
+            <div class="confirm-actions" style="margin-top:20px;">
+                <button class="bh-btn-white"
+                    onclick="cerrarModalCategoriaExcel()">Cancelar</button>
+                <button class="bh-btn-purple" onclick="confirmarCategoriaExcel()">
+                    <i class='bx bx-right-arrow-alt'></i> Continuar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de Importación Excel -->
     <div id="modal-excel-import" class="modal-overlay excel-import-modal">
         <div class="modal-content" style="max-width:700px; width:90%; max-height:80vh; overflow-y:auto;">
@@ -2963,6 +3109,10 @@
                 <div class="excel-summary-item">
                     <span style="color:var(--info);">🔄 Actualizar:</span>
                     <strong id="excel-update-count" style="color:var(--info);">0</strong>
+                </div>
+                <div class="excel-summary-item">
+                    <span style="color:var(--bh-purple);">🔗 Vinculados:</span>
+                    <strong id="excel-link-count" style="color:var(--bh-purple);">0</strong>
                 </div>
                 <div class="excel-summary-item">
                     <span style="color:var(--danger);">⚠️ Errores:</span>
@@ -2993,6 +3143,138 @@
                     style="background: linear-gradient(135deg, #10b981 0%, #047857 100%);">
                     <i class='bx bx-check'></i> Confirmar Importación
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DETALLE DE PRODUCTO (SÓLO LECTURA Y EDICIÓN PARCIAL) -->
+    <div id="modal-detalle-producto" class="modal-overlay" style="display:none;">
+        <div class="modal-content" style="max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; position: relative;">
+            <button onclick="cerrarDetalleProducto()" style="position:absolute; top:15px; right:15px; background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer;">&times;</button>
+            <h2 style="margin-top:0; flex-shrink: 0;">Detalle del Producto</h2>
+            
+            <div style="overflow-y: auto; flex: 1; padding-right: 5px;">
+                <div id="det-aviso-costo" style="display:none; background:rgba(239, 68, 68, 0.1); border:1px solid #ef4444; color:#ef4444; padding:10px; border-radius:8px; margin-bottom:15px; font-size:12px;">
+                    ⚠️ Este costo viene de un valor ambiguo en el archivo original, verifica manualmente con el proveedor.
+                </div>
+
+                <!-- Bloque 1: Datos Generales -->
+                <div class="grid-inputs" style="margin-bottom: 20px;">
+                    <div class="input-group">
+                        <label style="color:var(--text-muted); font-size:11px;">SKU 🔒</label>
+                        <div id="det-sku" title="El SKU no es editable para preservar la trazabilidad." style="background:#222; padding:8px; border-radius:6px; font-weight:bold; color:var(--text-muted); cursor:not-allowed;">-</div>
+                    </div>
+                    <div class="input-group">
+                        <label style="color:var(--text-muted); font-size:11px;">Stock Actual</label>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <div id="det-stock" style="background:#222; padding:8px; border-radius:6px; font-weight:bold; color:var(--success); flex:1;">-</div>
+                            <button class="bh-btn-white" style="padding:6px; font-size:11px;" onclick="toggleAjusteStock()">Ajustar</button>
+                        </div>
+                    </div>
+                    
+                    <div id="form-ajuste-stock" style="grid-column: span 2; display:none; background:#222; padding:15px; border-radius:8px; border:1px solid #444; margin-top:5px;">
+                        <h4 style="margin:0 0 10px 0; font-size:12px; color:var(--info);">Ajuste Manual de Stock</h4>
+                        <div class="grid-inputs" style="grid-template-columns: 1fr 2fr;">
+                            <div class="input-group">
+                                <label style="font-size:11px;">Nuevo total exacto</label>
+                                <input type="number" id="ajuste-stock-nuevo" class="bh-input" min="0">
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size:11px;">Motivo del ajuste</label>
+                                <input type="text" id="ajuste-stock-motivo" class="bh-input" placeholder="Ej: Merma, Error de conteo">
+                            </div>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
+                            <button class="bh-btn-white" style="padding:4px 10px; font-size:11px;" onclick="toggleAjusteStock()">Cancelar</button>
+                            <button class="bh-btn-purple" style="padding:4px 10px; font-size:11px;" onclick="guardarAjusteStock()">Aplicar Ajuste</button>
+                        </div>
+                    </div>
+
+                    <div class="input-group" style="grid-column: span 2;">
+                        <label style="color:var(--text-muted); font-size:11px;">Nombre del Producto</label>
+                        <input type="text" id="det-nombre" class="bh-input" oninput="verificarCambiosDetalle()">
+                    </div>
+                    <div class="input-group" style="grid-column: span 2;">
+                        <label style="color:var(--text-muted); font-size:11px;">Categoría</label>
+                        <select id="det-categoria" class="bh-input" style="background:#222;" onchange="refrescarDetSubcategoria(); toggleCostosPorCategoria()">
+                            <option value="Pantallas">Pantallas</option>
+                            <option value="Repuestos de Celulares">Repuestos de Celulares</option>
+                            <option value="Accesorios">Accesorios</option>
+                            <option value="Micas">Micas</option>
+                            <option value="Celulares">Celulares</option>
+                        </select>
+                    </div>
+                    <div class="input-group" id="det-grupo-subcategoria" style="grid-column: span 2; display: none;">
+                        <label style="color:var(--text-muted); font-size:11px;">Subcategoría</label>
+                        <select id="det-subcategoria" class="bh-input" style="background:#222;"
+                            onchange="manejarSeleccionSubcategoria(this, 'det-categoria'); verificarCambiosDetalle()">
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Bloque 2: Costos por proveedor (Condicional) -->
+                <div id="bloque-costos" style="margin-bottom: 20px; display: none;">
+                    <h3 style="font-size:14px; border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:10px; color:var(--text-muted);">Costos por Proveedor</h3>
+                    <div class="grid-inputs">
+                        <div class="input-group">
+                            <label style="color:var(--text-muted); font-size:11px;">CAYCEL</label>
+                            <input type="number" step="0.01" min="0" id="det-costo-caycel" class="bh-input" placeholder="Sin dato" oninput="verificarCambiosDetalle()">
+                        </div>
+                        <div class="input-group">
+                            <label style="color:var(--text-muted); font-size:11px;">SAMTEC</label>
+                            <input type="number" step="0.01" min="0" id="det-costo-samtec" class="bh-input" placeholder="Sin dato" oninput="verificarCambiosDetalle()">
+                        </div>
+                        <div class="input-group">
+                            <label style="color:var(--text-muted); font-size:11px;">CYBERPHONE</label>
+                            <input type="number" step="0.01" min="0" id="det-costo-cyberphone" class="bh-input" placeholder="Sin dato" oninput="verificarCambiosDetalle()">
+                        </div>
+                        <div class="input-group">
+                            <label style="color:var(--text-muted); font-size:11px;">AMOBILE</label>
+                            <input type="number" step="0.01" min="0" id="det-costo-amobile" class="bh-input" placeholder="Sin dato" oninput="verificarCambiosDetalle()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bloque 3: Precios de venta -->
+                <div style="margin-bottom: 20px;">
+                    <h3 style="font-size:14px; border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:10px; color:var(--text-muted);">Precios de Venta</h3>
+                    <div class="grid-inputs">
+                        <div class="input-group">
+                            <label style="color:var(--text-muted); font-size:11px;">Precio Mayor</label>
+                            <input type="number" step="0.01" min="0" id="det-precio-mayor" class="bh-input" placeholder="Sin dato" oninput="verificarCambiosDetalle()">
+                        </div>
+                        <div class="input-group">
+                            <label style="color:var(--text-muted); font-size:11px;">Precio Punto</label>
+                            <input type="number" step="0.01" min="0" id="det-precio-punto" class="bh-input" placeholder="Sin dato" oninput="verificarCambiosDetalle()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bloque 4: Historial de Ingresos -->
+                <div>
+                    <h3 style="font-size:14px; border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:10px; color:var(--text-muted);">Últimos Ingresos (Historial)</h3>
+                    <div style="background:#1a1a1a; border-radius:8px; border:1px solid #333;">
+                        <table class="excel-preview-table" style="margin:0; width:100%;">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Cant.</th>
+                                    <th>Proveedor</th>
+                                    <th>Costo</th>
+                                    <th>Nota</th>
+                                </tr>
+                            </thead>
+                            <tbody id="det-historial-body">
+                                <tr><td colspan="5" style="text-align:center; padding:15px; color:#777;">Cargando historial...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; padding-top:15px; border-top:1px solid #333; flex-shrink: 0;">
+                <button class="bh-btn-white" onclick="cerrarDetalleProducto()">Cerrar</button>
+                <button class="bh-btn-purple" id="btn-guardar-detalle" onclick="guardarDetalleProducto()" disabled>Guardar Cambios</button>
             </div>
         </div>
     </div>
@@ -3037,6 +3319,44 @@
                     onclick="document.getElementById('modal-facturacion').style.display='none'">Cancelar</button>
                 <button class="bh-btn-purple" style="background: var(--info);" onclick="emitirFactura()">Generar y
                     Descargar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Diagnóstico Consumo -->
+    <div id="modal-diagnostico-consumo" class="modal-overlay">
+        <div class="modal-content" style="width: 500px;">
+            <h2 style="margin-top:0; color: var(--bh-purple); display:flex; align-items:center; gap:8px;">
+                <i class='bx bx-bolt-circle'></i> Diagnóstico de Consumo
+            </h2>
+            <p style="color:#aaa; font-size:13px; margin-bottom:20px;">
+                Ingresa el valor de consumo (en Amperios) y selecciona la etapa para obtener el pre-diagnóstico de placa.
+            </p>
+
+            <div class="input-group">
+                <label>Etapa de Prueba</label>
+                <select id="diag-etapa" class="bh-input" onchange="evaluarConsumo()">
+                    <option value="antes">Antes de presionar Power</option>
+                    <option value="durante">Manteniendo Power</option>
+                    <option value="despues">Al soltar Power</option>
+                </select>
+            </div>
+
+            <div class="input-group" style="margin-top: 15px;">
+                <label>Consumo (A)</label>
+                <input type="text" id="diag-consumo" class="bh-input" inputmode="decimal" placeholder="Ej: 0.045" style="font-family: monospace; font-size: 18px; color: var(--info);">
+            </div>
+
+            <div id="diag-resultado-panel" style="margin-top: 20px; padding: 15px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid #333; display: none;">
+                <div style="font-weight:bold; margin-bottom: 5px; font-size: 14px;" id="diag-resultado-titulo">Resultado</div>
+                <div style="font-size: 13px; color: #ddd;" id="diag-resultado-texto"></div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:25px;">
+                <button class="bh-btn-white" onclick="cerrarModalDiagnosticoConsumo()">Cerrar</button>
+                <button class="bh-btn-purple" style="background:var(--success);" onclick="agregarDiagnosticoBitacora()" id="btn-add-bitacora" disabled>
+                    <i class='bx bx-message-square-add'></i> Añadir a Bitácora
+                </button>
             </div>
         </div>
     </div>
@@ -3313,6 +3633,19 @@
             setTimeout(() => { toast.style.animation = 'fadeOut 0.5s forwards'; setTimeout(() => toast.remove(), 500); }, 4000);
         }
 
+        let intentandoAutoLogin = false;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const tokenGuardado = localStorage.getItem('sessionToken');
+            if (tokenGuardado && isElectron) {
+                intentandoAutoLogin = true;
+                const loginSection = document.getElementById('login-section');
+                if (loginSection) loginSection.style.opacity = '0.4';
+                document.getElementById('login-error').innerText = 'Verificando sesión guardada...';
+                ipcRenderer.send('iniciar-sesion-token', { token: tokenGuardado });
+            }
+        });
+
         async function iniciarSesion() {
             const u = document.getElementById('user-login').value.trim();
             const p = document.getElementById('pass-login').value.trim();
@@ -3333,7 +3666,8 @@
             // 1. LOGIN PRINCIPAL (Tabla usuarios local/Electron)
             // Esto disparará tu ipcRenderer.on('login-respuesta') devolviéndote tus privilegios.
             // NOTA: Si en tu main.js el evento de escucha se llama diferente (ej: 'iniciar-sesion-sql'), cámbialo por 'login'.
-            ipcRenderer.send('iniciar-sesion', { usuario: u, password: p });
+            const recordar = document.getElementById('chk-recordar-sesion')?.checked || false;
+            ipcRenderer.send('iniciar-sesion', { usuario: u, password: p, recordar });
 
             // 2. LOGIN SECUNDARIO (Chat en vivo de Supabase)
             let emailParaChat = u;
@@ -3362,6 +3696,7 @@
                 if (res.requiere2FA) {
                     // Guardamos temporalmente el usuario para poder validar el 2FA después
                     localStorage.setItem('usuarioLoginTemp', res.usuario);
+                    localStorage.setItem('recordarTemp', recordar ? '1' : '0');
                     toggleMFAView(true);
                     showToast("Código de seguridad 2FA requerido", "info");
                 } else {
@@ -3371,6 +3706,11 @@
                     localStorage.setItem('miEmpresaId', res.empresa_id);
                     localStorage.setItem('userRol', res.rol);
                     if (res.avatar) localStorage.setItem('userAvatar', res.avatar);
+                    if (res.sessionToken) {
+                        localStorage.setItem('sessionToken', res.sessionToken);
+                    } else {
+                        localStorage.removeItem('sessionToken');
+                    }
 
                     document.getElementById('perfil-nombre').value = res.nombre_completo || '';
                     document.getElementById('perfil-nickname').value = res.nickname || res.usuario;
@@ -3382,7 +3722,7 @@
                         avatarBase64 = res.avatar;
                     }
 
-                    showToast("Acceso concedido", "success");
+                    showToast(intentandoAutoLogin ? "Sesión restaurada" : "Acceso concedido", "success");
 
                     document.getElementById('login-screen').style.display = 'none';
                     document.getElementById('app-content').style.display = 'flex';
@@ -3392,9 +3732,20 @@
                     showView('dashboard', document.getElementById('nav-dash'));
                     if (typeof iniciarChatEnVivo === 'function') iniciarChatEnVivo();
                 }
+                intentandoAutoLogin = false;
             } else {
-                document.getElementById('login-error').innerText = res.msg;
-                showToast(res.msg, 'danger');
+                if (intentandoAutoLogin) {
+                    // Falló el auto-login silencioso (token vencido/invalidado): no asustamos al usuario,
+                    // solo lo dejamos en la pantalla de login normal.
+                    intentandoAutoLogin = false;
+                    localStorage.removeItem('sessionToken');
+                    const loginSection = document.getElementById('login-section');
+                    if (loginSection) loginSection.style.opacity = '1';
+                    document.getElementById('login-error').innerText = '';
+                } else {
+                    document.getElementById('login-error').innerText = res.msg;
+                    showToast(res.msg, 'danger');
+                }
             }
         });
 
@@ -3413,6 +3764,12 @@
                 localStorage.setItem('miEmpresaId', res.empresa_id);
                 localStorage.setItem('userRol', res.rol);
                 if (res.avatar) localStorage.setItem('userAvatar', res.avatar);
+                if (res.sessionToken) {
+                    localStorage.setItem('sessionToken', res.sessionToken);
+                } else {
+                    localStorage.removeItem('sessionToken');
+                }
+                localStorage.removeItem('recordarTemp');
 
                 // 2. Rellenamos datos de perfil
                 document.getElementById('perfil-nombre').value = res.nombre_completo || '';
@@ -3502,7 +3859,8 @@
                 ['nav-dash', 'nav-clientes', 'nav-inv'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
                 if (document.getElementById('btn-add-prod')) document.getElementById('btn-add-prod').style.display = 'none';
             } else if (rol === 'tecnico') {
-                ['nav-dash', 'nav-recep', 'nav-taller'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
+                ['nav-dash', 'nav-recep', 'nav-taller', 'nav-inv'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
+                if (document.getElementById('btn-add-prod')) document.getElementById('btn-add-prod').style.display = 'none';
             }
 
             // 🚨 2. REGLA ESTRICTA PARA EL GENERADOR DE LICENCIAS Y DISTRIBUIDORES 🚨
@@ -3526,8 +3884,11 @@
             if (el) el.classList.add('active');
 
             if (id === 'crm' && !window.isDemoMode) ipcRenderer.send('analisis-crm');
-            if (id === 'taller' && !window.isDemoMode) ipcRenderer.send('obtener-ordenes');
-            if (id === 'inventario' && !window.isDemoMode) ipcRenderer.send('obtener-productos');
+            if ((id === 'taller' || id === 'dashboard') && !window.isDemoMode) ipcRenderer.send('obtener-ordenes');
+            if (id === 'inventario' && !window.isDemoMode) {
+                ipcRenderer.send('obtener-productos');
+                ipcRenderer.send('obtener-subcategorias-custom');
+            }
             if (id === 'reportes' && !window.isDemoMode) ipcRenderer.send('obtener-datos-reporte', 'hoy');
 
             // 1. Aquí pedimos las facturas
@@ -3651,6 +4012,7 @@
             const data = {
                 nombre: document.getElementById('reg-nombre').value,
                 categoria: document.getElementById('reg-categoria').value,
+                subcategoria: document.getElementById('reg-subcategoria').value || null,
                 sku: document.getElementById('reg-sku').value || null,
                 costo: document.getElementById('reg-costo').value,
                 precio: document.getElementById('reg-precio').value,
@@ -3786,13 +4148,22 @@
                     </td>
                     </tr>`;
                 }).join('');
-                if (document.getElementById('dash-asignar')) document.getElementById('dash-asignar').innerText = rows.length;
+                const porAsignar = rows.filter(r => r.estado === 'Recibido').length;
+                const enProceso = rows.filter(r => r.estado === 'En Proceso').length;
+                const listos = rows.filter(r => r.estado === 'Completado').length;
+                if (document.getElementById('dash-asignar')) document.getElementById('dash-asignar').innerText = porAsignar;
+                if (document.getElementById('dash-proceso')) document.getElementById('dash-proceso').innerText = enProceso;
+                if (document.getElementById('dash-listos')) document.getElementById('dash-listos').innerText = listos;
             }
         });
 
         ipcRenderer.on('lista-de-productos', (e, rows) => {
             todosLosProductos = rows || [];
             renderizarProductosFiltrados();
+        });
+
+        ipcRenderer.on('subcategorias-custom-lista', (e, data) => {
+            subcategoriasCustom = data || {};
         });
 
         ipcRenderer.on('datos-reporte', (e, data) => {
@@ -3857,7 +4228,7 @@
         function generarQR() {
             try {
                 document.getElementById('qrcode').innerHTML = "";
-                if (typeof QRCode !== 'undefined') { new QRCode(document.getElementById('qrcode'), { text: "https://blackhouse.app/tracking", width: 128, height: 128 }); }
+                if (typeof QRCode !== 'undefined') { new QRCode(document.getElementById('qrcode'), { text: "https://blackhouse-os-web.vercel.app/tracking.html", width: 128, height: 128 }); }
             } catch (err) { }
         }
 
@@ -3917,7 +4288,7 @@
                     `marcó la orden ID-${String(id).padStart(4, '0')} como DEVUELTO (Sin solución). Revisar.`
                 );
             }
-            const trackingLink = `https://blackhouse.app/track/${id}`;
+            const trackingLink = `https://blackhouse-os-web.vercel.app/tracking.html?id=${id}`;
             const mensaje = `Hola, el estado de su orden #${id} ha cambiado a: *${nuevoEstado}*. \nVer detalle: ${trackingLink}`;
             const url = `https://wa.me/51${telefono}?text=${encodeURIComponent(mensaje)}`;
             if (isElectron) window.open(url, '_blank');
@@ -3925,7 +4296,10 @@
             notificarChatOrden(id, 'Equipo', nuevoEstado);
         }
 
-        ipcRenderer.on('orden-actualizada', (e, data) => { showToast(`Estado actualizado`, 'success'); });
+        ipcRenderer.on('orden-actualizada', (e, data) => {
+            showToast(`Estado actualizado`, 'success');
+            ipcRenderer.send('obtener-ordenes');
+        });
 
         const canvas = document.getElementById('signature-pad');
         const ctx = canvas.getContext('2d');
@@ -4889,6 +5263,249 @@
                 showToast("Error al guardar: " + res.msg, "danger");
             }
         });
+        // ================= DIAGNÓSTICO DE CONSUMO =================
+        function abrirModalDiagnosticoConsumo() {
+            document.getElementById('modal-diagnostico-consumo').style.display = 'flex';
+            document.getElementById('diag-consumo').value = '';
+            document.getElementById('diag-resultado-panel').style.display = 'none';
+            document.getElementById('btn-add-bitacora').disabled = true;
+            
+            // Configurar el listener del input para validar formato decimal y que no salte el cursor
+            const inputConsumo = document.getElementById('diag-consumo');
+            inputConsumo.onkeydown = function(e) {
+                // Permitir ctrl/cmd keys y navegación
+                if ([46, 8, 9, 27, 13, 110, 190, 37, 39].indexOf(e.keyCode) !== -1 ||
+                    (e.keyCode === 65 && (e.ctrlKey === true || e.metaKey === true)) || 
+                    (e.keyCode === 67 && (e.ctrlKey === true || e.metaKey === true)) || 
+                    (e.keyCode === 86 && (e.ctrlKey === true || e.metaKey === true)) || 
+                    (e.keyCode === 88 && (e.ctrlKey === true || e.metaKey === true))) {
+                    return;
+                }
+                
+                // Prevenir múltiples puntos decimales
+                if (e.key === '.' || e.key === ',') {
+                    if (this.value.includes('.')) {
+                        e.preventDefault();
+                    }
+                    return;
+                }
+                
+                // Solo permitir números
+                if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
+                    e.preventDefault();
+                }
+            };
+
+            inputConsumo.oninput = function() {
+                this.value = this.value.replace(/,/g, '.');
+                
+                const parts = this.value.split('.');
+                if (parts.length > 2) {
+                    this.value = parts[0] + '.' + parts.slice(1).join('');
+                }
+                evaluarConsumo();
+            };
+        }
+
+        function cerrarModalDiagnosticoConsumo() {
+            document.getElementById('modal-diagnostico-consumo').style.display = 'none';
+        }
+
+        function evaluarConsumo() {
+            const etapa = document.getElementById('diag-etapa').value;
+            const consumoStr = document.getElementById('diag-consumo').value;
+            const panel = document.getElementById('diag-resultado-panel');
+            const txt = document.getElementById('diag-resultado-texto');
+            const btn = document.getElementById('btn-add-bitacora');
+            
+            if (!consumoStr || isNaN(parseFloat(consumoStr))) {
+                panel.style.display = 'none';
+                btn.disabled = true;
+                return;
+            }
+
+            const consumo = parseFloat(consumoStr);
+            let resultado = '';
+            let color = '';
+
+            if (etapa === 'antes') {
+                if (consumo === 0) {
+                    resultado = 'Normal. Esperando orden.';
+                    color = 'var(--success)';
+                } else if (consumo > 0 && consumo <= 0.080) {
+                    resultado = 'Fuga baja en línea principal (Vbat/VPH_PWR). Revisar periféricos.';
+                    color = 'var(--warning)';
+                } else if (consumo > 0.080) {
+                    resultado = 'Cortocircuito en línea principal. Inyectar tensión.';
+                    color = 'var(--danger)';
+                }
+            } else if (etapa === 'durante') {
+                if (consumo === 0) {
+                    resultado = 'Falla en botón, flex o PMIC no alimentado.';
+                    color = 'var(--warning)';
+                } else if (consumo > 0 && consumo <= 0.030) {
+                    resultado = 'Falla de Reloj Oscilador o CPU no despierta.';
+                    color = 'var(--danger)';
+                } else if (consumo > 0.030 && consumo <= 0.080) {
+                    resultado = 'Falla de RAM/Memoria (Posible soldadura fría/Reballing).';
+                    color = 'var(--warning)';
+                } else if (consumo > 0.080 && consumo <= 0.150) {
+                    resultado = 'Bloqueo de CPU o corto en salida LDO secundaria.';
+                    color = 'var(--danger)';
+                } else if (consumo > 0.150) {
+                    resultado = 'Corto secundario grave post-PMIC.';
+                    color = 'var(--danger)';
+                }
+            } else if (etapa === 'despues') {
+                if (consumo === 0) {
+                    resultado = 'Falla de retención (Falta señal PS_HOLD).';
+                    color = 'var(--danger)';
+                } else if (consumo > 0.150) {
+                    resultado = 'Secuencia de encendido normal o Bootloop.';
+                    color = 'var(--success)';
+                } else {
+                    resultado = 'Consumo anormal al soltar. Revisar PMIC.';
+                    color = 'var(--warning)';
+                }
+            }
+
+            if (resultado) {
+                panel.style.display = 'block';
+                panel.style.borderColor = color;
+                txt.innerHTML = `<span style="color:${color}; font-weight:bold;">${consumo.toFixed(3)}A:</span> ${resultado}`;
+                btn.disabled = false;
+                
+                const etapasNombres = {
+                    'antes': 'Antes de presionar Power',
+                    'durante': 'Manteniendo Power',
+                    'despues': 'Al soltar Power'
+                };
+                
+                panel.dataset.res = `[DIAGNÓSTICO CONSUMO]\nEtapa: ${etapasNombres[etapa]}\nConsumo: ${consumo.toFixed(3)}A\nAnálisis: ${resultado}`;
+            } else {
+                panel.style.display = 'none';
+                btn.disabled = true;
+            }
+        }
+
+        function agregarDiagnosticoBitacora() {
+            const bitacora = document.getElementById('lab-bitacora');
+            const panel = document.getElementById('diag-resultado-panel');
+            if (bitacora && panel.dataset.res) {
+                const text = bitacora.value;
+                bitacora.value = text + (text.trim() ? '\n\n' : '') + panel.dataset.res;
+                showToast('Diagnóstico añadido a la bitácora', 'success');
+            }
+            cerrarModalDiagnosticoConsumo();
+        }
+
+        // ================= RUTA DE DIAGNÓSTICO DE ENCENDIDO =================
+        let estadoRuta = {
+            pasoActual: 1,
+            resultadoFinal: '',
+            falloEnPaso: 0
+        };
+
+        const definicionPasos = {
+            1: "Validación Primaria (Standby): VPH_PWR / IF_PMIC",
+            2: "Despertar del Sistema: Consumo inicial",
+            3: "Potencia CPU (Líneas BUCK): Impedancia en bobinas PMIC",
+            4: "Lógica LDO: Presencia de 1.8V VDD_IO"
+        };
+
+        function avanzarRuta(paso, esCorrecto) {
+            if (paso !== estadoRuta.pasoActual) return; // Prevenir clicks erróneos
+
+            const contenedorActual = document.getElementById(`diag-paso-${paso}`);
+            
+            if (!esCorrecto) {
+                // Falla detectada
+                contenedorActual.style.borderColor = 'var(--danger)';
+                estadoRuta.falloEnPaso = paso;
+                estadoRuta.resultadoFinal = `Falla detectada en Paso ${paso} (${definicionPasos[paso]}). Requiere revisión profunda en este sector.`;
+                finalizarRuta(false);
+            } else {
+                // Medición correcta
+                contenedorActual.style.borderColor = 'var(--success)';
+                contenedorActual.style.opacity = '0.5';
+                contenedorActual.style.pointerEvents = 'none';
+
+                if (paso < 4) {
+                    estadoRuta.pasoActual++;
+                    const siguienteContenedor = document.getElementById(`diag-paso-${estadoRuta.pasoActual}`);
+                    siguienteContenedor.style.opacity = '1';
+                    siguienteContenedor.style.pointerEvents = 'auto';
+                    
+                    document.getElementById('diag-ruta-estado').innerText = `Paso ${estadoRuta.pasoActual} de 4`;
+                    document.getElementById('diag-ruta-progreso').style.width = `${estadoRuta.pasoActual * 25}%`;
+                } else {
+                    estadoRuta.resultadoFinal = "Todas las etapas de encendido primario están correctas. El equipo debería encender o el problema radica en memoria/software.";
+                    finalizarRuta(true);
+                }
+            }
+        }
+
+        function finalizarRuta(exito) {
+            const resumen = document.getElementById('diag-resumen');
+            const texto = document.getElementById('diag-resumen-texto');
+            
+            // Ocultar todos los pasos no alcanzados si hubo fallo
+            for(let i = 1; i <= 4; i++) {
+                const paso = document.getElementById(`diag-paso-${i}`);
+                if (paso) {
+                    paso.style.pointerEvents = 'none';
+                    if (i > estadoRuta.pasoActual) {
+                        paso.style.display = 'none';
+                    }
+                }
+            }
+
+            resumen.style.display = 'block';
+            resumen.style.borderColor = exito ? 'var(--success)' : 'var(--danger)';
+            texto.innerHTML = `<strong style="color:${exito ? 'var(--success)' : 'var(--danger)'}">Resultado:</strong> ${estadoRuta.resultadoFinal}`;
+            
+            document.getElementById('diag-ruta-progreso').style.width = '100%';
+            document.getElementById('diag-ruta-progreso').style.background = exito ? 'var(--success)' : 'var(--danger)';
+            document.getElementById('diag-ruta-estado').innerText = exito ? 'Completado' : 'Interrumpido';
+        }
+
+        function insertarRutaBitacora() {
+            const bitacora = document.getElementById('lab-bitacora');
+            if (bitacora) {
+                const text = bitacora.value;
+                const registro = `[RUTA DE ENCENDIDO]\nEstado: ${estadoRuta.falloEnPaso > 0 ? 'Falla en Paso ' + estadoRuta.falloEnPaso + ' (' + definicionPasos[estadoRuta.falloEnPaso] + ')' : 'Exitosa (4/4)'}\nConclusión: ${estadoRuta.resultadoFinal}`;
+                bitacora.value = text + (text.trim() ? '\n\n' : '') + registro;
+                showToast('Ruta de diagnóstico añadida a bitácora', 'success');
+            }
+        }
+
+        function reiniciarRuta() {
+            estadoRuta = { pasoActual: 1, resultadoFinal: '', falloEnPaso: 0 };
+            
+            document.getElementById('diag-ruta-estado').innerText = `Paso 1 de 4`;
+            document.getElementById('diag-ruta-estado').style.color = `var(--warning)`;
+            const progreso = document.getElementById('diag-ruta-progreso');
+            progreso.style.width = `25%`;
+            progreso.style.background = `var(--bh-purple)`;
+
+            for (let i = 1; i <= 4; i++) {
+                const paso = document.getElementById(`diag-paso-${i}`);
+                if (paso) {
+                    paso.style.display = 'block';
+                    paso.style.borderColor = '#333';
+                    if (i === 1) {
+                        paso.style.opacity = '1';
+                        paso.style.pointerEvents = 'auto';
+                    } else {
+                        paso.style.opacity = '0.5';
+                        paso.style.pointerEvents = 'none';
+                    }
+                }
+            }
+            
+            document.getElementById('diag-resumen').style.display = 'none';
+        }
+
         // ================= CALCULADORA LEY DE OHM =================
         function calcularOhm() {
             const vInput = document.getElementById('ohm-v');
@@ -5039,8 +5656,32 @@
 
         // ================= IMPORTACIÓN DESDE EXCEL =================
         let excelDataTemporal = []; // Productos parseados del Excel pendientes de confirmar
+        let excelFileEventTemporal = null; // Guardar el evento del archivo temporalmente
 
-        async function procesarExcelInventario(event) {
+        function abrirModalCategoriaExcel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            excelFileEventTemporal = event;
+            document.getElementById('modal-categoria-excel').style.display = 'flex';
+        }
+
+        function cerrarModalCategoriaExcel() {
+            document.getElementById('modal-categoria-excel').style.display = 'none';
+            if (excelFileEventTemporal && excelFileEventTemporal.target) {
+                excelFileEventTemporal.target.value = ''; // Limpiar el input si cancela
+            }
+            excelFileEventTemporal = null;
+        }
+
+        function confirmarCategoriaExcel() {
+            const categoria = document.getElementById('select-categoria-excel').value;
+            document.getElementById('modal-categoria-excel').style.display = 'none';
+            procesarExcelInventario(excelFileEventTemporal, categoria);
+            excelFileEventTemporal = null;
+        }
+
+        async function procesarExcelInventario(event, categoriaForzada) {
             const file = event.target.files[0];
             if (!file) return;
 
@@ -5055,6 +5696,12 @@
 
             try {
                 const data = await file.arrayBuffer();
+                
+                // Generar hash SHA-256 del archivo
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 const sheet = workbook.Sheets[sheetName];
@@ -5079,24 +5726,40 @@
 
                 jsonData.forEach((row, idx) => {
                     const nombre = String(row[columnMap.nombre] || '').trim();
-                    if (!nombre) {
+                    if (!nombre && !row[columnMap.sku]) {
+                        return; // Fila completamente vacía
+                    }
+                    if (!nombre && row[columnMap.sku]) {
                         errores.push(`Fila ${idx + 2}: Sin nombre de producto, omitida.`);
                         return;
                     }
 
-                    const cantidad = parseInt(row[columnMap.cantidad] || 0);
+                    let cantidad = parseInt(row[columnMap.cantidad] || 0);
                     if (isNaN(cantidad) || cantidad < 0) {
                         errores.push(`Fila ${idx + 2}: Cantidad inválida para "${nombre}", se usará 0.`);
+                        cantidad = 0;
+                    }
+
+                    // Columna "Disponible" (Sí/No): para productos que no se cuentan por unidad exacta
+                    // (ej. Micas), marca el stock como 1 (disponible) o 0 (agotado) en vez de un número.
+                    if (columnMap.disponible) {
+                        const valorDisponible = String(row[columnMap.disponible] || '').trim().toLowerCase();
+                        cantidad = ['si', 'sí', 'x', '1', 'true', 'disponible'].includes(valorDisponible) ? 1 : 0;
                     }
 
                     productosParseados.push({
                         sku: String(row[columnMap.sku] || '').trim() || null,
                         nombre: nombre,
-                        categoria: String(row[columnMap.categoria] || 'Accesorios').trim(),
+                        categoria: categoriaForzada || String(row[columnMap.categoria] || 'Accesorios').trim(),
+                        subcategoria: String(row[columnMap.subcategoria] || '').trim() || null,
                         modelo_compatible: String(row[columnMap.modelo] || '').trim(),
                         cantidad: Math.max(0, cantidad || 0),
-                        costo: parseFloat(row[columnMap.costo] || 0) || 0,
-                        precio: parseFloat(row[columnMap.precio] || 0) || 0
+                        costo: parseFloat(row[columnMap.costo] || 0) || null,
+                        precio: parseFloat(row[columnMap.precio_punto] || row[columnMap.precio] || 0) || null,
+                        proveedor: String(row[columnMap.proveedor] || '').trim().toUpperCase(),
+                        precio_mayor: parseFloat(row[columnMap.precio_mayor] || 0) || null,
+                        fecha_ingreso: String(row[columnMap.fecha_ingreso] || '').trim(),
+                        nota: String(row[columnMap.nota] || '').trim()
                     });
                 });
 
@@ -5106,10 +5769,17 @@
                     return;
                 }
 
-                excelDataTemporal = productosParseados;
+                // Guardamos el hash y nombre para usarlos luego al enviar a main
+                const payloadPreview = {
+                    hash: fileHash,
+                    nombreArchivo: nombreArchivo,
+                    items: productosParseados
+                };
+                
+                excelDataTemporal = payloadPreview; // Guardamos el payload completo
 
                 // Enviar al backend para que evalúe cuáles son nuevos y cuáles actualizar
-                ipcRenderer.send('preview-excel-inventario', productosParseados);
+                ipcRenderer.send('preview-excel-inventario', payloadPreview);
                 showToast(`📊 Se encontraron ${productosParseados.length} productos. Procesando...`, 'info');
 
                 // Mostrar errores si hay
@@ -5128,40 +5798,197 @@
         }
 
         function detectarColumnas(headers) {
-            const map = { sku: null, nombre: null, categoria: null, modelo: null, cantidad: null, costo: null, precio: null };
+            const map = { sku: null, nombre: null, categoria: null, subcategoria: null, modelo: null, cantidad: null, disponible: null, costo: null, precio: null, proveedor: null, precio_mayor: null, precio_punto: null, fecha_ingreso: null, nota: null };
+            
+            // Definir patrones para cada campo con prioridad (mayor = mejor match)
+            const fieldPatterns = {
+                sku: [
+                    { words: ['sku'], priority: 10 },
+                    { words: ['codigo', 'producto'], priority: 8 },
+                    { words: ['cod', 'prod'], priority: 7 },
+                    { words: ['codigo'], priority: 5 },
+                    { words: ['code'], priority: 5 },
+                    { words: ['cod'], priority: 3 },
+                    { words: ['referencia'], priority: 3 },
+                    { words: ['ref'], priority: 2 }
+                ],
+                nombre: [
+                    { words: ['nombre', 'producto'], priority: 10 },
+                    { words: ['nombre', 'del', 'producto'], priority: 10 },
+                    { words: ['nombre'], priority: 9 },
+                    { words: ['producto'], priority: 7 },
+                    { words: ['descripcion'], priority: 7 },
+                    { words: ['articulo'], priority: 7 },
+                    { words: ['item'], priority: 6 },
+                    { words: ['detalle'], priority: 6 },
+                    { words: ['repuesto'], priority: 6 },
+                    { words: ['pieza'], priority: 5 },
+                    { words: ['name'], priority: 5 },
+                    { words: ['product'], priority: 5 },
+                    { words: ['description'], priority: 5 },
+                    { words: ['pantalla'], priority: 4 },
+                    { words: ['accesorio'], priority: 4 }
+                ],
+                categoria: [
+                    { words: ['categoria'], priority: 10 },
+                    { words: ['category'], priority: 10 },
+                    { words: ['tipo'], priority: 7 },
+                    { words: ['type'], priority: 7 },
+                    { words: ['linea'], priority: 5 },
+                    { words: ['rubro'], priority: 5 },
+                    { words: ['grupo'], priority: 4 },
+                    { words: ['clase'], priority: 4 }
+                ],
+                subcategoria: [
+                    { words: ['subcategoria'], priority: 10 },
+                    { words: ['sub', 'categoria'], priority: 10 },
+                    { words: ['tipo', 'mica'], priority: 9 },
+                    { words: ['sub'], priority: 4 }
+                ],
+                modelo: [
+                    { words: ['modelo', 'compatible'], priority: 10 },
+                    { words: ['compatibilidad'], priority: 9 },
+                    { words: ['modelo'], priority: 8 },
+                    { words: ['compatible'], priority: 8 },
+                    { words: ['model'], priority: 7 },
+                    { words: ['equipo'], priority: 6 },
+                    { words: ['marca'], priority: 5 },
+                    { words: ['celular'], priority: 5 },
+                    { words: ['telefono'], priority: 4 },
+                    { words: ['dispositivo'], priority: 4 },
+                    { words: ['aplica'], priority: 3 }
+                ],
+                cantidad: [
+                    { words: ['cantidad'], priority: 10 },
+                    { words: ['qty'], priority: 10 },
+                    { words: ['stock'], priority: 8 },
+                    { words: ['unidades'], priority: 8 },
+                    { words: ['existencia'], priority: 7 },
+                    { words: ['existencias'], priority: 7 },
+                    { words: ['inventario'], priority: 5 },
+                    { words: ['agregar'], priority: 5 },
+                    { words: ['piezas'], priority: 4 },
+                    { words: ['cant'], priority: 4 },
+                    { words: ['quantity'], priority: 7 }
+                ],
+                disponible: [
+                    { words: ['disponible'], priority: 10 },
+                    { words: ['disponibilidad'], priority: 10 },
+                    { words: ['hay'], priority: 5 }
+                ],
+                costo: [
+                    { words: ['costo'], priority: 10 },
+                    { words: ['cost'], priority: 10 },
+                    { words: ['precio', 'compra'], priority: 9 },
+                    { words: ['costo', 'unitario'], priority: 9 },
+                    { words: ['compra'], priority: 5 },
+                    { words: ['inversion'], priority: 4 }
+                ],
+                precio: [
+                    { words: ['precio', 'venta'], priority: 10 },
+                    { words: ['precio'], priority: 8 },
+                    { words: ['price'], priority: 8 },
+                    { words: ['venta'], priority: 6 },
+                    { words: ['pvp'], priority: 7 },
+                    { words: ['valor'], priority: 4 }
+                ],
+                proveedor: [
+                    { words: ['proveedor'], priority: 10 }
+                ],
+                precio_mayor: [
+                    { words: ['precio', 'mayor'], priority: 10 },
+                    { words: ['mayor'], priority: 8 }
+                ],
+                precio_punto: [
+                    { words: ['precio', 'punto'], priority: 10 },
+                    { words: ['punto'], priority: 8 }
+                ],
+                fecha_ingreso: [
+                    { words: ['fecha', 'ingreso'], priority: 10 },
+                    { words: ['fecha'], priority: 5 }
+                ],
+                nota: [
+                    { words: ['nota'], priority: 10 },
+                    { words: ['observacion'], priority: 8 }
+                ]
+            };
+
+            // Para cada header, calcular el mejor campo al que puede pertenecer
+            const assignments = []; // { header, field, priority }
+            
             headers.forEach(h => {
                 const col = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-                if (col.includes('sku') || col.includes('codigo') || col.includes('code')) map.sku = h;
-                else if (col.includes('nombre') || col.includes('producto') || col.includes('name') || col.includes('descripcion')) map.nombre = h;
-                else if (col.includes('categoria') || col.includes('category') || col.includes('tipo')) map.categoria = h;
-                else if (col.includes('modelo') || col.includes('model') || col.includes('compatible')) map.modelo = h;
-                else if (col.includes('cantidad') || col.includes('qty') || col.includes('stock') || col.includes('agregar')) map.cantidad = h;
-                else if (col.includes('costo') || col.includes('cost')) map.costo = h;
-                else if (col.includes('precio') || col.includes('price') || col.includes('venta')) map.precio = h;
+                let bestField = null;
+                let bestPriority = -1;
+
+                for (const [field, patterns] of Object.entries(fieldPatterns)) {
+                    for (const pattern of patterns) {
+                        const allMatch = pattern.words.every(word => col.includes(word));
+                        if (allMatch && pattern.priority > bestPriority) {
+                            bestPriority = pattern.priority;
+                            bestField = field;
+                        }
+                    }
+                }
+
+                if (bestField) {
+                    assignments.push({ header: h, field: bestField, priority: bestPriority });
+                }
             });
+
+            // Ordenar por prioridad descendente y asignar (el de mayor prioridad gana)
+            assignments.sort((a, b) => b.priority - a.priority);
+            const usedHeaders = new Set();
+
+            assignments.forEach(a => {
+                if (!map[a.field] && !usedHeaders.has(a.header)) {
+                    map[a.field] = a.header;
+                    usedHeaders.add(a.header);
+                }
+            });
+
+            // FALLBACK: Si no se detectó "nombre", usar la primera columna de texto que no esté asignada
+            if (!map.nombre) {
+                const assignedHeaders = new Set(Object.values(map).filter(v => v));
+                const fallbackHeader = headers.find(h => !assignedHeaders.has(h));
+                if (fallbackHeader) {
+                    map.nombre = fallbackHeader;
+                    console.log(`[Excel Import] Fallback: usando columna "${fallbackHeader}" como nombre del producto`);
+                }
+            }
+
+            console.log('[Excel Import] Columnas del Excel:', headers);
+            console.log('[Excel Import] Mapeo detectado:', JSON.stringify(map));
             return map;
         }
 
         ipcRenderer.on('preview-excel-resultado', (e, resultado) => {
-            // resultado = { items: [{...producto, accion: 'nuevo'|'actualizar', stockActual: N}], errores: [] }
-            excelDataTemporal = resultado.items;
+            // resultado = { hash, nombreArchivo, items: [{...}], errores: [] }
+            excelDataTemporal = resultado;
 
             const totalCount = resultado.items.length;
             const newCount = resultado.items.filter(i => i.accion === 'nuevo').length;
             const updateCount = resultado.items.filter(i => i.accion === 'actualizar').length;
             const errorCount = (resultado.errores || []).length;
+            const linkCount = resultado.items.filter(i => i.accion === 'actualizar' && i.metodoVinculacion === 'nombre').length;
 
             document.getElementById('excel-total-count').textContent = totalCount;
             document.getElementById('excel-new-count').textContent = newCount;
             document.getElementById('excel-update-count').textContent = updateCount;
             document.getElementById('excel-error-count').textContent = errorCount;
+            document.getElementById('excel-link-count').textContent = linkCount;
             document.getElementById('excel-summary-bar').style.display = 'flex';
 
             const tbody = document.getElementById('excel-preview-body');
             tbody.innerHTML = resultado.items.map(item => {
-                const badge = item.accion === 'nuevo'
-                    ? `<span class="excel-badge-new">🆕 NUEVO</span>`
-                    : `<span class="excel-badge-update">🔄 +${item.cantidad} (actual: ${item.stockActual})</span>`;
+                let badge = '';
+                if (item.accion === 'nuevo') {
+                    badge = `<span class="excel-badge-new">🆕 NUEVO</span>`;
+                } else if (item.metodoVinculacion === 'nombre') {
+                    badge = `<span class="excel-badge-update" style="background:rgba(124,58,237,0.2); color:#b193ff; border:1px solid rgba(124,58,237,0.3);">🔗 VINCULADO (+${item.cantidad})</span>`;
+                } else {
+                    badge = `<span class="excel-badge-update">🔄 +${item.cantidad} (actual: ${item.stockActual})</span>`;
+                }
                 return `<tr>
                     <td style="font-size:12px; color:var(--text-muted);">${item.sku || '-'}</td>
                     <td style="font-weight:600; color:white;">${item.nombre}</td>
@@ -5183,13 +6010,13 @@
 
         function confirmarImportacionExcel() {
             document.getElementById('modal-excel-import').style.display = 'none';
-            showToast(`📦 Importando ${excelDataTemporal.length} productos...`, 'info');
+            showToast(`📦 Importando ${excelDataTemporal.items.length} productos...`, 'info');
             ipcRenderer.send('importar-excel-inventario', excelDataTemporal);
         }
 
         ipcRenderer.on('resultado-importacion-excel', (e, res) => {
             if (res.success) {
-                showToast(`✅ Importación completada: ${res.nuevos} nuevos, ${res.actualizados} actualizados`, 'success');
+                showToast(`✅ Importación completada: ${res.nuevos} nuevos, ${res.actualizados} actualizados, ${res.vinculados} vinculados por nombre`, 'success');
                 ipcRenderer.send('obtener-productos');
             } else {
                 showToast('❌ Error en la importación: ' + res.msg, 'danger');
@@ -5238,6 +6065,16 @@
             if (e.key === 'Escape') {
                 this.value = '';
                 this.blur();
+            }
+        });
+
+        // Cierre global con Escape
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const modalDetalle = document.getElementById('modal-detalle-producto');
+                if (modalDetalle && modalDetalle.style.display !== 'none') {
+                    cerrarDetalleProducto();
+                }
             }
         });
 
@@ -5296,6 +6133,11 @@
         // En lugar de onclick="location.reload()"
         function cerrarSesion() {
             if (confirm('¿Seguro que deseas cerrar sesión?')) {
+                const tokenGuardado = localStorage.getItem('sessionToken');
+                if (tokenGuardado) {
+                    ipcRenderer.send('cerrar-sesion-token', { token: tokenGuardado });
+                    localStorage.removeItem('sessionToken');
+                }
                 location.reload();
             }
         }
@@ -5595,7 +6437,8 @@
             }
 
             // Enviamos el código para validación en el servidor
-            ipcRenderer.send('verificar-2fa', { usuario: usuarioTemp, codigo: codigoCompleto });
+            const recordar = localStorage.getItem('recordarTemp') === '1';
+            ipcRenderer.send('verificar-2fa', { usuario: usuarioTemp, codigo: codigoCompleto, recordar });
         }
 
         // === LOGICA DEL SELECTOR DE MODELOS ===
@@ -5755,8 +6598,12 @@
 
             countLabel.innerText = `${totalEncontrados} encontrados` + (totalEncontrados > 100 ? ' (mostrando 100)' : '');
 
+            const botonAgregar = `<button type="button" class="model-btn" onclick="agregarModeloNuevo()" style="border:1px dashed var(--bh-purple); color:var(--bh-purple);">
+                        <i class='bx bx-plus' style="margin-right:5px;"></i> Agregar modelo nuevo
+                    </button>`;
+
             if (mostrados.length === 0) {
-                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color:#777; padding: 20px;">No se encontraron modelos.</div>';
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color:#777; padding: 20px;">No se encontraron modelos.</div>' + botonAgregar;
                 return;
             }
 
@@ -5764,7 +6611,25 @@
                 return `<button type="button" class="model-btn" onclick="seleccionarModelo('${item.fullName}')" title="${item.fullName}">
                             <i class='bx bx-mobile-vibration' style="color:var(--bh-purple); margin-right:5px;"></i> ${item.model}
                         </button>`;
-            }).join('');
+            }).join('') + botonAgregar;
+        }
+
+        function agregarModeloNuevo() {
+            let marca = marcaActiva;
+            if (!marca) {
+                marca = (window.prompt('¿Marca del modelo nuevo? (ej: Samsung, Xiaomi, Motorola)') || '').trim();
+                if (!marca) return;
+            }
+            const modelo = (window.prompt(`Nombre del modelo nuevo para ${marca}:`) || '').trim();
+            if (!modelo) return;
+
+            if (!marcasModelosCache[marca]) marcasModelosCache[marca] = [];
+            if (!marcasModelosCache[marca].includes(modelo)) marcasModelosCache[marca].push(modelo);
+            ipcRenderer.send('agregar-modelo-nuevo', { marca, modelo });
+
+            marcaActiva = marca;
+            filtrarYRenderizarModelos();
+            showToast(`Modelo "${modelo}" agregado a ${marca}`, 'success');
         }
 
         function seleccionarModelo(nombreCompleto) {
@@ -5784,6 +6649,62 @@
         }
 
         // === LOGICA DE INVENTARIO CATEGORIZADO ===
+        const SUBCATEGORIAS = {
+            'Repuestos': [
+                'Batería', 'Flex de Carga', 'Flex de Volumen/Encendido', 'Placa de Carga (conector)',
+                'Flex de Huella Dactilar', 'Cámara Frontal', 'Cámara Trasera', 'Altavoz (Parlante)',
+                'Auricular (altavoz de llamada)', 'Micrófono', 'Vibrador (motor)', 'Antena/Módulo de Señal',
+                'Conector de Audífonos', 'Bandeja SIM', 'Botón de Encendido/Home', 'Otro'
+            ],
+            'Repuestos de Celulares': [
+                'Batería', 'Flex de Carga', 'Flex de Volumen/Encendido', 'Placa de Carga (conector)',
+                'Flex de Huella Dactilar', 'Cámara Frontal', 'Cámara Trasera', 'Altavoz (Parlante)',
+                'Auricular (altavoz de llamada)', 'Micrófono', 'Vibrador (motor)', 'Antena/Módulo de Señal',
+                'Conector de Audífonos', 'Bandeja SIM', 'Botón de Encendido/Home', 'Otro'
+            ],
+            'Accesorios': [
+                'Auriculares (alámbricos)', 'Auriculares Bluetooth', 'Cargadores (pared/auto)',
+                'Cables (USB-C/Lightning/Micro USB)', 'Forros/Case', 'Stickers/Calcomanías',
+                'Soportes/Holders', 'Power Bank', 'Memorias/USB', 'Parlantes Bluetooth',
+                'Popsockets/Anillos', 'Protector de Cámara', 'Otro'
+            ],
+            'Micas': [
+                'Vidrio 88D', 'Cerámica Matte', 'Cerámica Anti Espía', 'Vidrio Anti Espía', 'Vidrio de Tablet',
+                'Vidrio OG', 'Cerámica Brillosa', 'Flyer Sin Bordes', 'Flyer Super Gruesa Original',
+                'OG Sin Bordes', '21D', 'Otro'
+            ]
+        };
+
+        // Subcategorías agregadas por el usuario desde la app (persistidas en Supabase).
+        // Se fusionan con SUBCATEGORIAS para que el importador de Excel y el resto de la app las reconozcan.
+        let subcategoriasCustom = {};
+
+        function combinarSubcategorias(base, custom) {
+            const lista = base.filter(x => x !== 'Otro');
+            (custom || []).forEach(n => { if (!lista.includes(n)) lista.push(n); });
+            if (base.includes('Otro')) lista.push('Otro');
+            return lista;
+        }
+
+        function poblarSelectSubcategoria(selectEl, categoria, valorSeleccionado) {
+            const opciones = combinarSubcategorias(SUBCATEGORIAS[categoria] || [], subcategoriasCustom[categoria] || []);
+            selectEl.innerHTML = '<option value="" disabled selected>Selecciona una opción...</option>' +
+                opciones.map(opt => `<option value="${opt}">${opt}</option>`).join('') +
+                '<option value="__nueva__">+ Agregar nueva subcategoría...</option>';
+            if (valorSeleccionado) selectEl.value = valorSeleccionado;
+        }
+
+        function manejarSeleccionSubcategoria(selectEl, categoriaSelectId) {
+            if (selectEl.value !== '__nueva__') return;
+            const categoria = document.getElementById(categoriaSelectId).value;
+            const nombre = (window.prompt(`Nombre de la nueva subcategoría para "${categoria}":`) || '').trim();
+            if (!nombre) { selectEl.value = ''; return; }
+            if (!subcategoriasCustom[categoria]) subcategoriasCustom[categoria] = [];
+            if (!subcategoriasCustom[categoria].includes(nombre)) subcategoriasCustom[categoria].push(nombre);
+            ipcRenderer.send('agregar-subcategoria-custom', { categoria, nombre });
+            poblarSelectSubcategoria(selectEl, categoria, nombre);
+            showToast(`Subcategoría "${nombre}" agregada`, 'success');
+        }
 
         function cambiarRegCategoria(val) {
             // Ocultar sugerencias
@@ -5791,6 +6712,16 @@
             document.getElementById('sub-repuestos-suggest').style.display = 'none';
             document.getElementById('sub-pantallas-selector').style.display = 'none';
             document.getElementById('sub-micas-suggest').style.display = 'none';
+
+            const grupoSub = document.getElementById('grupo-subcategoria');
+            const selectSub = document.getElementById('reg-subcategoria');
+            if (SUBCATEGORIAS[val] || (subcategoriasCustom[val] && subcategoriasCustom[val].length)) {
+                poblarSelectSubcategoria(selectSub, val);
+                grupoSub.style.display = 'block';
+            } else {
+                grupoSub.style.display = 'none';
+                selectSub.innerHTML = '';
+            }
 
             // Mostrar según categoría
             if (val === 'Accesorios') {
@@ -5834,7 +6765,23 @@
             document.querySelectorAll('.inv-tab').forEach(tab => tab.classList.remove('active'));
             if (el) el.classList.add('active');
 
+            poblarFiltroSubcategoria(categoria);
+
             renderizarProductosFiltrados();
+        }
+
+        function poblarFiltroSubcategoria(categoria) {
+            const filtroSub = document.getElementById('filtro-subcategoria');
+            if (!filtroSub) return;
+            const opciones = combinarSubcategorias(SUBCATEGORIAS[categoria] || [], subcategoriasCustom[categoria] || []);
+            if (opciones.length === 0) {
+                filtroSub.innerHTML = '';
+                filtroSub.style.display = 'none';
+                return;
+            }
+            filtroSub.innerHTML = '<option value="">Todas las subcategorías</option>' +
+                opciones.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+            filtroSub.style.display = 'inline-block';
         }
 
         function renderizarProductosFiltrados() {
@@ -5842,8 +6789,22 @@
             if (!tbody) return;
 
             let filtrados = todosLosProductos;
+
+            // 1. Filtrado por texto (Buscador)
+            const inputBuscador = document.getElementById('inv-buscador-texto');
+            const textoBuscado = inputBuscador ? inputBuscador.value.toUpperCase().trim() : '';
+            
+            if (textoBuscado) {
+                filtrados = filtrados.filter(p => {
+                    const n = (p.nombre || '').toUpperCase();
+                    const s = (p.sku || '').toUpperCase();
+                    return n.includes(textoBuscado) || s.includes(textoBuscado);
+                });
+            }
+
+            // 2. Filtrado por categoría
             if (categoriaInventarioActiva !== 'Todos') {
-                filtrados = todosLosProductos.filter(p => {
+                filtrados = filtrados.filter(p => {
                     const cat = (p.categoria || '').toLowerCase();
                     if (categoriaInventarioActiva === 'Accesorios') {
                         return cat === 'accesorios';
@@ -5853,13 +6814,26 @@
                         return cat === 'pantallas' || cat === 'pantalla';
                     } else if (categoriaInventarioActiva === 'Micas') {
                         return cat === 'micas' || cat === 'mica' || cat === 'protector' || cat === 'protectores';
+                    } else if (categoriaInventarioActiva === 'Celulares') {
+                        return cat === 'celulares' || cat === 'celular';
                     }
                     return false;
                 });
             }
 
+            // 3. Filtrado por subcategoría (encadenado sobre el resultado ya filtrado arriba)
+            const filtroSubEl = document.getElementById('filtro-subcategoria');
+            const subActiva = filtroSubEl ? filtroSubEl.value : '';
+            if (subActiva) {
+                filtrados = filtrados.filter(p => (p.subcategoria || '') === subActiva);
+            }
+
             if (filtrados.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:20px; color:#777;">No hay productos en esta categoría.</td></tr>`;
+                if (textoBuscado) {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:#777;">No se encontraron productos con ese criterio de búsqueda.</td></tr>`;
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:#777;">No hay productos en esta categoría.</td></tr>`;
+                }
                 return;
             }
 
@@ -5881,12 +6855,262 @@
                 }
 
                 return `<tr>
-                    <td style="font-weight:600; color:white;">${p.nombre}</td>
+                    <td style="font-weight:600; color:white;">
+                        ${p.nombre}
+                        ${p.costo_por_confirmar ? '<span style="font-size:10px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.5); color:#ef4444; padding:2px 6px; border-radius:4px; margin-left:8px;" title="Costo base proviene de múltiples proveedores y requiere verificación.">⚠️ Revisar costo</span>' : ''}
+                    </td>
                     <td><span style="font-size:11px; background:${badgeColor}22; border:1px solid ${badgeColor}44; color:${badgeColor}; padding:3px 10px; border-radius:20px; font-weight:bold;">${catText}</span></td>
-                    <td>S/ ${parseFloat(p.precio).toFixed(2)}</td>
-                    <td style="font-weight:bold; color:${p.stock > 0 ? '#10b981' : '#ef4444'}">${p.stock}</td>
+                    <td>
+                        <div style="color:var(--success); font-weight:bold;">S/ ${parseFloat(p.precio).toFixed(2)}</div>
+                        ${p.precio_mayor ? `<div style="font-size:10px; color:#aaa; margin-top:2px;">Mayor: S/ ${parseFloat(p.precio_mayor).toFixed(2)}</div>` : ''}
+                    </td>
+                    <td style="font-weight:bold; color:${p.stock > 0 ? '#10b981' : '#ef4444'}">${(p.categoria || '').toLowerCase().includes('mica') ? (p.stock > 0 ? 'Disponible' : 'Agotado') : p.stock}</td>
+                    <td>
+                        <button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); abrirDetalleProducto(${p.id})">👁️ Detalle</button>
+                    </td>
                 </tr>`;
             }).join('');
+        }
+
+        let productoDetalleOriginal = null;
+
+        async function abrirDetalleProducto(productoId) {
+            const p = todosLosProductos.find(x => x.id === productoId);
+            if (!p) return;
+            
+            productoDetalleOriginal = JSON.parse(JSON.stringify(p));
+
+            document.getElementById('det-sku').textContent = p.sku || '-';
+            document.getElementById('det-stock').textContent = p.stock || '0';
+            
+            document.getElementById('det-nombre').value = p.nombre || '';
+            document.getElementById('det-categoria').value = p.categoria || 'Pantallas';
+
+            const detCat = p.categoria || 'Pantallas';
+            const grupoDetSub = document.getElementById('det-grupo-subcategoria');
+            const selectDetSub = document.getElementById('det-subcategoria');
+            if (SUBCATEGORIAS[detCat] || (subcategoriasCustom[detCat] && subcategoriasCustom[detCat].length)) {
+                poblarSelectSubcategoria(selectDetSub, detCat, p.subcategoria || '');
+                grupoDetSub.style.display = 'block';
+            } else {
+                grupoDetSub.style.display = 'none';
+                selectDetSub.innerHTML = '';
+            }
+
+            const formatInput = v => (v != null && v > 0) ? parseFloat(v).toFixed(2) : '';
+
+            document.getElementById('det-costo-caycel').value = formatInput(p.costo_caycel);
+            document.getElementById('det-costo-samtec').value = formatInput(p.costo_samtec);
+            document.getElementById('det-costo-cyberphone').value = formatInput(p.costo_cyberphone);
+            document.getElementById('det-costo-amobile').value = formatInput(p.costo_amobile);
+
+            document.getElementById('det-precio-mayor').value = formatInput(p.precio_mayor);
+            document.getElementById('det-precio-punto').value = formatInput(p.precio_punto);
+
+            toggleCostosPorCategoria();
+
+            document.getElementById('det-aviso-costo').style.display = p.costo_por_confirmar ? 'block' : 'none';
+
+            document.getElementById('form-ajuste-stock').style.display = 'none';
+            document.getElementById('btn-guardar-detalle').disabled = true;
+
+            document.getElementById('det-historial-body').innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:#777;">Cargando historial...</td></tr>`;
+            document.getElementById('modal-detalle-producto').style.display = 'flex';
+
+            cargarHistorialDetalle();
+        }
+
+        async function cargarHistorialDetalle() {
+            if (!productoDetalleOriginal || !productoDetalleOriginal.sku) {
+                document.getElementById('det-historial-body').innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:#777;">Sin historial (SKU no registrado)</td></tr>`;
+                return;
+            }
+            try {
+                const formatMoney = v => (v != null && v > 0) ? `S/ ${parseFloat(v).toFixed(2)}` : 'Sin dato';
+                const historial = await ipcRenderer.invoke('obtener-historial-producto', productoDetalleOriginal.sku);
+                if (historial && historial.length > 0) {
+                    document.getElementById('det-historial-body').innerHTML = historial.map(h => {
+                        const d = new Date(h.creado_en);
+                        const cant = h.cantidad > 0 ? `+${h.cantidad}` : `${h.cantidad}`;
+                        const color = h.cantidad > 0 ? 'var(--success)' : (h.cantidad < 0 ? '#ef4444' : '#fff');
+                        return `<tr>
+                            <td>${d.toLocaleDateString()}</td>
+                            <td style="color:${color}; font-weight:bold;">${cant}</td>
+                            <td>${h.proveedor || '-'}</td>
+                            <td>${formatMoney(h.costo)}</td>
+                            <td>${h.nota || '-'}</td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    document.getElementById('det-historial-body').innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:#777;">Sin historial de ingresos registrado</td></tr>`;
+                }
+            } catch (err) {
+                document.getElementById('det-historial-body').innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:#ef4444;">Error cargando historial</td></tr>`;
+                console.error(err);
+            }
+        }
+
+        function cerrarDetalleProducto() {
+            document.getElementById('modal-detalle-producto').style.display = 'none';
+            productoDetalleOriginal = null;
+        }
+
+        function toggleCostosPorCategoria() {
+            if (localStorage.getItem('userRol') !== 'dueno') {
+                document.getElementById('bloque-costos').style.display = 'none';
+                return;
+            }
+            const cat = document.getElementById('det-categoria').value.toLowerCase();
+            const esPantalla = cat.includes('pantalla');
+            const p = productoDetalleOriginal;
+            const tieneCostos = p && (p.costo_caycel || p.costo_samtec || p.costo_cyberphone || p.costo_amobile);
+
+            if (esPantalla || tieneCostos) {
+                document.getElementById('bloque-costos').style.display = 'block';
+            } else {
+                document.getElementById('bloque-costos').style.display = 'none';
+            }
+        }
+
+        function refrescarDetSubcategoria() {
+            const detCat = document.getElementById('det-categoria').value;
+            const grupoDetSub = document.getElementById('det-grupo-subcategoria');
+            const selectDetSub = document.getElementById('det-subcategoria');
+            if (SUBCATEGORIAS[detCat] || (subcategoriasCustom[detCat] && subcategoriasCustom[detCat].length)) {
+                poblarSelectSubcategoria(selectDetSub, detCat);
+                grupoDetSub.style.display = 'block';
+            } else {
+                grupoDetSub.style.display = 'none';
+                selectDetSub.innerHTML = '';
+            }
+            verificarCambiosDetalle();
+        }
+
+        function verificarCambiosDetalle() {
+            if (!productoDetalleOriginal) return;
+            const formatVal = (val) => val === '' || val == null ? null : parseFloat(val);
+
+            const nNombre = document.getElementById('det-nombre').value.trim();
+            const nCat = document.getElementById('det-categoria').value;
+            const nSubCat = document.getElementById('det-subcategoria').value || null;
+            const nCayo = formatVal(document.getElementById('det-costo-caycel').value);
+            const nSam = formatVal(document.getElementById('det-costo-samtec').value);
+            const nCyb = formatVal(document.getElementById('det-costo-cyberphone').value);
+            const nAmo = formatVal(document.getElementById('det-costo-amobile').value);
+            const nMay = formatVal(document.getElementById('det-precio-mayor').value);
+            const nPun = formatVal(document.getElementById('det-precio-punto').value);
+
+            let changed = false;
+            if (nNombre !== (productoDetalleOriginal.nombre || '')) changed = true;
+            if (nCat !== (productoDetalleOriginal.categoria || 'Pantallas')) changed = true;
+            if (nSubCat !== (productoDetalleOriginal.subcategoria || null)) changed = true;
+            if (nCayo !== formatVal(productoDetalleOriginal.costo_caycel)) changed = true;
+            if (nSam !== formatVal(productoDetalleOriginal.costo_samtec)) changed = true;
+            if (nCyb !== formatVal(productoDetalleOriginal.costo_cyberphone)) changed = true;
+            if (nAmo !== formatVal(productoDetalleOriginal.costo_amobile)) changed = true;
+            if (nMay !== formatVal(productoDetalleOriginal.precio_mayor)) changed = true;
+            if (nPun !== formatVal(productoDetalleOriginal.precio_punto)) changed = true;
+
+            document.getElementById('btn-guardar-detalle').disabled = !changed;
+        }
+
+        async function guardarDetalleProducto() {
+            if (!productoDetalleOriginal) return;
+
+            const formatVal = (val) => val === '' || val == null ? null : parseFloat(val);
+
+            const updates = {
+                nombre: document.getElementById('det-nombre').value.trim(),
+                categoria: document.getElementById('det-categoria').value,
+                subcategoria: document.getElementById('det-subcategoria').value || null,
+                costo_caycel: formatVal(document.getElementById('det-costo-caycel').value),
+                costo_samtec: formatVal(document.getElementById('det-costo-samtec').value),
+                costo_cyberphone: formatVal(document.getElementById('det-costo-cyberphone').value),
+                costo_amobile: formatVal(document.getElementById('det-costo-amobile').value),
+                precio_mayor: formatVal(document.getElementById('det-precio-mayor').value),
+                precio_punto: formatVal(document.getElementById('det-precio-punto').value)
+            };
+
+            const btn = document.getElementById('btn-guardar-detalle');
+            btn.innerHTML = `<i class='bx bx-loader bx-spin'></i> Guardando...`;
+            btn.disabled = true;
+
+            try {
+                const prod = await ipcRenderer.invoke('actualizar-producto-detalle', { id: productoDetalleOriginal.id, updates });
+                showToast("Producto actualizado", "success");
+                
+                // Actualizar local
+                const idx = todosLosProductos.findIndex(x => x.id === prod.id);
+                if (idx > -1) {
+                    todosLosProductos[idx] = prod;
+                    productoDetalleOriginal = JSON.parse(JSON.stringify(prod));
+                }
+                renderizarProductosFiltrados();
+                verificarCambiosDetalle();
+            } catch (err) {
+                console.error(err);
+                showToast("Error al guardar cambios", "error");
+                btn.disabled = false;
+            } finally {
+                btn.innerHTML = `Guardar Cambios`;
+            }
+        }
+
+        function toggleAjusteStock() {
+            const form = document.getElementById('form-ajuste-stock');
+            if (form.style.display === 'none') {
+                form.style.display = 'block';
+                document.getElementById('ajuste-stock-nuevo').value = productoDetalleOriginal ? productoDetalleOriginal.stock : 0;
+                document.getElementById('ajuste-stock-motivo').value = '';
+            } else {
+                form.style.display = 'none';
+            }
+        }
+
+        async function guardarAjusteStock() {
+            if (!productoDetalleOriginal) return;
+            const nuevoStock = parseInt(document.getElementById('ajuste-stock-nuevo').value, 10);
+            const motivo = document.getElementById('ajuste-stock-motivo').value.trim();
+
+            if (isNaN(nuevoStock) || nuevoStock < 0) {
+                showToast("El nuevo stock debe ser un número mayor o igual a cero.", "warning");
+                return;
+            }
+            if (!motivo) {
+                showToast("Debes ingresar un motivo para el ajuste.", "warning");
+                return;
+            }
+
+            const cantidadDiferencia = nuevoStock - (productoDetalleOriginal.stock || 0);
+            if (cantidadDiferencia === 0) {
+                showToast("El nuevo stock es igual al actual.", "warning");
+                return;
+            }
+
+            try {
+                const prod = await ipcRenderer.invoke('ajustar-stock-manual', { 
+                    id: productoDetalleOriginal.id, 
+                    sku: productoDetalleOriginal.sku, 
+                    nuevoStock, 
+                    cantidadDiferencia, 
+                    motivo 
+                });
+                showToast("Stock ajustado exitosamente", "success");
+                
+                // Actualizar local
+                const idx = todosLosProductos.findIndex(x => x.id === prod.id);
+                if (idx > -1) {
+                    todosLosProductos[idx] = prod;
+                    productoDetalleOriginal = JSON.parse(JSON.stringify(prod));
+                    document.getElementById('det-stock').textContent = prod.stock;
+                }
+                renderizarProductosFiltrados();
+                toggleAjusteStock();
+                cargarHistorialDetalle();
+            } catch (err) {
+                console.error(err);
+                showToast("Error ajustando stock", "error");
+            }
         }
 
         // === LOGICA DE GESTION DE PROVEEDORES ===
@@ -6374,6 +7598,22 @@
         ipcRenderer.on('recibir-version', (event, version) => {
             const versionEl = document.getElementById('app-version');
             if(versionEl) versionEl.innerText = `Versión ${version}`;
+        });
+
+        function irADescargarActualizacion() {
+            ipcRenderer.send('abrir-pagina-descarga');
+        }
+
+        ipcRenderer.on('actualizacion-disponible', (e, info) => {
+            document.getElementById('banner-actualizacion-msg').innerText =
+                `🎉 Hay una nueva versión disponible (${info.version}).`;
+            document.getElementById('banner-actualizacion').style.display = 'flex';
+        });
+
+        ipcRenderer.on('actualizacion-lista', (e, info) => {
+            document.getElementById('banner-actualizacion-msg').innerText =
+                `✅ La actualización ${info.version} ya se descargó. Se instalará la próxima vez que abras la app, o puedes descargarla manualmente ahora.`;
+            document.getElementById('banner-actualizacion').style.display = 'flex';
         });
     </script>
 </body>

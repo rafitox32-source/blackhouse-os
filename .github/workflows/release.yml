@@ -12,7 +12,7 @@ jobs:
     permissions:
       contents: write
       packages: write
-    
+
     steps:
       - name: Checkout del código
         uses: actions/checkout@v3
@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Instalar dependencias
         run: npm install || npm ci
@@ -31,12 +31,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
-        
-      # Aquí irían los comandos para hacer la build de Electron (electron-builder)
-      # Ejemplo:
-      # - name: Build Electron App
-      #   run: npm run build
-      # - name: Release Draft
-      #   uses: softprops/action-gh-release@v1
-      #   with:
-      #     files: dist/*.exe
+
+  build-windows:
+    name: Build y publicar instalador de Windows
+    needs: release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout del código (rama main actualizada por semantic-release)
+        uses: actions/checkout@v3
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias
+        run: npm install || npm ci
+
+      - name: Build y publicar instalador (electron-builder)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --publish always

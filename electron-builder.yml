@@ -1,5 +1,5 @@
 appId: com.blackhouse.os
-productName: BlackHouseOS
+productName: BlackHouse OS
 directories:
   output: dist
   buildResources: build
