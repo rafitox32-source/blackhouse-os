@@ -54,6 +54,26 @@ jobs:
       - name: Instalar dependencias
         run: npm install || npm ci
 
+      - name: Generar archivo .env con credenciales
+        shell: pwsh
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: |
+          $lines = @(
+            "GROQ_API_KEY=$env:GROQ_API_KEY",
+            "SUPABASE_URL=$env:SUPABASE_URL",
+            "SUPABASE_KEY=$env:SUPABASE_KEY",
+            "GEMINI_API_KEY=$env:GEMINI_API_KEY",
+            "EMAIL_USER=$env:EMAIL_USER",
+            "EMAIL_PASS=$env:EMAIL_PASS"
+          )
+          Set-Content -Path .env -Value $lines -Encoding utf8
+
       - name: Build y publicar instalador (electron-builder)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

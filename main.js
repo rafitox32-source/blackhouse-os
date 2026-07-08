@@ -13,14 +13,17 @@ const crypto = require('crypto');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
+if (!process.env.GROQ_API_KEY) console.error('⚠️ GROQ_API_KEY no está configurada — las funciones de IA fallarán.');
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) console.error('⚠️ SUPABASE_URL/SUPABASE_KEY no están configuradas.');
+
 const openai = new OpenAI({
-    apiKey: process.env.GROQ_API_KEY, 
+    apiKey: process.env.GROQ_API_KEY || 'missing-groq-key',
     baseURL: "https://api.groq.com/openai/v1" // 🚨 Este es el truco de magia
 });
 
 const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_KEY
+    process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
+    process.env.SUPABASE_KEY || 'missing-supabase-key'
 );
 
 const DURACION_SESION_RECORDADA_DIAS = 30;
