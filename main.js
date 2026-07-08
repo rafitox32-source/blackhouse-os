@@ -303,7 +303,7 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
                         console.log("Error: IP no coincide", empIP.ip_autorizada, "vs", ipActual);
                         return event.reply('login-respuesta', {
                             success: false,
-                            msg: `🔒 Acceso bloqueado: Esta licencia está asociada a otro equipo o ubicación. Comunícate con soporte para transferir tu acceso.\n\nWhatsApp Soporte: +51 XXX XXX XXX`
+                            msg: `🔒 Acceso bloqueado: Esta licencia está asociada a otro equipo o ubicación. Comunícate con soporte para transferir tu acceso.\n\nWhatsApp Soporte: +51 924 171 629`
                         });
                     }
                 }
