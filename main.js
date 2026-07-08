@@ -3,7 +3,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 console.log("Groq key cargada:", !!process.env.GROQ_API_KEY);
 
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
@@ -27,23 +27,40 @@ const DURACION_SESION_RECORDADA_DIAS = 30;
 async function emitirTokenSesion(usuarioId) {
     const token = crypto.randomBytes(32).toString('hex');
     const expira = new Date(Date.now() + DURACION_SESION_RECORDADA_DIAS * 24 * 60 * 60 * 1000).toISOString();
-    await supabase.from('usuarios').update({ session_token: token, session_expira: expira }).eq('id', usuarioId);
+    const { error } = await supabase.from('usuarios').update({ session_token: token, session_expira: expira }).eq('id', usuarioId);
+    if (error) {
+        console.error('No se pudo guardar el token de sesión recordada:', error.message);
+        return null;
+    }
     return token;
 }
 
 const fs = require('fs');
 let devicesCache = null;
-try {
-    const cachePath = path.join(__dirname, 'devices_cache.json');
-    console.log("🔍 [Catálogo] Buscando archivo en:", cachePath);
-    if (fs.existsSync(cachePath)) {
-        devicesCache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-        console.log("✨ [Catálogo] Cargado con éxito. Marcas encontradas:", Object.keys(devicesCache).length);
-    } else {
-        console.warn("⚠️ [Catálogo] No se encontró el archivo en la ruta especificada.");
+
+// Los modelos agregados por el usuario se guardan en userData (fuera de la carpeta
+// de instalación) para que sobrevivan a actualizaciones y reinstalaciones del programa.
+function rutaDevicesCacheUsuario() {
+    return path.join(app.getPath('userData'), 'devices_cache.json');
+}
+
+function cargarDevicesCache() {
+    try {
+        const userPath = rutaDevicesCacheUsuario();
+        const seedPath = path.join(__dirname, 'devices_cache.json');
+        if (fs.existsSync(userPath)) {
+            devicesCache = JSON.parse(fs.readFileSync(userPath, 'utf8'));
+            console.log("✨ [Catálogo] Cargado desde datos de usuario. Marcas encontradas:", Object.keys(devicesCache).length);
+        } else if (fs.existsSync(seedPath)) {
+            devicesCache = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+            fs.writeFileSync(userPath, JSON.stringify(devicesCache, null, 2));
+            console.log("✨ [Catálogo] Copiado del instalador a datos de usuario. Marcas encontradas:", Object.keys(devicesCache).length);
+        } else {
+            console.warn("⚠️ [Catálogo] No se encontró devices_cache.json en ninguna ruta.");
+        }
+    } catch (e) {
+        console.error("❌ [Catálogo] Error al cargar:", e);
     }
-} catch (e) {
-    console.error("❌ [Catálogo] Error al cargar:", e);
 }
 
 let mainWindow = null;
@@ -74,6 +91,7 @@ function createWindow() {
         width: 1200,
         height: 800,
         icon: path.join(__dirname, 'assets', 'icon.png'),
+        autoHideMenuBar: true,
         webPreferences: {
             nodeIntegration: false, // Se mantiene en false por seguridad
             contextIsolation: true, // Se mantiene en true por seguridad
@@ -85,10 +103,16 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    Menu.setApplicationMenu(null);
+    cargarDevicesCache();
     createWindow();
     
-    // Configuración de actualizaciones automáticas
-    autoUpdater.checkForUpdatesAndNotify();
+    // Configuración de actualizaciones automáticas.
+    // Usamos checkForUpdates() (sin "AndNotify") a propósito: ese método extra
+    // dispara además una notificación nativa de Windows por su cuenta, fuera de
+    // nuestro control, que se sentía como un aviso repetido/intrusivo. Con esto
+    // solo queda nuestro banner propio dentro de la app, que sí refleja la versión real.
+    autoUpdater.checkForUpdates();
 
     autoUpdater.on('update-available', (info) => {
         if (mainWindow) mainWindow.webContents.send('actualizacion-disponible', { version: info.version });
@@ -112,24 +136,28 @@ app.whenReady().then(() => {
         shell.openExternal('https://blackhouse-os-web.vercel.app');
     });
 
-    // === CREAR CARPETAS FIRMWARE Y DUMP AL INICIAR ===
-    const firmwarePath = path.join(__dirname, 'Firmware');
-    const dumpPath = path.join(__dirname, 'Dump');
-    if (!fs.existsSync(firmwarePath)) {
-        fs.mkdirSync(firmwarePath, { recursive: true });
-        console.log('📁 [Carpeta] Firmware/ creada en:', firmwarePath);
-    }
-    if (!fs.existsSync(dumpPath)) {
-        fs.mkdirSync(dumpPath, { recursive: true });
-        console.log('📁 [Carpeta] Dump/ creada en:', dumpPath);
+    // === CREAR CARPETAS FIRMWARE Y DUMP AL INICIAR (en userData: sobreviven actualizaciones) ===
+    try {
+        const firmwarePath = path.join(app.getPath('userData'), 'Firmware');
+        const dumpPath = path.join(app.getPath('userData'), 'Dump');
+        if (!fs.existsSync(firmwarePath)) {
+            fs.mkdirSync(firmwarePath, { recursive: true });
+            console.log('📁 [Carpeta] Firmware/ creada en:', firmwarePath);
+        }
+        if (!fs.existsSync(dumpPath)) {
+            fs.mkdirSync(dumpPath, { recursive: true });
+            console.log('📁 [Carpeta] Dump/ creada en:', dumpPath);
+        }
+    } catch (e) {
+        console.error('No se pudieron crear las carpetas Firmware/Dump:', e.message);
     }
 });
 
 // === ABRIR CARPETAS FIRMWARE / DUMP ===
 ipcMain.on('abrir-carpeta', (event, tipo) => {
-    const carpeta = tipo === 'firmware' 
-        ? path.join(__dirname, 'Firmware') 
-        : path.join(__dirname, 'Dump');
+    const carpeta = tipo === 'firmware'
+        ? path.join(app.getPath('userData'), 'Firmware')
+        : path.join(app.getPath('userData'), 'Dump');
     if (!fs.existsSync(carpeta)) fs.mkdirSync(carpeta, { recursive: true });
     shell.openPath(carpeta);
 });
@@ -147,7 +175,7 @@ ipcMain.on('agregar-modelo-nuevo', (event, { marca, modelo }) => {
         if (!devicesCache[marca].some(m => m.toLowerCase() === modelo.toLowerCase())) {
             devicesCache[marca].push(modelo);
             devicesCache[marca].sort();
-            fs.writeFileSync(path.join(__dirname, 'devices_cache.json'), JSON.stringify(devicesCache, null, 2));
+            fs.writeFileSync(rutaDevicesCacheUsuario(), JSON.stringify(devicesCache, null, 2));
         }
         event.reply('marcas-modelos-respuesta', devicesCache);
     } catch (e) {
@@ -160,7 +188,6 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
     try {
         console.log("=== INICIO DE LOGIN ===");
         console.log("Intentando entrar con usuario:", data.usuario);
-        console.log("Contraseña recibida:", data.password);
 
         // 1. Buscamos al usuario
         console.log("Paso 1: Buscando en tabla usuarios...");
@@ -180,7 +207,8 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
 
         // 2. Validamos la contraseña
         console.log("Paso 2: Validando contraseña...");
-        const contrasenaValida = (data.password === users.password) || await bcrypt.compare(data.password, users.password).catch(() => false);
+        const eraTextoPlano = data.password === users.password;
+        const contrasenaValida = eraTextoPlano || await bcrypt.compare(data.password, users.password).catch(() => false);
 
         if (!contrasenaValida) {
             console.log("Error: Contraseña incorrecta");
@@ -188,6 +216,12 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
         }
 
         console.log("Contraseña correcta.");
+
+        // Migración transparente: si la contraseña seguía en texto plano, la hasheamos ahora
+        if (eraTextoPlano) {
+            const hashMigrado = await bcrypt.hash(data.password, 10);
+            await supabase.from('usuarios').update({ password: hashMigrado }).eq('id', users.id);
+        }
 
         // 3. Verificamos el estado de la suscripción de su empresa
         console.log("Paso 3: Verificando empresa", users.empresa_id);
@@ -514,7 +548,7 @@ ipcMain.on('nuevo-producto-sql', async (event, prod) => {
             nombre: prod.nombre,
             categoria: prod.categoria,
             subcategoria: prod.subcategoria || null,
-            costo: parseFloat(prod.costo) || 0,
+            costo: rolActual === 'dueno' ? (parseFloat(prod.costo) || 0) : 0,
             precio: parseFloat(prod.precio) || 0,
             stock: parseInt(prod.stock) || 0,
             proveedor: prod.proveedor || '',
@@ -522,10 +556,14 @@ ipcMain.on('nuevo-producto-sql', async (event, prod) => {
         };
         // Agregar SKU si viene
         if (prod.sku) insertData.sku = prod.sku;
-        
-        await supabase.from('productos').insert([insertData]);
+
+        const { error } = await supabase.from('productos').insert([insertData]);
+        if (error) throw error;
         event.reply('producto-guardado');
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        console.error(e);
+        event.reply('producto-guardado', { success: false, msg: e.message });
+    }
 });
 
 ipcMain.on('obtener-productos', async (event) => {
@@ -698,11 +736,12 @@ ipcMain.on('importar-excel-inventario', async (event, payload) => {
         // 1. Verificar deduplicación por hash
         if (hash) {
             const { data: cargaExistente } = await supabase.from('cargas_procesadas')
-                .select('id, creado_en')
+                .select('id, procesado_en')
                 .eq('hash_archivo', hash)
+                .eq('empresa_id', empresaActual)
                 .single();
             if (cargaExistente) {
-                const fecha = new Date(cargaExistente.creado_en).toLocaleString();
+                const fecha = new Date(cargaExistente.procesado_en).toLocaleString();
                 event.reply('resultado-importacion-excel', { 
                     success: false, 
                     msg: `Este archivo ya fue procesado el ${fecha}. Se bloqueó para evitar duplicar el inventario.` 
@@ -777,8 +816,8 @@ ipcMain.on('importar-excel-inventario', async (event, payload) => {
                         vinculadosCount++;
                     }
                     
-                    // Actualizar costo del proveedor indicado
-                    if (costoField && prod.costo > 0) {
+                    // Actualizar costo del proveedor indicado (solo el dueño puede escribir costos)
+                    if (costoField && prod.costo > 0 && rolActual === 'dueno') {
                         updateData[costoField] = prod.costo;
                     }
                     
@@ -826,7 +865,7 @@ ipcMain.on('importar-excel-inventario', async (event, payload) => {
                         empresa_id: empresaActual
                     };
                     
-                    if (costoField && prod.costo > 0) {
+                    if (costoField && prod.costo > 0 && rolActual === 'dueno') {
                         insertData[costoField] = prod.costo;
                     }
 
@@ -865,12 +904,15 @@ ipcMain.on('importar-excel-inventario', async (event, payload) => {
 
         // 3. Registrar archivo como procesado
         if (hash) {
-            await supabase.from('cargas_procesadas').insert([{
+            const { error: errorCarga } = await supabase.from('cargas_procesadas').insert([{
                 empresa_id: empresaActual,
                 hash_archivo: hash,
                 nombre_archivo: nombreArchivo,
-                resumen: `Nuevos: ${nuevosCreados}, Actualizados: ${actualizados}, Errores: ${erroresImport.length}`
+                filas_procesadas: productos.length,
+                filas_nuevas: nuevosCreados,
+                filas_actualizadas: actualizados
             }]);
+            if (errorCarga) console.error('No se pudo registrar la carga procesada:', errorCarga.message);
         }
 
         // Solo después de insertar movimientos y log, responder OK
@@ -897,12 +939,14 @@ ipcMain.handle('obtener-historial-producto', async (event, sku) => {
         .order('creado_en', { ascending: false })
         .limit(5);
     if (error) throw error;
-    if (error) throw error;
     return data;
 });
 
 ipcMain.handle('actualizar-producto-detalle', async (event, params) => {
     const { id, updates } = params;
+    if (rolActual !== 'dueno') {
+        Object.keys(updates).forEach(key => { if (key.startsWith('costo')) delete updates[key]; });
+    }
     const { data, error } = await supabase
         .from('productos')
         .update(updates)
@@ -957,7 +1001,10 @@ ipcMain.on('guardar-orden', async (event, orden) => {
         }]).select();
         if (error) throw error;
         event.reply('resultado-guardado', { success: true, id: data[0].id });
-    } catch (err) { console.error(err); }
+    } catch (err) {
+        console.error(err);
+        event.reply('resultado-guardado', { success: false, msg: err.message });
+    }
 });
 
 ipcMain.on('obtener-ordenes', async (event) => {
@@ -970,22 +1017,45 @@ ipcMain.on('obtener-ordenes', async (event) => {
 
 // === 6. REPORTES (SUMA SOLO EL DINERO DE MI EMPRESA) ===
 ipcMain.on('obtener-datos-reporte', async (event) => {
-    const { data } = await supabase.from('ordenes')
-        .select('costo, estado')
-        .eq('empresa_id', empresaActual);
+    const { data, error } = await supabase.from('ordenes')
+        .select('costo, adelanto, estado, created_at')
+        .eq('empresa_id', empresaActual)
+        .order('created_at', { ascending: true });
+
+    if (error) console.error('Error obteniendo datos de reporte:', error.message);
 
     let total = 0, reparados = 0;
+    const ingresosPorDia = {}; // { 'dd/mm/aaaa': monto }
+
     if (data) {
         data.forEach(o => {
-            total += parseFloat(o.costo || 0);
+            // Ingreso REAL cobrado: si la orden ya fue Entregada se cobró el costo total;
+            // si todavía está en el taller, lo único cobrado es el adelanto.
+            // (Antes se sumaba el costo de TODAS las órdenes, incluso las no cobradas,
+            //  por lo que el KPI de ingresos no reflejaba la realidad.)
+            const ingreso = (o.estado === 'Entregado')
+                ? parseFloat(o.costo || 0)
+                : parseFloat(o.adelanto || 0);
+            total += ingreso;
+
             if (o.estado === 'Completado' || o.estado === 'Entregado') reparados++;
+
+            const dia = o.created_at
+                ? new Date(o.created_at).toLocaleDateString('es-PE')
+                : 'Sin fecha';
+            ingresosPorDia[dia] = (ingresosPorDia[dia] || 0) + ingreso;
         });
     }
+
     event.reply('datos-reporte', {
         totalIngresos: total,
         totalOrdenes: data ? data.length : 0,
         totalReparados: reparados,
-        grafica: { labels: ['Ventas'], values: [total] }
+        // Serie real por día (antes era un único punto ficticio ['Ventas'])
+        grafica: {
+            labels: Object.keys(ingresosPorDia),
+            values: Object.values(ingresosPorDia).map(v => Math.round(v * 100) / 100)
+        }
     });
 });
 
@@ -993,6 +1063,11 @@ ipcMain.on('obtener-datos-reporte', async (event) => {
 ipcMain.on('crear-usuario-nuevo', async (event, data) => {
     if (rolActual !== 'dueno') {
         event.reply('resultado-usuario', { success: false, msg: 'Acceso Denegado: No tienes permisos de Administrador.' });
+        return;
+    }
+
+    if (!['dueno', 'vendedor', 'tecnico'].includes(data.rol)) {
+        event.reply('resultado-usuario', { success: false, msg: 'Rol inválido' });
         return;
     }
 
@@ -1063,7 +1138,7 @@ ipcMain.on('cambiar-estado-usuario', async (event, data) => {
 
 // === 8. ESTADO DEL PLAN (Para el Dashboard de Licencias) ===
 ipcMain.on('obtener-estado-plan', async (event, data) => {
-    const idParaConsultar = data.empresaId;
+    const idParaConsultar = empresaActual;
 
     if (!idParaConsultar) {
         event.reply('estado-plan-respuesta', { error: "Empresa no vinculada" });
@@ -1102,12 +1177,13 @@ ipcMain.on('obtener-estado-plan', async (event, data) => {
 // === 9. CONFIGURACIÓN DE EMPRESA ===
 ipcMain.on('guardar-datos-empresa', async (event, data) => {
     try {
-        const datosActualizar = { nombre: data.nombre };
+        if (!empresaActual) throw new Error('No hay sesión activa');
+        const datosActualizar = { nombre: data.nombre, direccion: data.direccion, telefono: data.telefono };
 
         const { error } = await supabase
             .from('empresas')
             .update(datosActualizar)
-            .eq('id', data.id);
+            .eq('id', empresaActual);
 
         if (error) throw error;
 
@@ -1119,10 +1195,11 @@ ipcMain.on('guardar-datos-empresa', async (event, data) => {
 
 ipcMain.on('pedir-datos-empresa', async (event, data) => {
     try {
+        if (!empresaActual) throw new Error('No hay sesión activa');
         const { data: empresaData, error } = await supabase
             .from('empresas')
             .select('*')
-            .eq('id', data.id)
+            .eq('id', empresaActual)
             .single();
 
         if (error) throw error;
@@ -1278,6 +1355,7 @@ ipcMain.on('emitir-factura-saas', async (event, data) => {
 // === 13. ACTUALIZAR PERFIL DE USUARIO ===
 ipcMain.on('guardar-mi-perfil', async (event, data) => {
     try {
+        if (!empresaActual) throw new Error('No hay sesión activa');
         const { error } = await supabase
             .from('usuarios')
             .update({
@@ -1285,7 +1363,8 @@ ipcMain.on('guardar-mi-perfil', async (event, data) => {
                 nickname: data.nickname,
                 avatar: data.avatar
             })
-            .eq('usuario', data.usuario_original);
+            .eq('usuario', data.usuario_original)
+            .eq('empresa_id', empresaActual);
 
         if (error) throw error;
 
@@ -1498,10 +1577,11 @@ REGLAS ESTRICTAS:
 // === 15. BÚSQUEDAS ===
 ipcMain.on('buscar-stock-tecnico', async (event, valor) => {
     try {
+        const valorSeguro = String(valor || '').replace(/[,()]/g, '');
         const { data } = await supabase
             .from('productos')
             .select('*')
-            .or(`nombre.ilike.%${valor}%,categoria.ilike.%${valor}%`)
+            .or(`nombre.ilike.%${valorSeguro}%,categoria.ilike.%${valorSeguro}%`)
             .eq('empresa_id', empresaActual)
             .limit(10);
         event.reply('resultados-stock-tecnico', data || []);
@@ -1512,10 +1592,11 @@ ipcMain.on('buscar-stock-tecnico', async (event, valor) => {
 
 ipcMain.on('busqueda-global', async (event, q) => {
     try {
+        const qSeguro = String(q || '').replace(/[,()]/g, '');
         const { data } = await supabase
             .from('ordenes')
             .select('*')
-            .or(`cliente.ilike.%${q}%,modelo.ilike.%${q}%,imei.ilike.%${q}%`)
+            .or(`cliente.ilike.%${qSeguro}%,modelo.ilike.%${qSeguro}%,imei.ilike.%${qSeguro}%`)
             .eq('empresa_id', empresaActual)
             .limit(20);
         event.reply('resultados-busqueda-global', data || []);
@@ -1628,8 +1709,9 @@ ipcMain.on('obtener-usuarios', async (event) => {
     event.reply('lista-de-usuarios', data || []);
 });
 
-// === HANDLER: Gestión de Resellers (Global) ===
+// === HANDLER: Gestión de Resellers (Global, solo super admin) ===
 ipcMain.on('obtener-resellers-admin', async (event) => {
+    if (empresaActual !== 1) return event.reply('resellers-admin-respuesta', { success: false, msg: 'No autorizado' });
     try {
         const { data, error } = await supabase
             .from('usuarios')
@@ -1644,6 +1726,7 @@ ipcMain.on('obtener-resellers-admin', async (event) => {
 });
 
 ipcMain.on('guardar-reseller-admin', async (event, reseller) => {
+    if (empresaActual !== 1) return event.reply('guardar-reseller-respuesta', { success: false, msg: 'No autorizado' });
     try {
         if (reseller.id) {
             const { error } = await supabase
@@ -1655,7 +1738,8 @@ ipcMain.on('guardar-reseller-admin', async (event, reseller) => {
                     avatar: reseller.avatar,
                     estado: reseller.estado
                 })
-                .eq('id', reseller.id);
+                .eq('id', reseller.id)
+                .eq('rol', 'reseller');
             if (error) throw error;
             event.reply('guardar-reseller-respuesta', { success: true, msg: 'Distribuidor actualizado con éxito' });
         } else {
@@ -1684,11 +1768,13 @@ ipcMain.on('guardar-reseller-admin', async (event, reseller) => {
 });
 
 ipcMain.on('eliminar-reseller-admin', async (event, id) => {
+    if (empresaActual !== 1) return event.reply('eliminar-reseller-respuesta', { success: false, msg: 'No autorizado' });
     try {
         const { error } = await supabase
             .from('usuarios')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .eq('rol', 'reseller');
         if (error) throw error;
         event.reply('eliminar-reseller-respuesta', { success: true, msg: 'Distribuidor eliminado con éxito' });
     } catch (e) {

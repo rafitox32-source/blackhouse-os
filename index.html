@@ -1504,6 +1504,9 @@
 
     <div id="watermark-bg"></div>
     <div id="toast-container"></div>
+    <div id="app-version-footer"
+        style="position:fixed; bottom:6px; left:0; right:0; text-align:center; z-index:100000; color:#666; font-size:11px; font-weight:600; letter-spacing:1px; pointer-events:none;">
+        Cargando versión...</div>
     <div id="login-screen">
 
         <div class="login-card">
@@ -2101,6 +2104,8 @@
                                     <th>Fecha</th>
                                     <th>Cliente / Contacto</th>
                                     <th>Equipo</th>
+                                    <th>Falla</th>
+                                    <th>Cuenta</th>
                                     <th>Estado</th>
                                 </tr>
                             </thead>
@@ -4052,6 +4057,7 @@
         });
 
         ipcRenderer.on('resultado-guardado', (e, datos) => {
+            if (datos && datos.success === false) { showToast("Error al guardar la orden: " + datos.msg, 'danger'); return; }
             showToast('Orden creada exitosamente', 'success');
             document.querySelectorAll('#recepcion input, #recepcion textarea').forEach(i => i.value = '');
             limpiarFirma(); document.getElementById('photo-preview').style.display = 'none';
@@ -4105,7 +4111,11 @@
             showView('taller', document.getElementById('nav-taller'));
         });
 
-        ipcRenderer.on('producto-guardado', () => { showToast("Producto agregado", 'success'); showView('inventario', document.getElementById('nav-inv')); });
+        ipcRenderer.on('producto-guardado', (e, res) => {
+            if (res && res.success === false) { showToast("Error al guardar: " + res.msg, 'danger'); return; }
+            showToast("Producto agregado", 'success');
+            showView('inventario', document.getElementById('nav-inv'));
+        });
 
         ipcRenderer.on('resultado-usuario', (e, res) => {
             if (res.success) { showToast(res.msg, 'success'); document.getElementById('modal-usuario').style.display = 'none'; ipcRenderer.send('obtener-usuarios'); }
@@ -4122,15 +4132,30 @@
                     if (r.estado === 'Completado') bgSelect = '#2d264b';
                     if (r.estado === 'Entregado') bgSelect = '#064e3b';
 
+                    // La BD no tiene columna "fecha": la fecha real de recepción es created_at
+                    const fechaOrden = r.created_at ? new Date(r.created_at).toLocaleDateString('es-PE') : '-';
+                    const saldoPend = parseFloat(r.saldo || 0);
+                    const costoTotal = parseFloat(r.costo || 0);
+
                     return `
                     <tr>
                         <td style="color:var(--bh-purple); font-weight:bold;">#${String(r.id).padStart(4, '0')}</td>
-                        <td>${r.fecha ? r.fecha.substring(0, 10) : '-'}</td>
+                        <td>${fechaOrden}</td>
                         <td>
                             <div style="font-weight:600; color:white;">${r.cliente}</div>
                             <a href="${link}" target="_blank" style="font-size:12px; color:var(--success); text-decoration:none; display:flex; align-items:center; gap:5px;"><span>📞 WhatsApp</span></a>
                         </td>
-                        <td>${r.modelo}</td>
+                        <td>
+                            <div>${r.modelo || '-'}</div>
+                            ${r.imei ? `<div style="font-size:11px; color:#888;">IMEI: ${r.imei}</div>` : ''}
+                        </td>
+                        <td style="max-width:220px;">
+                            <div style="font-size:12px; color:#ccc; white-space:normal; word-break:break-word;">${r.falla || '-'}</div>
+                        </td>
+                        <td>
+                            <div style="color:${saldoPend > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight:600;">S/ ${saldoPend.toFixed(2)}</div>
+                            <div style="font-size:11px; color:#888;">Total: S/ ${costoTotal.toFixed(2)}</div>
+                        </td>
                         <td>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             <select class="status-select" onchange="cambiarEstadoOrden(${r.id}, this.value, '${r.telefono}')" style="background:${bgSelect}; color:white;">
@@ -4440,14 +4465,16 @@
             <td>${r.fecha}</td>
             <td>
                 <div style="font-weight:600;color:white;">${r.cliente}</div>
-                <div style="font-size:11px;color:#666;margin-top:2px;">${r.falla}</div>
                 <span style="font-size:11px;color:var(--success);">📞 WhatsApp</span>
             </td>
             <td style="color:#ccc;">${r.modelo}</td>
+            <td style="max-width:220px;">
+                <div style="font-size:12px;color:#ccc;white-space:normal;word-break:break-word;">${r.falla}</div>
+            </td>
+            <td><span style="font-size:12px;color:var(--success);font-weight:600;">S/ ${r.costo}.00</span></td>
             <td>
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     <span class="status-badge ${r.badge}">${r.estado}</span>
-                    <span style="font-size:11px;color:var(--success);font-weight:600;">S/ ${r.costo}.00</span>
                     <button class="bh-btn-white" style="border-color:var(--info);color:var(--info);padding:3px 8px;font-size:10px;" onclick="showToast('Función disponible en versión licenciada','warning')">🧾 Facturar</button>
                 </div>
             </td>
@@ -6099,12 +6126,19 @@
                 <td style="color:var(--bh-purple); font-weight:bold;">
                     #${String(r.id).padStart(4, '0')}
                 </td>
-                <td>${r.fecha ? r.fecha.substring(0, 10) : '-'}</td>
+                <td>${r.created_at ? new Date(r.created_at).toLocaleDateString('es-PE') : '-'}</td>
                 <td>
                     <div style="font-weight:600; color:white;">${r.cliente}</div>
-                    <div style="font-size:11px; color:#aaa;">${r.modelo}</div>
+                    <div style="font-size:11px; color:#aaa;">${r.telefono || ''}</div>
                 </td>
-                <td>${r.modelo}</td>
+                <td>
+                    <div>${r.modelo || '-'}</div>
+                    ${r.imei ? `<div style="font-size:11px; color:#888;">IMEI: ${r.imei}</div>` : ''}
+                </td>
+                <td style="max-width:220px;">
+                    <div style="font-size:12px; color:#ccc; white-space:normal; word-break:break-word;">${r.falla || '-'}</div>
+                </td>
+                <td>S/ ${parseFloat(r.saldo || 0).toFixed(2)}</td>
                 <td><span class="status-badge bg-proceso">${r.estado}</span></td>
             </tr>
         `).join('');
@@ -7598,6 +7632,8 @@
         ipcRenderer.on('recibir-version', (event, version) => {
             const versionEl = document.getElementById('app-version');
             if(versionEl) versionEl.innerText = `Versión ${version}`;
+            const versionFooter = document.getElementById('app-version-footer');
+            if(versionFooter) versionFooter.innerText = `BlackHouse OS - v${version}`;
         });
 
         function irADescargarActualizacion() {
