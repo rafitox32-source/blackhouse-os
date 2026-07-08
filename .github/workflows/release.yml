@@ -64,6 +64,15 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
         run: |
+          $faltantes = @()
+          if ([string]::IsNullOrWhiteSpace($env:GROQ_API_KEY)) { $faltantes += "GROQ_API_KEY" }
+          if ([string]::IsNullOrWhiteSpace($env:SUPABASE_URL)) { $faltantes += "SUPABASE_URL" }
+          if ([string]::IsNullOrWhiteSpace($env:SUPABASE_KEY)) { $faltantes += "SUPABASE_KEY" }
+          if ($faltantes.Count -gt 0) {
+            Write-Error "Faltan secrets obligatorios en GitHub Actions: $($faltantes -join ', '). Abortando build para no publicar un instalador que no puede loguear a nadie."
+            exit 1
+          }
+
           $lines = @(
             "GROQ_API_KEY=$env:GROQ_API_KEY",
             "SUPABASE_URL=$env:SUPABASE_URL",

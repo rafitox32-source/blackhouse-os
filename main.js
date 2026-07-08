@@ -92,24 +92,6 @@ let empresaActual = null;
 let rolActual = null;
 const otpMemoryCache = new Map(); // Fallback en memoria si faltan columnas de base de datos
 
-// === FUNCIÓN DE VERIFICACIÓN DE IP ===
-const https = require('https');
-
-async function obtenerIPPublica() {
-    return new Promise((resolve) => {
-        const req = https.get('https://api.ipify.org?format=json', (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-                try { resolve(JSON.parse(data).ip); }
-                catch { resolve(null); }
-            });
-        });
-        req.on('error', () => resolve(null));
-        req.setTimeout(4000, () => { req.destroy(); resolve(null); });
-    });
-}
-
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1200,
@@ -1631,19 +1613,6 @@ ipcMain.on('marcar-asistencia-manual', async (event, data) => {
         console.error("Error al marcar asistencia:", err);
         event.reply('asistencia-respuesta', { success: false, msg: err.message });
     }
-});
-
-// === HANDLER PARA RESETEAR IP (Solo super admin puede usarlo) ===
-ipcMain.on('reset-ip-empresa', async (event, data) => {
-    if (empresaActual !== 1) return; // Solo tú (empresa ID=1) puedes hacer esto
-    const { error } = await supabase
-        .from('empresas')
-        .update({ ip_autorizada: null })
-        .eq('id', data.empresaId);
-    event.reply('reset-ip-respuesta', {
-        success: !error,
-        msg: error ? error.message : `IP reseteada correctamente para empresa ID: ${data.empresaId}`
-    });
 });
 
 // === HANDLER: Cargar historial de facturas ===
