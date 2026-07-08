@@ -63,6 +63,27 @@ function cargarDevicesCache() {
     }
 }
 
+// Copia las plantillas Excel de inventario (que vienen con el instalador, de solo
+// lectura) a la carpeta de datos de usuario la primera vez, para que el cliente
+// pueda abrirlas, llenarlas y guardarlas sin tocar la carpeta de instalación.
+function prepararPlantillasInventario() {
+    try {
+        const origen = path.join(__dirname, 'plantillas_excel');
+        const destino = path.join(app.getPath('userData'), 'Plantillas de Inventario');
+        if (!fs.existsSync(destino)) fs.mkdirSync(destino, { recursive: true });
+        if (fs.existsSync(origen)) {
+            fs.readdirSync(origen).forEach(archivo => {
+                const destinoArchivo = path.join(destino, archivo);
+                if (!fs.existsSync(destinoArchivo)) {
+                    fs.copyFileSync(path.join(origen, archivo), destinoArchivo);
+                }
+            });
+        }
+    } catch (e) {
+        console.error('No se pudieron preparar las plantillas de inventario:', e.message);
+    }
+}
+
 let mainWindow = null;
 let empresaActual = null;
 let rolActual = null;
@@ -105,6 +126,7 @@ function createWindow() {
 app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
     cargarDevicesCache();
+    prepararPlantillasInventario();
     createWindow();
     
     // Configuración de actualizaciones automáticas.
@@ -159,6 +181,13 @@ ipcMain.on('abrir-carpeta', (event, tipo) => {
         ? path.join(app.getPath('userData'), 'Firmware')
         : path.join(app.getPath('userData'), 'Dump');
     if (!fs.existsSync(carpeta)) fs.mkdirSync(carpeta, { recursive: true });
+    shell.openPath(carpeta);
+});
+
+// === ABRIR CARPETA DE PLANTILLAS DE INVENTARIO (Excel para carga masiva) ===
+ipcMain.on('abrir-carpeta-plantillas', () => {
+    const carpeta = path.join(app.getPath('userData'), 'Plantillas de Inventario');
+    prepararPlantillasInventario();
     shell.openPath(carpeta);
 });
 

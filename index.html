@@ -2199,22 +2199,32 @@
                 <div id="inventario" class="view">
                     <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
                         <h1>Inventario</h1>
-                        <div style="display:flex; gap:10px;">
-                            <label class="bh-btn-white"
-                                style="cursor:pointer; display:flex; align-items:center; gap:5px;">
-                                <i class='bx bx-scan'></i> Escanear Lista
-                                <input type="file" id="upload-lista-inv" accept="image/*" style="display:none;"
-                                    onchange="procesarImagenInventario(event)">
-                            </label>
-                            <label class="bh-btn-white"
-                                style="cursor:pointer; display:flex; align-items:center; gap:5px; border-color: var(--success); color: var(--success); margin:0; height:38px;">
-                                <i class='bx bx-spreadsheet'></i> Cargar Excel
-                                <input type="file" id="input-excel-inventario" accept=".xlsx, .xls, .csv" style="display:none;"
-                                    onchange="abrirModalCategoriaExcel(event)">
-                            </label>
-                            <button id="btn-add-prod" class="bh-btn-purple"
-                                onclick="showView('agregar-producto-view', null)">+ Agregar</button>
+                        <div style="position:relative;">
+                            <button id="btn-add-prod" class="bh-btn-purple" onclick="toggleMenuAgregarInventario()">+ Agregar ▾</button>
+                            <div id="menu-agregar-inventario" style="display:none; position:absolute; right:0; top:44px; background:#1a1a1a; border:1px solid #333; border-radius:10px; min-width:230px; z-index:200; box-shadow:0 8px 24px rgba(0,0,0,0.5); overflow:hidden;">
+                                <a onclick="document.getElementById('menu-agregar-inventario').style.display='none'; showView('agregar-producto-view', null)"
+                                    style="display:flex; align-items:center; gap:8px; padding:12px 16px; color:white; cursor:pointer; font-size:13px;">
+                                    <i class='bx bx-plus-circle'></i> Agregar manualmente
+                                </a>
+                                <label style="display:flex; align-items:center; gap:8px; padding:12px 16px; color:var(--success); cursor:pointer; font-size:13px; margin:0;">
+                                    <i class='bx bx-spreadsheet'></i> Cargar Excel
+                                    <input type="file" id="input-excel-inventario" accept=".xlsx, .xls, .csv" style="display:none;"
+                                        onchange="document.getElementById('menu-agregar-inventario').style.display='none'; abrirModalCategoriaExcel(event)">
+                                </label>
+                                <label style="display:flex; align-items:center; gap:8px; padding:12px 16px; color:white; cursor:pointer; font-size:13px; margin:0;">
+                                    <i class='bx bx-scan'></i> Escanear Lista
+                                    <input type="file" id="upload-lista-inv" accept="image/*" style="display:none;"
+                                        onchange="document.getElementById('menu-agregar-inventario').style.display='none'; procesarImagenInventario(event)">
+                                </label>
+                                <a onclick="document.getElementById('menu-agregar-inventario').style.display='none'; ipcRenderer.send('abrir-carpeta-plantillas')"
+                                    style="display:flex; align-items:center; gap:8px; padding:12px 16px; color:#d8b4fe; cursor:pointer; font-size:13px; border-top:1px solid #333;">
+                                    <i class='bx bx-download'></i> Plantillas de Inventario (Excel)
+                                </a>
+                            </div>
                         </div>
+                    </div>
+                    <div id="inv-sin-productos-hint" style="display:none; background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.3); border-radius:10px; padding:14px 16px; margin-bottom:16px; font-size:13px; color:#ddd;">
+                        📋 Aún no tienes productos cargados. Usa <b>"+ Agregar" → "Plantillas de Inventario"</b> para descargar un Excel de ejemplo por categoría, llénalo y cárgalo con <b>"Cargar Excel"</b>.
                     </div>
                     <!-- Pestañas de Navegación de Inventario -->
                     <div class="inv-tabs">
@@ -2278,8 +2288,9 @@
                                 <select id="reg-categoria" class="bh-input" style="background:#222; color:white;"
                                     onchange="cambiarRegCategoria(this.value)">
                                     <option value="Accesorios">Accesorios</option>
-                                    <option value="Repuestos">Repuestos de Celulares</option>
+                                    <option value="Repuestos de Celulares">Repuestos de Celulares</option>
                                     <option value="Pantallas">Pantallas</option>
+                                    <option value="Celulares">Celulares</option>
                                     <option value="Micas">Micas (Protectores)</option>
                                 </select>
                             </div>
@@ -3080,7 +3091,7 @@
                     <option value="Celulares">Celulares</option>
                     <option value="Pantallas">Pantallas</option>
                     <option value="Micas">Micas</option>
-                    <option value="Repuestos">Repuestos de Celulares</option>
+                    <option value="Repuestos de Celulares">Repuestos de Celulares</option>
                     <option value="Accesorios">Accesorios</option>
                 </select>
             </div>
@@ -4184,7 +4195,22 @@
 
         ipcRenderer.on('lista-de-productos', (e, rows) => {
             todosLosProductos = rows || [];
+            const hint = document.getElementById('inv-sin-productos-hint');
+            if (hint) hint.style.display = todosLosProductos.length === 0 ? 'block' : 'none';
             renderizarProductosFiltrados();
+        });
+
+        function toggleMenuAgregarInventario() {
+            const menu = document.getElementById('menu-agregar-inventario');
+            if (!menu) return;
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('menu-agregar-inventario');
+            const btn = document.getElementById('btn-add-prod');
+            if (menu && menu.style.display === 'block' && !menu.contains(e.target) && e.target !== btn) {
+                menu.style.display = 'none';
+            }
         });
 
         ipcRenderer.on('subcategorias-custom-lista', (e, data) => {
@@ -6761,7 +6787,7 @@
             if (val === 'Accesorios') {
                 document.getElementById('sub-accesorios-suggest').style.display = 'block';
                 document.getElementById('reg-nombre').placeholder = 'Ej: Auriculares Bluetooth';
-            } else if (val === 'Repuestos') {
+            } else if (val === 'Repuestos' || val === 'Repuestos de Celulares') {
                 document.getElementById('sub-repuestos-suggest').style.display = 'block';
                 document.getElementById('reg-nombre').placeholder = 'Ej: Puerto de Carga';
             } else if (val === 'Pantallas') {

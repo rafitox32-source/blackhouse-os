@@ -1,0 +1,37 @@
+BLACKHOUSE OS — PLANTILLAS DE INVENTARIO
+==========================================
+
+Esta carpeta se genera automaticamente para ayudarte a cargar tu inventario
+completo de forma masiva, en vez de agregar producto por producto.
+
+QUE HAY EN ESTA CARPETA
+------------------------
+- Plantilla_Accesorios.xlsx
+- Plantilla_Repuestos_Celulares.xlsx
+- Plantilla_Pantallas.xlsx
+- Plantilla_Celulares.xlsx
+- Plantilla_Micas.xlsx
+
+Cada archivo tiene su propia hoja de "Instrucciones" adentro.
+
+COMO USARLAS
+------------
+1. Abre el archivo de la categoria que quieras cargar.
+2. Llena una fila por producto (hay 2 filas de ejemplo, bórralas o
+   sobrescríbelas).
+3. Guarda el archivo.
+4. Dentro del programa: Inventario -> "+ Agregar" -> "Cargar Excel".
+5. Elige el archivo, y cuando te pregunte la categoria, selecciona la
+   que corresponda a esa plantilla.
+6. Cada plantilla se importa por separado (una categoria a la vez).
+
+OTRAS FORMAS DE CARGAR TU INVENTARIO
+-------------------------------------
+- Archivos .csv: tambien se aceptan, con las mismas columnas.
+- "Escanear Lista" (dentro de "+ Agregar"): si tienes tu inventario en
+  una foto o lista escrita/impresa, puedes subir la imagen y el programa
+  intenta leer los productos automaticamente con inteligencia artificial.
+  Revisa siempre el resultado antes de confirmar, ya que el reconocimiento
+  de imagenes puede cometer errores con nombres poco claros.
+
+Si tienes dudas, contacta a soporte de BlackHouse OS.
