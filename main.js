@@ -282,33 +282,7 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
             }
         }
 
-       // 5. VERIFICACIÓN DE IP
-        if (users.empresa_id !== 1) {
-            console.log("Paso 5: Verificando IP...");
-            const ipActual = await obtenerIPPublica();
-            if (ipActual) {
-                const { data: empIP } = await supabase
-                    .from('empresas')
-                    .select('ip_autorizada')
-                    .eq('id', users.empresa_id)
-                    .single();
-
-                if (empIP) {
-                    if (!empIP.ip_autorizada) {
-                        await supabase.from('empresas')
-                            .update({ ip_autorizada: ipActual })
-                            .eq('id', users.empresa_id);
-                        console.log(`IP registrada por primera vez: ${ipActual}`);
-                    } else if (empIP.ip_autorizada !== ipActual) {
-                        console.log("Error: IP no coincide", empIP.ip_autorizada, "vs", ipActual);
-                        return event.reply('login-respuesta', {
-                            success: false,
-                            msg: `🔒 Acceso bloqueado: Esta licencia está asociada a otro equipo o ubicación. Comunícate con soporte para transferir tu acceso.\n\nWhatsApp Soporte: +51 924 171 629`
-                        });
-                    }
-                }
-            }
-        }
+       // 5. VERIFICACIÓN DE IP (desactivada: la licencia ya no se ata a una ubicación/red fija)
 
         console.log("=== LOGIN EXITOSO ===");
         
