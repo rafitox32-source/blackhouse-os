@@ -73,6 +73,26 @@ jobs:
             exit 1
           }
 
+          # Detecta el error de haber pegado "NOMBRE=valor" completo en vez de solo "valor"
+          # al crear el secret en GitHub (ya nos paso una vez).
+          $malFormados = @()
+          if ($env:GROQ_API_KEY -match '^\s*GROQ_API_KEY\s*=') { $malFormados += "GROQ_API_KEY" }
+          if ($env:SUPABASE_URL -match '^\s*SUPABASE_URL\s*=') { $malFormados += "SUPABASE_URL" }
+          if ($env:SUPABASE_KEY -match '^\s*SUPABASE_KEY\s*=') { $malFormados += "SUPABASE_KEY" }
+          if ($malFormados.Count -gt 0) {
+            Write-Error "Estos secrets tienen el nombre de la variable pegado dentro del valor: $($malFormados -join ', '). Edita el secret en GitHub y deja SOLO el valor, sin 'NOMBRE=' al inicio."
+            exit 1
+          }
+
+          # SUPABASE_URL debe ser una URL http(s) valida, no cualquier texto.
+          try {
+            $uri = [System.Uri]::new($env:SUPABASE_URL)
+            if ($uri.Scheme -notin @('http','https')) { throw "esquema invalido" }
+          } catch {
+            Write-Error "SUPABASE_URL no es una URL http(s) valida. Revisa el valor del secret en GitHub."
+            exit 1
+          }
+
           $lines = @(
             "GROQ_API_KEY=$env:GROQ_API_KEY",
             "SUPABASE_URL=$env:SUPABASE_URL",
