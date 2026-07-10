@@ -19,6 +19,11 @@ COMO USARLAS
 1. Abre el archivo de la categoria que quieras cargar.
 2. Llena una fila por producto (hay 2 filas de ejemplo, bórralas o
    sobrescríbelas).
+   - Las columnas "Marca" y "Modelo Compatible" ahora son desplegables:
+     primero elige la Marca (Apple, Samsung, Xiaomi, etc.) y el Modelo
+     se filtra solo a esa marca (mas de 5,000 modelos en total). Si tu
+     producto no aplica a un modelo especifico (ej. un cargador
+     universal), deja ambas celdas vacías.
 3. Guarda el archivo.
 4. Dentro del programa: Inventario -> "+ Agregar" -> "Cargar Excel".
 5. Elige el archivo, y cuando te pregunte la categoria, selecciona la
