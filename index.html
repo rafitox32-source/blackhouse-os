@@ -3725,9 +3725,13 @@
 
             if (res.success) {
                 if (res.requiere2FA) {
-                    // Guardamos temporalmente el usuario para poder validar el 2FA después
+                    // Guardamos temporalmente el usuario para poder validar el 2FA después.
+                    // OJO: "recordar" es local a iniciarSesion() y no existe en este scope
+                    // (este listener es un handler aparte) - se leia el checkbox de nuevo
+                    // aqui para evitar un ReferenceError si esta rama llega a activarse.
                     localStorage.setItem('usuarioLoginTemp', res.usuario);
-                    localStorage.setItem('recordarTemp', recordar ? '1' : '0');
+                    const recordarSesion = document.getElementById('chk-recordar-sesion')?.checked || false;
+                    localStorage.setItem('recordarTemp', recordarSesion ? '1' : '0');
                     toggleMFAView(true);
                     showToast("Código de seguridad 2FA requerido", "info");
                 } else {
