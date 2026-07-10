@@ -212,8 +212,14 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
             .eq('estado', 'activo')
             .single();
 
+        if (error && error.code !== 'PGRST116') {
+            // Error real de conexion/consulta (red, DNS, Supabase caido, etc.), no un simple "no existe".
+            console.error('Login query error - fallo de conexion (Paso 1):', error);
+            return event.reply('login-respuesta', { success: false, msg: `🌐 No se pudo conectar con el servidor. Verifica tu conexión a internet o la fecha/hora del sistema. (${error.message || error.code || 'error desconocido'})` });
+        }
+
         if (error || !users) {
-            console.error('Login query error (Paso 1):', error);
+            console.error('Login query error - usuario no encontrado (Paso 1):', error);
             return event.reply('login-respuesta', { success: false, msg: 'Usuario no encontrado o inactivo' });
         }
         
