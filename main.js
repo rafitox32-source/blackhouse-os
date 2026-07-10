@@ -1172,7 +1172,13 @@ ipcMain.on('obtener-estado-plan', async (event, data) => {
 ipcMain.on('guardar-datos-empresa', async (event, data) => {
     try {
         if (!empresaActual) throw new Error('No hay sesión activa');
-        const datosActualizar = { nombre: data.nombre, direccion: data.direccion, telefono: data.telefono };
+        const datosActualizar = {
+            nombre: data.nombre,
+            razon_social: data.razon_social,
+            ruc: data.ruc,
+            direccion: data.direccion,
+            telefono: data.telefono
+        };
 
         const { error } = await supabase
             .from('empresas')

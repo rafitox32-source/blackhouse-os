@@ -2560,6 +2560,16 @@
                                                 placeholder="Ej: BlackHouse Pro">
                                         </div>
                                         <div class="input-group">
+                                            <label>Razón Social</label>
+                                            <input type="text" id="conf-empresa-razonsocial" class="bh-input"
+                                                placeholder="Ej: Black House S.A.C.">
+                                        </div>
+                                        <div class="input-group">
+                                            <label>RUC</label>
+                                            <input type="text" id="conf-empresa-ruc" class="bh-input"
+                                                placeholder="Ej: 20123456789">
+                                        </div>
+                                        <div class="input-group">
                                             <label>Dirección</label>
                                             <input type="text" id="conf-empresa-dir" class="bh-input"
                                                 placeholder="Ej: Av. Principal 123">
@@ -2570,6 +2580,11 @@
                                                 placeholder="Ej: 999 888 777">
                                         </div>
                                     </div>
+                                    <p style="font-size: 12px; color: var(--text-muted, #888); margin: 8px 0 0;">
+                                        La Razón Social y el RUC se usan para completar el encabezado de las
+                                        boletas/facturas emitidas desde este sistema y desde el panel de ventas
+                                        móvil.
+                                    </p>
                                     <button class="bh-btn-purple" onclick="guardarDatosEmpresa()">Guardar
                                         Cambios</button>
                                 </div>
@@ -3950,6 +3965,8 @@
             if (!data) return;
             const campos = {
                 'conf-empresa-nombre': data.nombre,
+                'conf-empresa-razonsocial': data.razon_social,
+                'conf-empresa-ruc': data.ruc,
                 'conf-empresa-dir': data.direccion,
                 'conf-empresa-tel': data.telefono
             };
@@ -4663,6 +4680,8 @@
 
         function guardarDatosEmpresa() {
             const nombre = document.getElementById('conf-empresa-nombre').value;
+            const razonSocial = document.getElementById('conf-empresa-razonsocial').value;
+            const ruc = document.getElementById('conf-empresa-ruc').value;
             const direccion = document.getElementById('conf-empresa-dir').value;
             const telefono = document.getElementById('conf-empresa-tel').value;
 
@@ -4675,6 +4694,8 @@
             const data = {
                 id: empresaId,
                 nombre: nombre,
+                razon_social: razonSocial,
+                ruc: ruc,
                 direccion: direccion,
                 telefono: telefono
             };
