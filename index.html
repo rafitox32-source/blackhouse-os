@@ -2199,8 +2199,12 @@
                 <div id="inventario" class="view">
                     <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
                         <h1>Inventario</h1>
-                        <div style="position:relative;">
-                            <button id="btn-add-prod" class="bh-btn-purple" onclick="toggleMenuAgregarInventario()">+ Agregar ▾</button>
+                        <div style="display:flex; gap:10px;">
+                            <button class="bh-btn-white" onclick="showView('compatibilidades-view', null)" title="Ver y gestionar qué modelos comparten la misma mica/pantalla">
+                                <i class='bx bx-git-compare'></i> Compatibilidades
+                            </button>
+                            <div style="position:relative;">
+                                <button id="btn-add-prod" class="bh-btn-purple" onclick="toggleMenuAgregarInventario()">+ Agregar ▾</button>
                             <div id="menu-agregar-inventario" style="display:none; position:absolute; right:0; top:44px; background:#1a1a1a; border:1px solid #333; border-radius:10px; min-width:230px; z-index:200; box-shadow:0 8px 24px rgba(0,0,0,0.5); overflow:hidden;">
                                 <a onclick="document.getElementById('menu-agregar-inventario').style.display='none'; showView('agregar-producto-view', null)"
                                     style="display:flex; align-items:center; gap:8px; padding:12px 16px; color:white; cursor:pointer; font-size:13px;">
@@ -2220,6 +2224,7 @@
                                     style="display:flex; align-items:center; gap:8px; padding:12px 16px; color:#d8b4fe; cursor:pointer; font-size:13px; border-top:1px solid #333;">
                                     <i class='bx bx-download'></i> Plantillas de Inventario (Excel)
                                 </a>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -2378,6 +2383,13 @@
                                         <i class='bx bx-mobile-alt' style="font-size:16px;"></i> Buscar Modelo
                                     </button>
                                 </div>
+                                <div id="sugerencia-compat-producto" style="display:none; margin-top:10px; background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.35); border-radius:8px; padding:10px 12px; font-size:12.5px; color:#ddd;">
+                                    <div id="sugerencia-compat-texto" style="margin-bottom:8px;"></div>
+                                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;">
+                                        <input type="checkbox" id="sugerencia-compat-check" checked>
+                                        Vincular este producto al grupo (comparte stock con esos modelos)
+                                    </label>
+                                </div>
                             </div>
 
                             <div class="input-group"><label>Costo Unitario (S/)</label><input type="number"
@@ -2392,6 +2404,32 @@
                         <div style="text-align:right; margin-top: 20px;">
                             <button class="bh-btn-purple" onclick="guardarProducto()">Guardar Producto</button>
                         </div>
+                    </div>
+                </div>
+
+                <div id="compatibilidades-view" class="view">
+                    <button onclick="showView('inventario', null)"
+                        style="background:none; border:none; color:var(--bh-purple); cursor:pointer; margin-bottom:20px; font-size:16px; display:flex; align-items:center; gap:5px;">←
+                        Volver</button>
+                    <div class="bh-card" style="margin-bottom:20px;">
+                        <h2 style="margin-top:0; margin-bottom:6px;">Compatibilidades de Modelos</h2>
+                        <p style="color:#aaa; font-size:13px; margin-top:0; margin-bottom:16px;">
+                            Micas y pantallas que sirven para varios modelos comparten la misma pieza física y el mismo stock.
+                            Busca un modelo para ver con cuáles es compatible, o crea un grupo nuevo.
+                        </p>
+                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                            <div style="position:relative; flex:1; min-width:250px;">
+                                <i class='bx bx-search' style="position:absolute; left:15px; top:50%; transform:translateY(-50%); color:var(--text-muted); font-size:18px;"></i>
+                                <input type="text" id="compat-buscador" class="bh-input"
+                                    placeholder="Buscar modelo (ej: Note 10s, A12, Y19)..."
+                                    style="padding-left:40px; width:100%; box-sizing:border-box; background:#1a1a1a;"
+                                    oninput="renderizarGruposCompatibilidad()">
+                            </div>
+                            <button class="bh-btn-purple" onclick="abrirModalNuevoGrupo()">+ Nuevo Grupo</button>
+                        </div>
+                    </div>
+                    <div id="compat-lista">
+                        <div class="bh-card" style="text-align:center; padding:20px; color:#777;">Cargando grupos de compatibilidad...</div>
                     </div>
                 </div>
 
@@ -3062,6 +3100,54 @@
         </div>
     </div>
 
+    <!-- Modal Crear/Editar Grupo de Compatibilidad -->
+    <div id="modal-grupo-compat" class="modal-overlay">
+        <div class="modal-content" style="width: 520px; max-width: 95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 id="modal-grupo-compat-titulo" style="margin:0; color:white; font-size:18px;">Nuevo Grupo de Compatibilidad</h2>
+                <button type="button" onclick="cerrarModalGrupoCompat()"
+                    style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✖</button>
+            </div>
+
+            <input type="hidden" id="compat-grupo-id" value="">
+
+            <div class="input-group">
+                <label>Tipo de pieza</label>
+                <select id="compat-tipo-pieza" class="bh-input" style="background:#222; color:white;">
+                    <option value="mica">Mica / Protector</option>
+                    <option value="pantalla">Pantalla</option>
+                    <option value="general">Otra pieza</option>
+                </select>
+            </div>
+
+            <div class="input-group">
+                <label>Nombre del grupo</label>
+                <input type="text" id="compat-etiqueta" class="bh-input"
+                    placeholder="Se autocompleta con los modelos agregados; puedes editarlo"
+                    oninput="this.dataset.editadoManualmente = '1'">
+            </div>
+
+            <div class="input-group">
+                <label>Modelos compatibles (comparten la misma pieza y el mismo stock)</label>
+                <div id="compat-chips-miembros"
+                    style="display:flex; flex-wrap:wrap; gap:6px; min-height:40px; border:1px solid #333; border-radius:8px; padding:8px; background:#1a1a1a;">
+                    <span style="color:#666; font-size:12px;">Ningún modelo agregado todavía.</span>
+                </div>
+                <button type="button" class="bh-btn-white" style="margin-top:8px;" onclick="abrirSelectorModelosParaGrupo()">
+                    <i class='bx bx-mobile-alt'></i> Agregar modelo
+                </button>
+            </div>
+
+            <div id="compat-modal-msg" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444;"></div>
+
+            <div
+                style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                <button type="button" class="bh-btn-white" onclick="cerrarModalGrupoCompat()">Cancelar</button>
+                <button type="button" class="bh-btn-purple" onclick="guardarGrupoCompat()">Guardar Grupo</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-confirm-custom" class="modal-overlay">
         <div class="confirm-box">
             <div style="font-size:40px; margin-bottom:15px;">👤</div>
@@ -3654,6 +3740,12 @@
         let todosLosProductos = []; // Almacena la lista de productos cargados
         let categoriaInventarioActiva = 'Todos'; // Categoría activa de las pestañas
 
+        // === Compatibilidades de Modelos (Fase 2) ===
+        let todosLosGrupos = []; // Grupos de compatibilidad cargados junto con productos
+        let compatMiembrosTemp = []; // Modelos [{marca, modelo}] del grupo que se está creando/editando en el modal
+        let compatGrupoEditandoId = null; // null = creando uno nuevo; si tiene valor, se está editando ese grupo
+        let grupoSugeridoParaProducto = null; // Grupo detectado al elegir un modelo en el formulario de "Nuevo Producto"
+
         function showToast(msg, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -3923,6 +4015,10 @@
             if (id === 'inventario' && !window.isDemoMode) {
                 ipcRenderer.send('obtener-productos');
                 ipcRenderer.send('obtener-subcategorias-custom');
+                ipcRenderer.send('obtener-grupos-compatibilidad');
+            }
+            if (id === 'compatibilidades-view' && !window.isDemoMode) {
+                ipcRenderer.send('obtener-grupos-compatibilidad');
             }
             if (id === 'reportes' && !window.isDemoMode) ipcRenderer.send('obtener-datos-reporte', 'hoy');
 
@@ -4064,6 +4160,13 @@
                 const vinculoEl = document.getElementById('reg-vinculo-modelo');
                 if (vinculoEl && vinculoEl.value) {
                     data.modelo_compatible = vinculoEl.value;
+                }
+                // Si se detectó que el modelo elegido pertenece a un grupo de compatibilidad existente
+                // y el usuario dejó marcada la casilla de sugerencia, vincular el producto a ese grupo.
+                const checkSugerencia = document.getElementById('sugerencia-compat-check');
+                if (grupoSugeridoParaProducto && checkSugerencia && checkSugerencia.checked) {
+                    data.grupo_compatibilidad_id = grupoSugeridoParaProducto.id;
+                    data.modelo_compatible = grupoSugeridoParaProducto.etiqueta;
                 }
             }
             ipcRenderer.send('nuevo-producto-sql', data);
@@ -6703,7 +6806,7 @@
             }
 
             grid.innerHTML = mostrados.map(item => {
-                return `<button type="button" class="model-btn" onclick="seleccionarModelo('${item.fullName}')" title="${item.fullName}">
+                return `<button type="button" class="model-btn" onclick="seleccionarModelo('${item.fullName}', '${item.brand}', '${item.model}')" title="${item.fullName}">
                             <i class='bx bx-mobile-vibration' style="color:var(--bh-purple); margin-right:5px;"></i> ${item.model}
                         </button>`;
             }).join('') + botonAgregar;
@@ -6727,7 +6830,15 @@
             showToast(`Modelo "${modelo}" agregado a ${marca}`, 'success');
         }
 
-        function seleccionarModelo(nombreCompleto) {
+        function seleccionarModelo(nombreCompleto, marca, modelo) {
+            // Target especial: el modal de "Nuevo/Editar Grupo de Compatibilidad" no tiene un único
+            // input, sino una lista creciente de chips de modelos miembro.
+            if (modelSelectorTargetId === 'compat-nuevo-modelo') {
+                agregarMiembroCompatBuilder(marca || '', modelo || nombreCompleto);
+                cerrarSelectorModelos();
+                return;
+            }
+
             const targetInput = document.getElementById(modelSelectorTargetId);
             if (targetInput) {
                 targetInput.value = nombreCompleto;
@@ -6735,6 +6846,8 @@
                 if (modelSelectorTargetId === 'reg-vinculo-modelo') {
                     // Autocompletar el nombre del producto
                     document.getElementById('reg-nombre').value = `Pantalla ${nombreCompleto}`;
+                    // Revisar si este modelo ya pertenece a un grupo de compatibilidad conocido
+                    revisarSugerenciaCompatibilidad(marca || '', modelo || nombreCompleto);
                 }
                 // Disparar evento input para validaciones
                 targetInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -6808,6 +6921,12 @@
             document.getElementById('sub-pantallas-selector').style.display = 'none';
             document.getElementById('sub-micas-suggest').style.display = 'none';
 
+            // Al cambiar de categoría se descarta cualquier sugerencia de grupo de compatibilidad
+            // detectada para la categoría anterior (evita arrastrar un vínculo incorrecto).
+            grupoSugeridoParaProducto = null;
+            const sugerenciaBox = document.getElementById('sugerencia-compat-producto');
+            if (sugerenciaBox) sugerenciaBox.style.display = 'none';
+
             const grupoSub = document.getElementById('grupo-subcategoria');
             const selectSub = document.getElementById('reg-subcategoria');
             if (SUBCATEGORIAS[val] || (subcategoriasCustom[val] && subcategoriasCustom[val].length)) {
@@ -6851,6 +6970,261 @@
         function agregarSugerenciaNombre(nombre) {
             document.getElementById('reg-nombre').value = nombre;
             showToast(`Sugerencia aplicada: ${nombre}`, 'success');
+        }
+
+        // ================= COMPATIBILIDADES DE MODELOS (Fase 2) =================
+
+        // Recibe la lista completa de grupos (con miembros y productos vinculados) cada vez que
+        // se piden desde el backend (al entrar a Inventario, a Compatibilidades, o tras guardar/borrar).
+        ipcRenderer.on('lista-grupos-compatibilidad', (e, grupos) => {
+            todosLosGrupos = grupos || [];
+            renderizarGruposCompatibilidad();
+        });
+
+        ipcRenderer.on('grupo-compatibilidad-guardado', (e, res) => {
+            if (res && res.success) {
+                let msg = compatGrupoEditandoId ? 'Grupo actualizado' : 'Grupo creado';
+                if (res.vinculadosAuto > 0) {
+                    msg += ` — ${res.vinculadosAuto} producto(s) existente(s) se vincularon automáticamente`;
+                }
+                showToast(msg, 'success');
+                cerrarModalGrupoCompat();
+                ipcRenderer.send('obtener-grupos-compatibilidad');
+                ipcRenderer.send('obtener-productos');
+            } else {
+                const msgBox = document.getElementById('compat-modal-msg');
+                if (msgBox) {
+                    msgBox.textContent = (res && res.msg) || 'No se pudo guardar el grupo.';
+                    msgBox.style.display = 'block';
+                }
+            }
+        });
+
+        ipcRenderer.on('grupo-compatibilidad-eliminado', (e, res) => {
+            if (res && res.success) {
+                showToast('Grupo eliminado', 'success');
+                ipcRenderer.send('obtener-grupos-compatibilidad');
+                ipcRenderer.send('obtener-productos');
+            } else {
+                showToast((res && res.msg) || 'No se pudo eliminar el grupo', 'danger');
+            }
+        });
+
+        ipcRenderer.on('producto-vinculado-a-grupo', (e, res) => {
+            if (res && res.success) {
+                showToast('Producto vinculado al grupo', 'success');
+                ipcRenderer.send('obtener-grupos-compatibilidad');
+                ipcRenderer.send('obtener-productos');
+            } else {
+                showToast((res && res.msg) || 'No se pudo vincular el producto', 'danger');
+            }
+        });
+
+        const ETIQUETA_TIPO_PIEZA = { mica: '🛡️ Mica', pantalla: '📱 Pantalla', general: '🔧 General' };
+
+        function renderizarGruposCompatibilidad() {
+            const cont = document.getElementById('compat-lista');
+            if (!cont) return;
+
+            const term = (document.getElementById('compat-buscador')?.value || '').trim().toUpperCase();
+
+            let grupos = todosLosGrupos;
+            if (term) {
+                grupos = grupos.filter(g => {
+                    if ((g.etiqueta || '').toUpperCase().includes(term)) return true;
+                    return (g.miembros || []).some(m =>
+                        (m.modelo || '').toUpperCase().includes(term) || (m.marca || '').toUpperCase().includes(term)
+                    );
+                });
+            }
+
+            if (grupos.length === 0) {
+                cont.innerHTML = `<div class="bh-card" style="text-align:center; padding:30px; color:#777;">
+                    ${term ? 'Ningún grupo coincide con esa búsqueda.' : 'Todavía no hay grupos de compatibilidad. Crea el primero con "+ Nuevo Grupo".'}
+                </div>`;
+                return;
+            }
+
+            cont.innerHTML = grupos.map(g => {
+                const chipsModelos = (g.miembros || []).map(m =>
+                    `<span style="background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); color:#d8b4fe; padding:3px 10px; border-radius:20px; font-size:12px;">${m.marca ? m.marca + ' ' : ''}${m.modelo}</span>`
+                ).join(' ');
+
+                const productos = g.productos || [];
+                const listaProductos = productos.length > 0
+                    ? productos.map(p => `<div style="font-size:12px; color:#ccc; padding:2px 0;">📦 <b>${p.sku || 'sin SKU'}</b> — ${p.nombre} <span style="color:${p.stock > 0 ? 'var(--success)' : '#ef4444'};">(Stock: ${p.stock})</span></div>`).join('')
+                    : `<div style="font-size:12px; color:#777;">Sin productos vinculados a este grupo todavía.</div>`;
+
+                return `<div class="bh-card" style="margin-bottom:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
+                        <div>
+                            <span style="font-size:11px; background:rgba(255,255,255,0.08); padding:3px 10px; border-radius:20px; margin-right:8px;">${ETIQUETA_TIPO_PIEZA[g.tipo_pieza] || g.tipo_pieza}</span>
+                            <b style="color:white; font-size:14px;">${g.etiqueta}</b>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <button class="bh-btn-white" style="padding:4px 10px; font-size:11px;" onclick="editarGrupoCompat(${g.id})">✏️ Editar</button>
+                            <button class="bh-btn-white" style="padding:4px 10px; font-size:11px; color:#ef4444;" onclick="eliminarGrupoCompat(${g.id})">🗑️ Eliminar</button>
+                        </div>
+                    </div>
+                    <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;">${chipsModelos}</div>
+                    <div style="margin-top:10px; border-top:1px solid #2a2a2a; padding-top:8px;">${listaProductos}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function abrirModalNuevoGrupo() {
+            compatGrupoEditandoId = null;
+            compatMiembrosTemp = [];
+            document.getElementById('modal-grupo-compat-titulo').textContent = 'Nuevo Grupo de Compatibilidad';
+            document.getElementById('compat-grupo-id').value = '';
+            document.getElementById('compat-tipo-pieza').value = 'mica';
+            const etiquetaEl = document.getElementById('compat-etiqueta');
+            etiquetaEl.value = '';
+            delete etiquetaEl.dataset.editadoManualmente; // permite que el autocompletado funcione desde cero
+            document.getElementById('compat-modal-msg').style.display = 'none';
+            renderChipsCompatBuilder();
+            document.getElementById('modal-grupo-compat').style.display = 'flex';
+        }
+
+        function editarGrupoCompat(grupoId) {
+            const grupo = todosLosGrupos.find(g => g.id === grupoId);
+            if (!grupo) return;
+            compatGrupoEditandoId = grupoId;
+            compatMiembrosTemp = (grupo.miembros || []).map(m => ({ marca: m.marca || '', modelo: m.modelo }));
+            document.getElementById('modal-grupo-compat-titulo').textContent = 'Editar Grupo de Compatibilidad';
+            document.getElementById('compat-grupo-id').value = grupoId;
+            document.getElementById('compat-tipo-pieza').value = grupo.tipo_pieza;
+            const etiquetaEl = document.getElementById('compat-etiqueta');
+            etiquetaEl.value = grupo.etiqueta;
+            // Marca la etiqueta como "editada manualmente" para que agregar un modelo más no la sobrescriba
+            etiquetaEl.dataset.editadoManualmente = '1';
+            document.getElementById('compat-modal-msg').style.display = 'none';
+            renderChipsCompatBuilder();
+            document.getElementById('modal-grupo-compat').style.display = 'flex';
+        }
+
+        function cerrarModalGrupoCompat() {
+            document.getElementById('modal-grupo-compat').style.display = 'none';
+            compatGrupoEditandoId = null;
+            compatMiembrosTemp = [];
+        }
+
+        function abrirSelectorModelosParaGrupo() {
+            abrirSelectorModelos('compat-nuevo-modelo');
+        }
+
+        function agregarMiembroCompatBuilder(marca, modelo) {
+            const yaExiste = compatMiembrosTemp.some(m =>
+                (m.marca || '').toUpperCase() === (marca || '').toUpperCase() &&
+                m.modelo.toUpperCase() === modelo.toUpperCase()
+            );
+            if (yaExiste) {
+                showToast('Ese modelo ya está en el grupo', 'warning');
+                return;
+            }
+            compatMiembrosTemp.push({ marca: marca || '', modelo });
+            renderChipsCompatBuilder();
+
+            // Autocompletar el nombre del grupo con los modelos elegidos hasta ahora (editable por el usuario)
+            const etiquetaEl = document.getElementById('compat-etiqueta');
+            if (etiquetaEl && !etiquetaEl.dataset.editadoManualmente) {
+                etiquetaEl.value = compatMiembrosTemp.map(m => m.marca ? `${m.marca} ${m.modelo}` : m.modelo).join(' / ');
+            }
+        }
+
+        function quitarMiembroCompatBuilder(idx) {
+            compatMiembrosTemp.splice(idx, 1);
+            renderChipsCompatBuilder();
+        }
+
+        function renderChipsCompatBuilder() {
+            const cont = document.getElementById('compat-chips-miembros');
+            if (!cont) return;
+            if (compatMiembrosTemp.length === 0) {
+                cont.innerHTML = '<span style="color:#666; font-size:12px;">Ningún modelo agregado todavía.</span>';
+                return;
+            }
+            cont.innerHTML = compatMiembrosTemp.map((m, idx) => `
+                <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); color:#d8b4fe; padding:3px 6px 3px 10px; border-radius:20px; font-size:12px;">
+                    ${m.marca ? m.marca + ' ' : ''}${m.modelo}
+                    <button type="button" onclick="quitarMiembroCompatBuilder(${idx})" style="background:none; border:none; color:#d8b4fe; cursor:pointer; font-size:13px; padding:0 2px;" title="Quitar">✖</button>
+                </span>
+            `).join('');
+        }
+
+        function guardarGrupoCompat() {
+            const tipo_pieza = document.getElementById('compat-tipo-pieza').value;
+            const etiqueta = document.getElementById('compat-etiqueta').value.trim();
+            const msgBox = document.getElementById('compat-modal-msg');
+
+            if (compatMiembrosTemp.length === 0) {
+                msgBox.textContent = 'Agrega al menos un modelo al grupo.';
+                msgBox.style.display = 'block';
+                return;
+            }
+            if (!etiqueta) {
+                msgBox.textContent = 'El grupo necesita un nombre.';
+                msgBox.style.display = 'block';
+                return;
+            }
+            msgBox.style.display = 'none';
+
+            const payload = { tipo_pieza, etiqueta, miembros: compatMiembrosTemp };
+            if (compatGrupoEditandoId) {
+                ipcRenderer.send('actualizar-grupo-compatibilidad', { grupo_id: compatGrupoEditandoId, ...payload });
+            } else {
+                ipcRenderer.send('crear-grupo-compatibilidad', payload);
+            }
+        }
+
+        function eliminarGrupoCompat(grupoId) {
+            const grupo = todosLosGrupos.find(g => g.id === grupoId);
+            const cantidadProductos = grupo ? (grupo.productos || []).length : 0;
+            const aviso = cantidadProductos > 0
+                ? `Este grupo tiene ${cantidadProductos} producto(s) vinculado(s). Se eliminará el grupo, pero los productos NO se borran (solo perderán el vínculo). ¿Continuar?`
+                : '¿Eliminar este grupo de compatibilidad?';
+            if (!window.confirm(aviso)) return;
+            ipcRenderer.send('eliminar-grupo-compatibilidad', grupoId);
+        }
+
+        // Al elegir un modelo en "Vincular a Modelo de Celular" del formulario de Nuevo Producto,
+        // revisa si ya existe un grupo de compatibilidad (del mismo tipo de pieza que la categoría
+        // elegida) que contenga ese modelo, y si es así ofrece vincular el producto a ese grupo.
+        function revisarSugerenciaCompatibilidad(marca, modelo) {
+            grupoSugeridoParaProducto = null;
+            const box = document.getElementById('sugerencia-compat-producto');
+            if (!box) return;
+
+            const categoria = document.getElementById('reg-categoria').value;
+            const tipoPiezaEsperado = categoria === 'Micas' ? 'mica' : (categoria === 'Pantallas' ? 'pantalla' : null);
+            if (!tipoPiezaEsperado) { box.style.display = 'none'; return; }
+
+            const marcaNorm = (marca || '').trim().toUpperCase();
+            const modeloNorm = (modelo || '').trim().toUpperCase();
+
+            const grupo = todosLosGrupos.find(g => {
+                if (g.tipo_pieza !== tipoPiezaEsperado) return false;
+                return (g.miembros || []).some(m => {
+                    const mMarca = (m.marca || '').trim().toUpperCase();
+                    const mModelo = (m.modelo || '').trim().toUpperCase();
+                    // Compara modelo solo, y marca+modelo combinados, para tolerar que el texto
+                    // histórico a veces no separa marca y modelo de la misma forma que el selector.
+                    return mModelo === modeloNorm || (mMarca && mMarca === marcaNorm && mModelo === modeloNorm);
+                });
+            });
+
+            if (!grupo) { box.style.display = 'none'; return; }
+
+            grupoSugeridoParaProducto = grupo;
+            const hermanos = (grupo.miembros || [])
+                .filter(m => (m.modelo || '').trim().toUpperCase() !== modeloNorm)
+                .map(m => m.marca ? `${m.marca} ${m.modelo}` : m.modelo)
+                .join(', ');
+            document.getElementById('sugerencia-compat-texto').innerHTML =
+                `💡 Este modelo ya está en el grupo <b>"${grupo.etiqueta}"</b>` +
+                (hermanos ? ` — también sirve para: ${hermanos}` : '') + '.';
+            document.getElementById('sugerencia-compat-check').checked = true;
+            box.style.display = 'block';
         }
 
         function filtrarInventario(categoria, el) {

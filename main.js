@@ -552,6 +552,8 @@ ipcMain.on('nuevo-producto-sql', async (event, prod) => {
         if (prod.sku) insertData.sku = prod.sku;
         // Agregar modelo compatible si viene (Pantallas/Micas vinculadas a un modelo del selector)
         if (prod.modelo_compatible) insertData.modelo_compatible = prod.modelo_compatible;
+        // Si el usuario aceptó la sugerencia de vincular el producto a un grupo de compatibilidad existente
+        if (prod.grupo_compatibilidad_id) insertData.grupo_compatibilidad_id = prod.grupo_compatibilidad_id;
 
         const { error } = await supabase.from('productos').insert([insertData]);
         if (error) throw error;
@@ -568,6 +570,196 @@ ipcMain.on('obtener-productos', async (event) => {
         .eq('empresa_id', empresaActual)
         .order('id', { ascending: false });
     event.reply('lista-de-productos', data || []);
+});
+
+// === 4D. GRUPOS DE COMPATIBILIDAD DE MODELOS (micas/pantallas que comparten pieza y stock) ===
+const normalizarModeloCompat = (txt) => String(txt || '').replace(/\s+/g, ' ').trim().toUpperCase();
+
+ipcMain.on('obtener-grupos-compatibilidad', async (event) => {
+    try {
+        const { data: grupos, error: errGrupos } = await supabase.from('grupos_compatibilidad')
+            .select('*')
+            .eq('empresa_id', empresaActual)
+            .order('id', { ascending: false });
+        if (errGrupos) throw errGrupos;
+
+        const grupoIds = (grupos || []).map(g => g.id);
+        let miembros = [];
+        let productosVinculados = [];
+
+        if (grupoIds.length > 0) {
+            const { data: m, error: errM } = await supabase.from('grupos_compatibilidad_modelos')
+                .select('*')
+                .in('grupo_id', grupoIds);
+            if (errM) throw errM;
+            miembros = m || [];
+
+            const { data: p, error: errP } = await supabase.from('productos')
+                .select('id, sku, nombre, stock, categoria, subcategoria, grupo_compatibilidad_id')
+                .eq('empresa_id', empresaActual)
+                .in('grupo_compatibilidad_id', grupoIds);
+            if (errP) throw errP;
+            productosVinculados = p || [];
+        }
+
+        const resultado = (grupos || []).map(g => ({
+            ...g,
+            miembros: miembros.filter(m => m.grupo_id === g.id),
+            productos: productosVinculados.filter(p => p.grupo_compatibilidad_id === g.id)
+        }));
+
+        event.reply('lista-grupos-compatibilidad', resultado);
+    } catch (e) {
+        console.error('Error obteniendo grupos de compatibilidad:', e.message);
+        event.reply('lista-grupos-compatibilidad', []);
+    }
+});
+
+// Crea un grupo nuevo con sus modelos miembro. miembros: [{marca, modelo}, ...]
+ipcMain.on('crear-grupo-compatibilidad', async (event, payload) => {
+    try {
+        const { tipo_pieza, etiqueta, miembros } = payload || {};
+        if (!tipo_pieza || !['mica', 'pantalla', 'general'].includes(tipo_pieza)) {
+            throw new Error('Tipo de pieza inválido.');
+        }
+        if (!etiqueta || !Array.isArray(miembros) || miembros.length === 0) {
+            throw new Error('El grupo necesita una etiqueta y al menos un modelo.');
+        }
+
+        const { data: grupoCreado, error: errGrupo } = await supabase.from('grupos_compatibilidad')
+            .insert([{ empresa_id: empresaActual, tipo_pieza, etiqueta }])
+            .select('id')
+            .single();
+        if (errGrupo) throw errGrupo;
+
+        const filasMiembros = miembros.map(m => ({
+            grupo_id: grupoCreado.id,
+            marca: m.marca || null,
+            modelo: m.modelo,
+            modelo_normalizado: normalizarModeloCompat(m.modelo)
+        }));
+
+        const { error: errMiembros } = await supabase.from('grupos_compatibilidad_modelos').insert(filasMiembros);
+        if (errMiembros) throw errMiembros;
+
+        // Auto-vincular productos existentes sin grupo cuyo modelo_compatible (texto legacy) coincide
+        // EXACTO (normalizado) con la etiqueta del grupo recién creado. Esto es lo que permite que,
+        // por ejemplo, al crear manualmente el grupo "Honor X7 / Honor X7a" (uno de los 5 casos que no
+        // se pudieron migrar automáticamente por no existir en el catálogo), el producto MICA-0050 que
+        // ya tenía ese texto exacto en modelo_compatible quede vinculado sin tocarlo a mano.
+        // Solo coincidencia EXACTA (no difusa) — el matching aproximado es tarea de la Fase 3 (Excel).
+        let vinculadosAuto = 0;
+        const categoriaEsperada = tipo_pieza === 'mica' ? 'Micas' : (tipo_pieza === 'pantalla' ? 'Pantallas' : null);
+        let queryCandidatos = supabase.from('productos')
+            .select('id, modelo_compatible')
+            .eq('empresa_id', empresaActual)
+            .is('grupo_compatibilidad_id', null);
+        if (categoriaEsperada) queryCandidatos = queryCandidatos.eq('categoria', categoriaEsperada);
+        const { data: candidatos } = await queryCandidatos;
+
+        const etiquetaNorm = normalizarModeloCompat(etiqueta);
+        const idsAutoVincular = (candidatos || [])
+            .filter(p => p.modelo_compatible && normalizarModeloCompat(p.modelo_compatible) === etiquetaNorm)
+            .map(p => p.id);
+
+        if (idsAutoVincular.length > 0) {
+            const { error: errAuto } = await supabase.from('productos')
+                .update({ grupo_compatibilidad_id: grupoCreado.id })
+                .in('id', idsAutoVincular);
+            if (!errAuto) vinculadosAuto = idsAutoVincular.length;
+        }
+
+        event.reply('grupo-compatibilidad-guardado', { success: true, id: grupoCreado.id, vinculadosAuto });
+    } catch (e) {
+        console.error('Error creando grupo de compatibilidad:', e.message);
+        event.reply('grupo-compatibilidad-guardado', { success: false, msg: e.message });
+    }
+});
+
+// Actualiza etiqueta/tipo_pieza y reemplaza la lista completa de modelos miembro de un grupo existente.
+ipcMain.on('actualizar-grupo-compatibilidad', async (event, payload) => {
+    try {
+        const { grupo_id, tipo_pieza, etiqueta, miembros } = payload || {};
+        if (!grupo_id) throw new Error('Falta el grupo a actualizar.');
+        if (!tipo_pieza || !['mica', 'pantalla', 'general'].includes(tipo_pieza)) {
+            throw new Error('Tipo de pieza inválido.');
+        }
+        if (!etiqueta || !Array.isArray(miembros) || miembros.length === 0) {
+            throw new Error('El grupo necesita una etiqueta y al menos un modelo.');
+        }
+
+        const { error: errUpdate } = await supabase.from('grupos_compatibilidad')
+            .update({ tipo_pieza, etiqueta })
+            .eq('id', grupo_id)
+            .eq('empresa_id', empresaActual);
+        if (errUpdate) throw errUpdate;
+
+        // Reemplazo total de miembros: más simple y predecible que un diff incremental
+        const { error: errDelete } = await supabase.from('grupos_compatibilidad_modelos')
+            .delete()
+            .eq('grupo_id', grupo_id);
+        if (errDelete) throw errDelete;
+
+        const filasMiembros = miembros.map(m => ({
+            grupo_id,
+            marca: m.marca || null,
+            modelo: m.modelo,
+            modelo_normalizado: normalizarModeloCompat(m.modelo)
+        }));
+        const { error: errInsert } = await supabase.from('grupos_compatibilidad_modelos').insert(filasMiembros);
+        if (errInsert) throw errInsert;
+
+        // Mantener sincronizado el texto modelo_compatible de los productos ya vinculados a este grupo
+        await supabase.from('productos')
+            .update({ modelo_compatible: etiqueta })
+            .eq('grupo_compatibilidad_id', grupo_id)
+            .eq('empresa_id', empresaActual);
+
+        event.reply('grupo-compatibilidad-guardado', { success: true, id: grupo_id });
+    } catch (e) {
+        console.error('Error actualizando grupo de compatibilidad:', e.message);
+        event.reply('grupo-compatibilidad-guardado', { success: false, msg: e.message });
+    }
+});
+
+// Elimina un grupo. Los miembros se borran en cascada (FK ON DELETE CASCADE) y los productos
+// vinculados quedan con grupo_compatibilidad_id = NULL automáticamente (FK ON DELETE SET NULL).
+ipcMain.on('eliminar-grupo-compatibilidad', async (event, grupoId) => {
+    try {
+        const { error } = await supabase.from('grupos_compatibilidad')
+            .delete()
+            .eq('id', grupoId)
+            .eq('empresa_id', empresaActual);
+        if (error) throw error;
+        event.reply('grupo-compatibilidad-eliminado', { success: true, id: grupoId });
+    } catch (e) {
+        console.error('Error eliminando grupo de compatibilidad:', e.message);
+        event.reply('grupo-compatibilidad-eliminado', { success: false, msg: e.message });
+    }
+});
+
+// Vincula un producto YA EXISTENTE a un grupo de compatibilidad (usado desde la pantalla de
+// Compatibilidades para corregir productos antiguos que no se vincularon al crearse).
+ipcMain.on('vincular-producto-a-grupo', async (event, { producto_id, grupo_id }) => {
+    try {
+        const { data: grupo, error: errGrupo } = await supabase.from('grupos_compatibilidad')
+            .select('etiqueta')
+            .eq('id', grupo_id)
+            .eq('empresa_id', empresaActual)
+            .single();
+        if (errGrupo) throw errGrupo;
+
+        const { error } = await supabase.from('productos')
+            .update({ grupo_compatibilidad_id: grupo_id, modelo_compatible: grupo.etiqueta })
+            .eq('id', producto_id)
+            .eq('empresa_id', empresaActual);
+        if (error) throw error;
+
+        event.reply('producto-vinculado-a-grupo', { success: true });
+    } catch (e) {
+        console.error('Error vinculando producto a grupo:', e.message);
+        event.reply('producto-vinculado-a-grupo', { success: false, msg: e.message });
+    }
 });
 
 // === 4A. SUBCATEGORÍAS PERSONALIZADAS (editables por el usuario, ej. tipos de Micas) ===
