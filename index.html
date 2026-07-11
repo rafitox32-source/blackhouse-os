@@ -3117,7 +3117,6 @@
                 <select id="compat-tipo-pieza" class="bh-input" style="background:#222; color:white;">
                     <option value="mica">Mica / Protector</option>
                     <option value="pantalla">Pantalla</option>
-                    <option value="cargador">Cargador</option>
                     <option value="general">Otra pieza</option>
                 </select>
             </div>
@@ -3170,7 +3169,7 @@
 
             <div id="compat-import-panel-excel">
                 <p style="color:#999; font-size:12.5px; margin-bottom:10px;">
-                    Columnas esperadas en el Excel: <b>Tipo de Pieza</b> (mica / cargador), <b>Nombre del Grupo</b>
+                    Columnas esperadas en el Excel: <b>Tipo de Pieza</b> (mica / pantalla), <b>Nombre del Grupo</b>
                     (opcional, se autocompleta), <b>Modelos Compatibles</b> (ej: "Galaxy A12 / Galaxy A20s").
                 </p>
                 <input type="file" id="compat-import-input-excel" accept=".xlsx,.csv" onchange="procesarArchivoExcelCompat(event)">
@@ -7348,7 +7347,7 @@
 
                 const nuevasFilas = filas.map(f => {
                     const tipoRaw = (f[claveTipo] || 'mica').toString().trim().toLowerCase();
-                    const tipo_pieza = ['mica', 'cargador', 'pantalla', 'general'].includes(tipoRaw) ? tipoRaw : 'mica';
+                    const tipo_pieza = ['mica', 'pantalla', 'general'].includes(tipoRaw) ? tipoRaw : 'mica';
                     const modelosTexto = (f[claveModelos] || '').toString();
                     const miembros = modelosTexto.split(/[/,]/).map(s => s.trim()).filter(Boolean).map(modeloTxt => {
                         // Si el fragmento trae marca conocida como primera palabra, la separamos; si no, queda sin marca.
@@ -7399,7 +7398,7 @@
                     return;
                 }
                 const nuevasFilas = grupos.map(g => {
-                    const tipo_pieza = ['mica', 'cargador'].includes(g.tipo_pieza) ? g.tipo_pieza : 'mica';
+                    const tipo_pieza = ['mica', 'pantalla'].includes(g.tipo_pieza) ? g.tipo_pieza : 'mica';
                     const miembros = (g.modelos || []).map(m => ({ marca: m.marca || '', modelo: m.modelo })).filter(m => m.modelo);
                     const etiqueta = miembros.map(m => m.marca ? `${m.marca} ${m.modelo}` : m.modelo).join(' / ');
                     return { tipo_pieza, etiqueta, miembros };
@@ -7430,7 +7429,7 @@
             btnConfirmar.textContent = `Confirmar e Importar (${compatImportFilas.length})`;
             contador.textContent = `${compatImportFilas.length} grupo(s) candidato(s)`;
 
-            const etiquetasTipo = { mica: 'Mica', cargador: 'Cargador', pantalla: 'Pantalla', general: 'Otra' };
+            const etiquetasTipo = { mica: 'Mica', pantalla: 'Pantalla', general: 'Otra' };
 
             cont.innerHTML = compatImportFilas.map((fila, i) => {
                 const chips = (fila.miembros || []).map((m, mi) => `

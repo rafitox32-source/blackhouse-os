@@ -619,7 +619,7 @@ ipcMain.on('obtener-grupos-compatibilidad', async (event) => {
 ipcMain.on('crear-grupo-compatibilidad', async (event, payload) => {
     try {
         const { tipo_pieza, etiqueta, miembros } = payload || {};
-        if (!tipo_pieza || !['mica', 'pantalla', 'general', 'cargador'].includes(tipo_pieza)) {
+        if (!tipo_pieza || !['mica', 'pantalla', 'general'].includes(tipo_pieza)) {
             throw new Error('Tipo de pieza inválido.');
         }
         if (!etiqueta || !Array.isArray(miembros) || miembros.length === 0) {
@@ -681,7 +681,7 @@ ipcMain.on('actualizar-grupo-compatibilidad', async (event, payload) => {
     try {
         const { grupo_id, tipo_pieza, etiqueta, miembros } = payload || {};
         if (!grupo_id) throw new Error('Falta el grupo a actualizar.');
-        if (!tipo_pieza || !['mica', 'pantalla', 'general', 'cargador'].includes(tipo_pieza)) {
+        if (!tipo_pieza || !['mica', 'pantalla', 'general'].includes(tipo_pieza)) {
             throw new Error('Tipo de pieza inválido.');
         }
         if (!etiqueta || !Array.isArray(miembros) || miembros.length === 0) {
@@ -1665,7 +1665,7 @@ ipcMain.on('analizar-documento-ia', async (event, data) => {
 // Handler NUEVO y separado de 'analizar-documento-ia' (no se toca ese, ya está en producción
 // para "Escanear Lista" de inventario) para no arriesgar esa función existente. Reutiliza el
 // mismo patrón de Gemini Vision, pero con un prompt propio orientado a GRUPOS de compatibilidad
-// (varios modelos que comparten una misma mica/cargador) en vez de productos individuales.
+// (varios modelos que comparten una misma mica/pantalla) en vez de productos individuales.
 // Acepta imagen (jpg/png/etc) Y PDF: Gemini 1.5 entiende PDF nativo como inlineData con
 // mimeType 'application/pdf' (interpreta cada página como si fuera una imagen), así que no
 // hace falta distinguir "PDF con texto" de "PDF escaneado" ni añadir una librería de
@@ -1681,9 +1681,9 @@ ipcMain.on('analizar-compatibilidad-archivo', async (event, data) => {
         const base64Data = match[2];
 
         const prompt = `
-            Eres un asistente experto en compatibilidad de repuestos y accesorios de celulares.
+            Eres un asistente experto en compatibilidad de repuestos de celulares.
             Analiza este documento/imagen que contiene una lista de compatibilidad de MICAS o
-            CARGADORES: cada fila o grupo son varios modelos de celular que comparten la MISMA
+            PANTALLAS: cada fila o grupo son varios modelos de celular que comparten la MISMA
             pieza física (mismo producto, mismo stock).
 
             Devuélvelo ESTRICTAMENTE en este formato JSON (un elemento del array por cada
@@ -1693,7 +1693,7 @@ ipcMain.on('analizar-compatibilidad-archivo', async (event, data) => {
             ]
 
             Reglas:
-            1. "tipo_pieza" debe ser "mica" o "cargador" según corresponda a esa fila/grupo.
+            1. "tipo_pieza" debe ser "mica" o "pantalla" según corresponda a esa fila/grupo.
             2. NO incluyas markdown (como \`\`\`json).
             3. No inventes modelos que no veas escritos en el documento.
             4. Si un modelo no tiene marca explícita en el documento, usa "" para "marca" (se
