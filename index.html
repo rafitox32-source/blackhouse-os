@@ -1662,7 +1662,7 @@
 
     <div id="banner-actualizacion" style="display:none; position:fixed; top:0; left:0; right:0; z-index:99999; background:linear-gradient(90deg, #7c3aed, #4c1d95); color:white; padding:10px 20px; display:flex; align-items:center; justify-content:center; gap:15px; font-size:13px; box-shadow:0 2px 10px rgba(0,0,0,0.4);">
         <span id="banner-actualizacion-msg">🎉 Hay una nueva versión disponible.</span>
-        <button onclick="irADescargarActualizacion()" style="background:white; color:#4c1d95; border:none; padding:6px 14px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">Descargar ahora</button>
+        <button id="banner-actualizacion-btn" onclick="irADescargarActualizacion()" style="background:white; color:#4c1d95; border:none; padding:6px 14px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">Descargar manualmente</button>
         <button onclick="document.getElementById('banner-actualizacion').style.display='none'" style="background:transparent; border:none; color:white; font-size:16px; cursor:pointer; opacity:0.8;">&times;</button>
     </div>
 
@@ -8419,15 +8419,31 @@
             ipcRenderer.send('abrir-pagina-descarga');
         }
 
+        // Antes este botón, en los dos estados (disponible/lista), solo abría el navegador —
+        // nunca llamaba a quitAndInstall(), así que la descarga silenciosa que electron-updater
+        // ya había hecho en segundo plano nunca se aprovechaba, y el aviso de actualización se
+        // quedaba apareciendo siempre (el usuario terminaba reabriendo la misma versión vieja).
+        // Ahora, una vez que la actualización ya se descargó, el botón reinicia la app e instala
+        // de una vez con autoUpdater.quitAndInstall().
+        function instalarActualizacionAhora() {
+            ipcRenderer.send('instalar-actualizacion-ahora');
+        }
+
         ipcRenderer.on('actualizacion-disponible', (e, info) => {
             document.getElementById('banner-actualizacion-msg').innerText =
-                `🎉 Hay una nueva versión disponible (${info.version}).`;
+                `🎉 Hay una nueva versión disponible (${info.version}). Descargando en segundo plano...`;
+            const btn = document.getElementById('banner-actualizacion-btn');
+            btn.textContent = 'Descargar manualmente';
+            btn.onclick = irADescargarActualizacion;
             document.getElementById('banner-actualizacion').style.display = 'flex';
         });
 
         ipcRenderer.on('actualizacion-lista', (e, info) => {
             document.getElementById('banner-actualizacion-msg').innerText =
-                `✅ La actualización ${info.version} ya se descargó. Se instalará la próxima vez que abras la app, o puedes descargarla manualmente ahora.`;
+                `✅ La actualización ${info.version} ya está lista para instalar.`;
+            const btn = document.getElementById('banner-actualizacion-btn');
+            btn.textContent = 'Reiniciar e instalar';
+            btn.onclick = instalarActualizacionAhora;
             document.getElementById('banner-actualizacion').style.display = 'flex';
         });
     </script>

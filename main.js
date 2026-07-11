@@ -138,9 +138,22 @@ app.whenReady().then(() => {
         event.reply('recibir-version', app.getVersion());
     });
 
-    // Abrir la página de descarga en el navegador (usado por el aviso de actualización)
+    // Abrir la página de descarga en el navegador (fallback manual, usado por el aviso de
+    // actualización cuando TODAVÍA no se terminó de descargar la actualización en segundo plano).
+    // Va directo a /api/download (redirige al .exe del último release), no a la portada, para
+    // no obligar al usuario a buscar el botón de descarga él mismo.
     ipcMain.on('abrir-pagina-descarga', () => {
-        shell.openExternal('https://blackhouse-os-web.vercel.app');
+        shell.openExternal('https://blackhouse-os-web.vercel.app/api/download');
+    });
+
+    // Reinstalar la actualización que electron-updater YA descargó en segundo plano (evento
+    // 'update-downloaded'). Antes el único botón del banner mandaba al usuario al navegador a
+    // descargar el instalador a mano, sin usar nunca esta descarga silenciosa ni quitAndInstall()
+    // — por eso la app vieja se quedaba abierta y el aviso de actualización nunca desaparecía de
+    // verdad. Este handler cierra la app e instala la versión ya descargada, y al reabrir queda
+    // en la versión nueva de una vez.
+    ipcMain.on('instalar-actualizacion-ahora', () => {
+        autoUpdater.quitAndInstall();
     });
 
     // === CREAR CARPETAS FIRMWARE Y DUMP AL INICIAR (en userData: sobreviven actualizaciones) ===
