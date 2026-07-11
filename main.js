@@ -619,7 +619,7 @@ ipcMain.on('obtener-grupos-compatibilidad', async (event) => {
 ipcMain.on('crear-grupo-compatibilidad', async (event, payload) => {
     try {
         const { tipo_pieza, etiqueta, miembros } = payload || {};
-        if (!tipo_pieza || !['mica', 'pantalla', 'general'].includes(tipo_pieza)) {
+        if (!tipo_pieza || !['mica', 'pantalla', 'general', 'cargador'].includes(tipo_pieza)) {
             throw new Error('Tipo de pieza inválido.');
         }
         if (!etiqueta || !Array.isArray(miembros) || miembros.length === 0) {
@@ -681,7 +681,7 @@ ipcMain.on('actualizar-grupo-compatibilidad', async (event, payload) => {
     try {
         const { grupo_id, tipo_pieza, etiqueta, miembros } = payload || {};
         if (!grupo_id) throw new Error('Falta el grupo a actualizar.');
-        if (!tipo_pieza || !['mica', 'pantalla', 'general'].includes(tipo_pieza)) {
+        if (!tipo_pieza || !['mica', 'pantalla', 'general', 'cargador'].includes(tipo_pieza)) {
             throw new Error('Tipo de pieza inválido.');
         }
         if (!etiqueta || !Array.isArray(miembros) || miembros.length === 0) {
@@ -1658,6 +1658,59 @@ ipcMain.on('analizar-documento-ia', async (event, data) => {
     } catch (error) {
         console.error("Error al conectar con Gemini:", error);
         event.reply('respuesta-analisis-ia', { success: false, msg: error.message });
+    }
+});
+
+// === 14B. IMPORTAR GRUPOS DE COMPATIBILIDAD DESDE PDF O IMAGEN (Fase 5) ===
+// Handler NUEVO y separado de 'analizar-documento-ia' (no se toca ese, ya está en producción
+// para "Escanear Lista" de inventario) para no arriesgar esa función existente. Reutiliza el
+// mismo patrón de Gemini Vision, pero con un prompt propio orientado a GRUPOS de compatibilidad
+// (varios modelos que comparten una misma mica/cargador) en vez de productos individuales.
+// Acepta imagen (jpg/png/etc) Y PDF: Gemini 1.5 entiende PDF nativo como inlineData con
+// mimeType 'application/pdf' (interpreta cada página como si fuera una imagen), así que no
+// hace falta distinguir "PDF con texto" de "PDF escaneado" ni añadir una librería de
+// extracción de texto — el mimeType se toma directo del data URL que manda el renderer,
+// sea cual sea el tipo de archivo real.
+ipcMain.on('analizar-compatibilidad-archivo', async (event, data) => {
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const match = /^data:([^;]+);base64,([\s\S]+)$/.exec(data.file || '');
+        if (!match) throw new Error('Archivo no reconocido (se esperaba una imagen o un PDF).');
+        const mimeType = match[1];
+        const base64Data = match[2];
+
+        const prompt = `
+            Eres un asistente experto en compatibilidad de repuestos y accesorios de celulares.
+            Analiza este documento/imagen que contiene una lista de compatibilidad de MICAS o
+            CARGADORES: cada fila o grupo son varios modelos de celular que comparten la MISMA
+            pieza física (mismo producto, mismo stock).
+
+            Devuélvelo ESTRICTAMENTE en este formato JSON (un elemento del array por cada
+            fila/grupo distinto de la lista, aunque tenga un solo modelo):
+            [
+              { "tipo_pieza": "mica", "modelos": [{"marca": "Samsung", "modelo": "Galaxy A12"}, {"marca": "Samsung", "modelo": "Galaxy A20s"}] }
+            ]
+
+            Reglas:
+            1. "tipo_pieza" debe ser "mica" o "cargador" según corresponda a esa fila/grupo.
+            2. NO incluyas markdown (como \`\`\`json).
+            3. No inventes modelos que no veas escritos en el documento.
+            4. Si un modelo no tiene marca explícita en el documento, usa "" para "marca" (se
+               revisa y corrige a mano antes de guardar nada).
+            5. Responde ÚNICA Y EXCLUSIVAMENTE con el array JSON válido, sin texto adicional.
+        `;
+
+        const fileParts = [{ inlineData: { data: base64Data, mimeType } }];
+        const result = await model.generateContent([prompt, ...fileParts]);
+        const responseText = result.response.text();
+
+        const jsonLimpio = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+
+        event.reply('respuesta-analisis-compatibilidad', { success: true, data: jsonLimpio });
+    } catch (error) {
+        console.error("Error al analizar archivo de compatibilidad:", error);
+        event.reply('respuesta-analisis-compatibilidad', { success: false, msg: error.message });
     }
 });
 

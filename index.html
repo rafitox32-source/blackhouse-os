@@ -2425,6 +2425,7 @@
                                     style="padding-left:40px; width:100%; box-sizing:border-box; background:#1a1a1a;"
                                     oninput="renderizarGruposCompatibilidad()">
                             </div>
+                            <button class="bh-btn-white" onclick="abrirModalImportarCompat()"><i class='bx bx-import'></i> Importar desde archivo</button>
                             <button class="bh-btn-purple" onclick="abrirModalNuevoGrupo()">+ Nuevo Grupo</button>
                         </div>
                     </div>
@@ -3116,6 +3117,7 @@
                 <select id="compat-tipo-pieza" class="bh-input" style="background:#222; color:white;">
                     <option value="mica">Mica / Protector</option>
                     <option value="pantalla">Pantalla</option>
+                    <option value="cargador">Cargador</option>
                     <option value="general">Otra pieza</option>
                 </select>
             </div>
@@ -3144,6 +3146,65 @@
                 style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
                 <button type="button" class="bh-btn-white" onclick="cerrarModalGrupoCompat()">Cancelar</button>
                 <button type="button" class="bh-btn-purple" onclick="guardarGrupoCompat()">Guardar Grupo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Importar Grupos de Compatibilidad desde archivo (Fase 5) -->
+    <div id="modal-importar-compat" class="modal-overlay">
+        <div class="modal-content" style="width: 720px; max-width: 95%; max-height: 85vh; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="margin:0; color:white; font-size:18px;">Importar Grupos desde Archivo</h2>
+                <button type="button" onclick="cerrarModalImportarCompat()"
+                    style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✖</button>
+            </div>
+
+            <div style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid #333;">
+                <button type="button" id="compat-import-tab-excel" onclick="cambiarTabImportCompat('excel')"
+                    style="background:transparent; border:none; padding:8px 12px; cursor:pointer; color:white; border-bottom:2px solid var(--bh-purple); font-weight:600;">📊 Excel</button>
+                <button type="button" id="compat-import-tab-pdf" onclick="cambiarTabImportCompat('pdf')"
+                    style="background:transparent; border:none; padding:8px 12px; cursor:pointer; color:#999; border-bottom:2px solid transparent;">📄 PDF</button>
+                <button type="button" id="compat-import-tab-imagen" onclick="cambiarTabImportCompat('imagen')"
+                    style="background:transparent; border:none; padding:8px 12px; cursor:pointer; color:#999; border-bottom:2px solid transparent;">🖼️ Imagen</button>
+            </div>
+
+            <div id="compat-import-panel-excel">
+                <p style="color:#999; font-size:12.5px; margin-bottom:10px;">
+                    Columnas esperadas en el Excel: <b>Tipo de Pieza</b> (mica / cargador), <b>Nombre del Grupo</b>
+                    (opcional, se autocompleta), <b>Modelos Compatibles</b> (ej: "Galaxy A12 / Galaxy A20s").
+                </p>
+                <input type="file" id="compat-import-input-excel" accept=".xlsx,.csv" onchange="procesarArchivoExcelCompat(event)">
+            </div>
+
+            <div id="compat-import-panel-pdf" style="display:none;">
+                <p style="color:#999; font-size:12.5px; margin-bottom:10px;">
+                    Sube el PDF con la lista de compatibilidad (catálogo de proveedor, etc). Se analiza con IA.
+                </p>
+                <input type="file" id="compat-import-input-pdf" accept="application/pdf" onchange="procesarArchivoIACompat(event)">
+            </div>
+
+            <div id="compat-import-panel-imagen" style="display:none;">
+                <p style="color:#999; font-size:12.5px; margin-bottom:10px;">
+                    Sube una foto o captura de la lista de compatibilidad (jpg, png, etc). Se analiza con IA.
+                </p>
+                <input type="file" id="compat-import-input-imagen" accept="image/*" onchange="procesarArchivoIACompat(event)">
+            </div>
+
+            <div id="compat-import-tabla-wrap" style="display:none; margin-top:18px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <label style="color:#ccc; font-size:13px;">Revisa y corrige antes de importar — no se guarda nada hasta que confirmes:</label>
+                    <span id="compat-import-contador" style="color:#999; font-size:12px;"></span>
+                </div>
+                <div id="compat-import-tabla"></div>
+            </div>
+
+            <div id="compat-import-msg" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444;"></div>
+
+            <div
+                style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                <button type="button" class="bh-btn-white" onclick="cerrarModalImportarCompat()">Cancelar</button>
+                <button type="button" class="bh-btn-purple" id="compat-import-btn-confirmar" style="display:none;"
+                    onclick="confirmarImportacionCompat()">Confirmar e Importar</button>
             </div>
         </div>
     </div>
@@ -3747,6 +3808,14 @@
         // === Compatibilidades de Modelos (Fase 2) ===
         let todosLosGrupos = []; // Grupos de compatibilidad cargados junto con productos
         let compatMiembrosTemp = []; // Modelos [{marca, modelo}] del grupo que se está creando/editando en el modal
+        // --- Importar Grupos desde archivo (Fase 5) ---
+        let compatImportTabActiva = 'excel';
+        let compatImportFilas = []; // [{tipo_pieza, etiqueta, miembros:[{marca,modelo}]}, ...] candidatos pendientes de revisión
+        let compatImportFilaActiva = null; // índice de la fila que está recibiendo un modelo desde el selector
+        let compatImportEnProgreso = 0; // cuántos crear-grupo-compatibilidad de esta importación siguen pendientes de respuesta
+        let compatImportTotalEnviados = 0;
+        let compatImportOk = 0;
+        let compatImportErrores = 0;
         let compatGrupoEditandoId = null; // null = creando uno nuevo; si tiene valor, se está editando ese grupo
         let grupoSugeridoParaProducto = null; // Grupo detectado al elegir un modelo en el formulario de "Nuevo Producto"
 
@@ -6850,6 +6919,13 @@
                 cerrarSelectorModelos();
                 return;
             }
+            // Target especial: agregar un modelo a una fila candidata dentro de la tabla de
+            // revisión del importador de archivos (Excel/PDF/Imagen), ver compatImportFilaActiva.
+            if (modelSelectorTargetId === 'compat-import-modelo') {
+                agregarMiembroAFilaImport(compatImportFilaActiva, marca || '', modelo || nombreCompleto);
+                cerrarSelectorModelos();
+                return;
+            }
 
             const targetInput = document.getElementById(modelSelectorTargetId);
             if (targetInput) {
@@ -6994,6 +7070,27 @@
         });
 
         ipcRenderer.on('grupo-compatibilidad-guardado', (e, res) => {
+            // Modo importación masiva (Fase 5): varias creaciones en vuelo a la vez, se consolida
+            // un único resultado cuando responden todas, en vez de mostrar/cerrar por cada una.
+            if (compatImportEnProgreso > 0) {
+                compatImportEnProgreso--;
+                if (res && res.success) {
+                    compatImportOk++;
+                } else {
+                    compatImportErrores++;
+                    console.error('Error importando un grupo de compatibilidad:', res && res.msg);
+                }
+                if (compatImportEnProgreso === 0) {
+                    let msg = `Importación completa: ${compatImportOk} de ${compatImportTotalEnviados} grupo(s) creado(s)`;
+                    if (compatImportErrores > 0) msg += ` — ${compatImportErrores} con error (revisa consola)`;
+                    showToast(msg, compatImportErrores > 0 ? 'warning' : 'success');
+                    cerrarModalImportarCompat();
+                    ipcRenderer.send('obtener-grupos-compatibilidad');
+                    ipcRenderer.send('obtener-productos');
+                }
+                return;
+            }
+
             if (res && res.success) {
                 let msg = compatGrupoEditandoId ? 'Grupo actualizado' : 'Grupo creado';
                 if (res.vinculadosAuto > 0) {
@@ -7187,6 +7284,241 @@
             } else {
                 ipcRenderer.send('crear-grupo-compatibilidad', payload);
             }
+        }
+
+        // ================= IMPORTAR GRUPOS DESDE ARCHIVO (Fase 5) =================
+
+        function abrirModalImportarCompat() {
+            compatImportFilas = [];
+            compatImportFilaActiva = null;
+            compatImportTabActiva = 'excel';
+            document.getElementById('compat-import-input-excel').value = '';
+            document.getElementById('compat-import-input-pdf').value = '';
+            document.getElementById('compat-import-input-imagen').value = '';
+            document.getElementById('compat-import-msg').style.display = 'none';
+            cambiarTabImportCompat('excel');
+            renderTablaImportCompat();
+            document.getElementById('modal-importar-compat').style.display = 'flex';
+        }
+
+        function cerrarModalImportarCompat() {
+            document.getElementById('modal-importar-compat').style.display = 'none';
+            compatImportFilas = [];
+            compatImportFilaActiva = null;
+        }
+
+        function cambiarTabImportCompat(tab) {
+            compatImportTabActiva = tab;
+            ['excel', 'pdf', 'imagen'].forEach(t => {
+                document.getElementById(`compat-import-panel-${t}`).style.display = (t === tab) ? 'block' : 'none';
+                const tabBtn = document.getElementById(`compat-import-tab-${t}`);
+                tabBtn.style.color = (t === tab) ? 'white' : '#999';
+                tabBtn.style.borderBottomColor = (t === tab) ? 'var(--bh-purple)' : 'transparent';
+                tabBtn.style.fontWeight = (t === tab) ? '600' : 'normal';
+            });
+        }
+
+        // Excel: se parsea 100% en el navegador con la misma librería XLSX que ya usa el import de inventario.
+        async function procesarArchivoExcelCompat(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const msgBox = document.getElementById('compat-import-msg');
+            msgBox.style.display = 'none';
+
+            try {
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const filas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+                if (filas.length === 0) {
+                    showToast('El Excel está vacío', 'warning');
+                    return;
+                }
+
+                const claves = Object.keys(filas[0]);
+                const claveTipo = claves.find(k => /tipo.*pieza/i.test(k));
+                const claveNombre = claves.find(k => /nombre.*grupo|etiqueta/i.test(k));
+                const claveModelos = claves.find(k => /modelo/i.test(k));
+
+                if (!claveModelos) {
+                    showToast('No se encontró una columna de "Modelos Compatibles" en el Excel', 'danger');
+                    return;
+                }
+
+                const nuevasFilas = filas.map(f => {
+                    const tipoRaw = (f[claveTipo] || 'mica').toString().trim().toLowerCase();
+                    const tipo_pieza = ['mica', 'cargador', 'pantalla', 'general'].includes(tipoRaw) ? tipoRaw : 'mica';
+                    const modelosTexto = (f[claveModelos] || '').toString();
+                    const miembros = modelosTexto.split(/[/,]/).map(s => s.trim()).filter(Boolean).map(modeloTxt => {
+                        // Si el fragmento trae marca conocida como primera palabra, la separamos; si no, queda sin marca.
+                        const partes = modeloTxt.split(' ');
+                        const posibleMarca = partes[0];
+                        if (marcasModelosCache && marcasModelosCache[posibleMarca]) {
+                            return { marca: posibleMarca, modelo: partes.slice(1).join(' ') || modeloTxt };
+                        }
+                        return { marca: '', modelo: modeloTxt };
+                    });
+                    const etiqueta = (f[claveNombre] || '').toString().trim() ||
+                        miembros.map(m => m.marca ? `${m.marca} ${m.modelo}` : m.modelo).join(' / ');
+                    return { tipo_pieza, etiqueta, miembros };
+                }).filter(f => f.miembros.length > 0);
+
+                if (nuevasFilas.length === 0) {
+                    showToast('No se encontraron filas con modelos válidos en el Excel', 'warning');
+                    return;
+                }
+
+                compatImportFilas = compatImportFilas.concat(nuevasFilas);
+                renderTablaImportCompat();
+                showToast(`${nuevasFilas.length} grupo(s) candidato(s) encontrados en el Excel`, 'success');
+            } catch (error) {
+                console.error('Error leyendo Excel de compatibilidad:', error);
+                showToast('No se pudo leer el archivo Excel: ' + error.message, 'danger');
+            }
+        }
+
+        // PDF e Imagen: se mandan a analizar-compatibilidad-archivo (Gemini Vision) en main.js.
+        async function procesarArchivoIACompat(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            showToast('Analizando documento con IA... Esto puede tardar unos segundos. ⏳', 'info');
+            const base64 = await convertirABase64(file);
+            ipcRenderer.send('analizar-compatibilidad-archivo', { file: base64 });
+        }
+
+        ipcRenderer.on('respuesta-analisis-compatibilidad', (event, res) => {
+            if (!res.success) {
+                showToast('Error al analizar el archivo: ' + res.msg, 'danger');
+                return;
+            }
+            try {
+                const grupos = JSON.parse(res.data);
+                if (!Array.isArray(grupos) || grupos.length === 0) {
+                    showToast('La IA no encontró grupos de compatibilidad en el archivo.', 'warning');
+                    return;
+                }
+                const nuevasFilas = grupos.map(g => {
+                    const tipo_pieza = ['mica', 'cargador'].includes(g.tipo_pieza) ? g.tipo_pieza : 'mica';
+                    const miembros = (g.modelos || []).map(m => ({ marca: m.marca || '', modelo: m.modelo })).filter(m => m.modelo);
+                    const etiqueta = miembros.map(m => m.marca ? `${m.marca} ${m.modelo}` : m.modelo).join(' / ');
+                    return { tipo_pieza, etiqueta, miembros };
+                }).filter(f => f.miembros.length > 0);
+
+                compatImportFilas = compatImportFilas.concat(nuevasFilas);
+                renderTablaImportCompat();
+                showToast(`${nuevasFilas.length} grupo(s) candidato(s) encontrados — revísalos antes de importar`, 'success');
+            } catch (error) {
+                console.error('Error al procesar respuesta de IA:', error);
+                showToast('Error leyendo la respuesta de la IA. Revisa consola.', 'danger');
+            }
+        });
+
+        function renderTablaImportCompat() {
+            const wrap = document.getElementById('compat-import-tabla-wrap');
+            const cont = document.getElementById('compat-import-tabla');
+            const btnConfirmar = document.getElementById('compat-import-btn-confirmar');
+            const contador = document.getElementById('compat-import-contador');
+
+            if (compatImportFilas.length === 0) {
+                wrap.style.display = 'none';
+                btnConfirmar.style.display = 'none';
+                return;
+            }
+            wrap.style.display = 'block';
+            btnConfirmar.style.display = 'inline-block';
+            btnConfirmar.textContent = `Confirmar e Importar (${compatImportFilas.length})`;
+            contador.textContent = `${compatImportFilas.length} grupo(s) candidato(s)`;
+
+            const etiquetasTipo = { mica: 'Mica', cargador: 'Cargador', pantalla: 'Pantalla', general: 'Otra' };
+
+            cont.innerHTML = compatImportFilas.map((fila, i) => {
+                const chips = (fila.miembros || []).map((m, mi) => `
+                    <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); color:#d8b4fe; padding:3px 6px 3px 10px; border-radius:20px; font-size:12px;">
+                        ${m.marca ? m.marca + ' ' : ''}${m.modelo}
+                        <button type="button" onclick="quitarMiembroFilaImport(${i}, ${mi})" style="background:none; border:none; color:#d8b4fe; cursor:pointer; font-size:13px; padding:0 2px;" title="Quitar">✖</button>
+                    </span>`).join('');
+
+                const opcionesTipo = Object.keys(etiquetasTipo).map(t =>
+                    `<option value="${t}" ${fila.tipo_pieza === t ? 'selected' : ''}>${etiquetasTipo[t]}</option>`).join('');
+
+                return `
+                    <div style="border:1px solid #333; border-radius:8px; padding:10px; margin-bottom:8px; background:#1a1a1a;">
+                        <div style="display:flex; gap:8px; margin-bottom:8px;">
+                            <select onchange="compatImportFilas[${i}].tipo_pieza = this.value"
+                                style="background:#222; color:white; border:1px solid #333; border-radius:6px; padding:4px;">
+                                ${opcionesTipo}
+                            </select>
+                            <input type="text" value="${(fila.etiqueta || '').replace(/"/g, '&quot;')}"
+                                oninput="compatImportFilas[${i}].etiqueta = this.value"
+                                placeholder="Nombre del grupo"
+                                style="flex:1; background:#222; color:white; border:1px solid #333; border-radius:6px; padding:4px 8px;">
+                            <button type="button" onclick="quitarFilaImport(${i})" title="Quitar esta fila"
+                                style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:15px;">✖</button>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                            ${chips || '<span style="color:#666; font-size:12px;">Ningún modelo.</span>'}
+                            <button type="button" onclick="abrirSelectorModelosParaFilaImport(${i})" class="bh-btn-white" style="padding:3px 8px; font-size:11px;">
+                                <i class='bx bx-plus'></i> Modelo
+                            </button>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function abrirSelectorModelosParaFilaImport(idx) {
+            compatImportFilaActiva = idx;
+            abrirSelectorModelos('compat-import-modelo');
+        }
+
+        function agregarMiembroAFilaImport(filaIdx, marca, modelo) {
+            if (filaIdx === null || !compatImportFilas[filaIdx]) return;
+            const fila = compatImportFilas[filaIdx];
+            const yaExiste = fila.miembros.some(m =>
+                (m.marca || '').toUpperCase() === (marca || '').toUpperCase() && m.modelo.toUpperCase() === modelo.toUpperCase());
+            if (yaExiste) {
+                showToast('Ese modelo ya está en el grupo', 'warning');
+                return;
+            }
+            fila.miembros.push({ marca: marca || '', modelo });
+            renderTablaImportCompat();
+        }
+
+        function quitarMiembroFilaImport(filaIdx, miembroIdx) {
+            if (!compatImportFilas[filaIdx]) return;
+            compatImportFilas[filaIdx].miembros.splice(miembroIdx, 1);
+            renderTablaImportCompat();
+        }
+
+        function quitarFilaImport(idx) {
+            compatImportFilas.splice(idx, 1);
+            renderTablaImportCompat();
+        }
+
+        function confirmarImportacionCompat() {
+            const msgBox = document.getElementById('compat-import-msg');
+            const filasValidas = compatImportFilas.filter(f => f.etiqueta && f.etiqueta.trim() && f.miembros.length > 0);
+
+            if (filasValidas.length === 0) {
+                msgBox.textContent = 'No hay grupos válidos para importar (cada uno necesita nombre y al menos un modelo).';
+                msgBox.style.display = 'block';
+                return;
+            }
+            msgBox.style.display = 'none';
+
+            compatImportTotalEnviados = filasValidas.length;
+            compatImportEnProgreso = filasValidas.length;
+            compatImportOk = 0;
+            compatImportErrores = 0;
+
+            showToast(`Importando ${filasValidas.length} grupo(s)... 💾`, 'info');
+            filasValidas.forEach(fila => {
+                ipcRenderer.send('crear-grupo-compatibilidad', {
+                    tipo_pieza: fila.tipo_pieza,
+                    etiqueta: fila.etiqueta.trim(),
+                    miembros: fila.miembros
+                });
+            });
         }
 
         function eliminarGrupoCompat(grupoId) {
