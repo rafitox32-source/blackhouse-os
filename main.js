@@ -805,6 +805,27 @@ ipcMain.on('preview-excel-inventario', async (event, payload) => {
         const items = [];
         const errores = [];
 
+        // === TERCERA VÍA DE MATCHING: por grupo de compatibilidad ===
+        // Si el modelo importado (columna "Modelo Compatible" del Excel) coincide con un modelo
+        // miembro de un grupo de compatibilidad ya existente, y ese grupo ya tiene un producto
+        // vinculado de la MISMA categoría+subcategoría, se ofrece sumar el stock ahí en vez de
+        // crear un producto duplicado (ej: fila "Note 10s" reconoce el grupo "Note 11 / Note 10s").
+        // Esto es ADICIONAL al matching por SKU y por nombre+categoría de más abajo, no lo reemplaza.
+        const { data: gruposEmpresa } = await supabase.from('grupos_compatibilidad')
+            .select('id')
+            .eq('empresa_id', empresaActual);
+        const grupoIdsEmpresa = (gruposEmpresa || []).map(g => g.id);
+
+        let miembrosCompat = [];
+        if (grupoIdsEmpresa.length > 0) {
+            const { data: miembrosData } = await supabase.from('grupos_compatibilidad_modelos')
+                .select('grupo_id, modelo_normalizado')
+                .in('grupo_id', grupoIdsEmpresa);
+            miembrosCompat = miembrosData || [];
+        }
+        // Productos que ya están vinculados a algún grupo (candidatos a recibir el stock importado)
+        const productosConGrupo = existentes.filter(e => e.grupo_compatibilidad_id);
+
         // === LOGICA DE SUBCATEGORIAS PARA EXCEL ===
         const SUBCATEGORIAS = {
             'repuestos': [
@@ -884,6 +905,23 @@ ipcMain.on('preview-excel-inventario', async (event, payload) => {
                 if (encontrado) prod.metodoVinculacion = 'nombre';
             }
 
+            // Tercer fallback: por grupo de compatibilidad (ver comentario arriba del handler)
+            if (!encontrado && prod.modelo_compatible && miembrosCompat.length > 0) {
+                const modeloImportadoNorm = normalizarModeloCompat(prod.modelo_compatible);
+                const miembroMatch = miembrosCompat.find(m => m.modelo_normalizado === modeloImportadoNorm);
+                if (miembroMatch) {
+                    const productoDelGrupo = productosConGrupo.find(p =>
+                        p.grupo_compatibilidad_id === miembroMatch.grupo_id &&
+                        normalizar(p.categoria) === normalizar(prod.categoria) &&
+                        normalizar(p.subcategoria || '') === normalizar(prod.subcategoria || '')
+                    );
+                    if (productoDelGrupo) {
+                        encontrado = productoDelGrupo;
+                        prod.metodoVinculacion = 'compatibilidad';
+                    }
+                }
+            }
+
             if (encontrado) {
                 items.push({
                     ...prod,
@@ -918,6 +956,7 @@ ipcMain.on('importar-excel-inventario', async (event, payload) => {
         let actualizados = 0;
         let nuevosCreados = 0;
         let vinculadosCount = 0;
+        let vinculadosPorCompatibilidad = 0;
         const movimientos = [];
         const erroresImport = [];
 
@@ -1002,6 +1041,8 @@ ipcMain.on('importar-excel-inventario', async (event, payload) => {
 
                     if (prod.metodoVinculacion === 'nombre') {
                         vinculadosCount++;
+                    } else if (prod.metodoVinculacion === 'compatibilidad') {
+                        vinculadosPorCompatibilidad++;
                     }
                     
                     // Actualizar costo del proveedor indicado (solo el dueño puede escribir costos)
@@ -1104,12 +1145,13 @@ ipcMain.on('importar-excel-inventario', async (event, payload) => {
         }
 
         // Solo después de insertar movimientos y log, responder OK
-        event.reply('resultado-importacion-excel', { 
-            success: true, 
-            nuevos: nuevosCreados, 
-            actualizados, 
+        event.reply('resultado-importacion-excel', {
+            success: true,
+            nuevos: nuevosCreados,
+            actualizados,
             vinculados: vinculadosCount,
-            msg: `Proceso finalizado. Nuevos: ${nuevosCreados}, Actualizados: ${actualizados}, Vinculados por nombre: ${vinculadosCount}. Errores menores: ${erroresImport.length}` 
+            vinculadosPorCompatibilidad,
+            msg: `Proceso finalizado. Nuevos: ${nuevosCreados}, Actualizados: ${actualizados}, Vinculados por nombre: ${vinculadosCount}, Vinculados por compatibilidad: ${vinculadosPorCompatibilidad}. Errores menores: ${erroresImport.length}`
         });
     } catch (err) {
         console.error('Error procesando Excel:', err);

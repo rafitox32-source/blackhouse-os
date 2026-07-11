@@ -3232,6 +3232,10 @@
                     <strong id="excel-link-count" style="color:var(--bh-purple);">0</strong>
                 </div>
                 <div class="excel-summary-item">
+                    <span style="color:var(--bh-purple);">🧩 Compatibles:</span>
+                    <strong id="excel-compat-count" style="color:var(--bh-purple);">0</strong>
+                </div>
+                <div class="excel-summary-item">
                     <span style="color:var(--danger);">⚠️ Errores:</span>
                     <strong id="excel-error-count" style="color:var(--danger);">0</strong>
                 </div>
@@ -6162,12 +6166,14 @@
             const updateCount = resultado.items.filter(i => i.accion === 'actualizar').length;
             const errorCount = (resultado.errores || []).length;
             const linkCount = resultado.items.filter(i => i.accion === 'actualizar' && i.metodoVinculacion === 'nombre').length;
+            const compatCount = resultado.items.filter(i => i.accion === 'actualizar' && i.metodoVinculacion === 'compatibilidad').length;
 
             document.getElementById('excel-total-count').textContent = totalCount;
             document.getElementById('excel-new-count').textContent = newCount;
             document.getElementById('excel-update-count').textContent = updateCount;
             document.getElementById('excel-error-count').textContent = errorCount;
             document.getElementById('excel-link-count').textContent = linkCount;
+            document.getElementById('excel-compat-count').textContent = compatCount;
             document.getElementById('excel-summary-bar').style.display = 'flex';
 
             const tbody = document.getElementById('excel-preview-body');
@@ -6177,6 +6183,8 @@
                     badge = `<span class="excel-badge-new">🆕 NUEVO</span>`;
                 } else if (item.metodoVinculacion === 'nombre') {
                     badge = `<span class="excel-badge-update" style="background:rgba(124,58,237,0.2); color:#b193ff; border:1px solid rgba(124,58,237,0.3);">🔗 VINCULADO (+${item.cantidad})</span>`;
+                } else if (item.metodoVinculacion === 'compatibilidad') {
+                    badge = `<span class="excel-badge-update" style="background:rgba(124,58,237,0.2); color:#b193ff; border:1px solid rgba(124,58,237,0.3);" title="Este modelo es compatible con otro ya registrado; se sumará el stock a esa pieza">🧩 COMPATIBLE (+${item.cantidad})</span>`;
                 } else {
                     badge = `<span class="excel-badge-update">🔄 +${item.cantidad} (actual: ${item.stockActual})</span>`;
                 }
@@ -6207,7 +6215,11 @@
 
         ipcRenderer.on('resultado-importacion-excel', (e, res) => {
             if (res.success) {
-                showToast(`✅ Importación completada: ${res.nuevos} nuevos, ${res.actualizados} actualizados, ${res.vinculados} vinculados por nombre`, 'success');
+                let msg = `✅ Importación completada: ${res.nuevos} nuevos, ${res.actualizados} actualizados, ${res.vinculados} vinculados por nombre`;
+                if (res.vinculadosPorCompatibilidad > 0) {
+                    msg += `, ${res.vinculadosPorCompatibilidad} por compatibilidad`;
+                }
+                showToast(msg, 'success');
                 ipcRenderer.send('obtener-productos');
             } else {
                 showToast('❌ Error en la importación: ' + res.msg, 'danger');
