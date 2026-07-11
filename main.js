@@ -550,6 +550,8 @@ ipcMain.on('nuevo-producto-sql', async (event, prod) => {
         };
         // Agregar SKU si viene
         if (prod.sku) insertData.sku = prod.sku;
+        // Agregar modelo compatible si viene (Pantallas/Micas vinculadas a un modelo del selector)
+        if (prod.modelo_compatible) insertData.modelo_compatible = prod.modelo_compatible;
 
         const { error } = await supabase.from('productos').insert([insertData]);
         if (error) throw error;

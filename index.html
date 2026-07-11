@@ -4046,9 +4046,10 @@
         }
 
         function guardarProducto() {
+            const categoria = document.getElementById('reg-categoria').value;
             const data = {
                 nombre: document.getElementById('reg-nombre').value,
-                categoria: document.getElementById('reg-categoria').value,
+                categoria: categoria,
                 subcategoria: document.getElementById('reg-subcategoria').value || null,
                 sku: document.getElementById('reg-sku').value || null,
                 costo: document.getElementById('reg-costo').value,
@@ -4056,6 +4057,15 @@
                 stock: document.getElementById('reg-stock').value,
                 proveedor: document.getElementById('reg-proveedor').value
             };
+            // Solo Pantallas y Micas tienen el selector "Vincular a Modelo de Celular".
+            // Se envía únicamente si esa sección está visible para evitar arrastrar un valor
+            // residual de una selección anterior al cambiar de categoría.
+            if (categoria === 'Pantallas' || categoria === 'Micas') {
+                const vinculoEl = document.getElementById('reg-vinculo-modelo');
+                if (vinculoEl && vinculoEl.value) {
+                    data.modelo_compatible = vinculoEl.value;
+                }
+            }
             ipcRenderer.send('nuevo-producto-sql', data);
         }
 
@@ -6883,7 +6893,8 @@
                 filtrados = filtrados.filter(p => {
                     const n = (p.nombre || '').toUpperCase();
                     const s = (p.sku || '').toUpperCase();
-                    return n.includes(textoBuscado) || s.includes(textoBuscado);
+                    const m = (p.modelo_compatible || '').toUpperCase();
+                    return n.includes(textoBuscado) || s.includes(textoBuscado) || m.includes(textoBuscado);
                 });
             }
 
