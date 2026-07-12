@@ -2013,30 +2013,27 @@ ipcMain.on('registrar-devolucion', async (event, payload) => {
             throw new Error('Acción inválida.');
         }
 
-        const insertData = {
-            empresa_id: empresaActual,
-            factura_id: factura_id || null,
-            producto_id: producto_id || null,
-            producto_nombre,
-            cantidad: cantidadNum,
-            motivo: motivo || null,
-            condicion,
-            accion,
-            monto: (monto !== undefined && monto !== null && monto !== '') ? parseFloat(monto) : null,
-            usuario: usuario || null
-        };
-
-        const { data: devolucionCreada, error: errDevol } = await supabase.from('devoluciones')
-            .insert([insertData])
-            .select()
-            .single();
-        if (errDevol) throw errDevol;
+        // factura_id llega del renderer: se verifica que pertenezca de verdad a esta empresa antes
+        // de guardarlo, para no dejar que un devoluciones.factura_id apunte a la factura de OTRA
+        // empresa (evita que el join embebido de obtener-devoluciones filtre datos ajenos).
+        if (factura_id) {
+            const { data: facturaValida, error: errFactura } = await supabase.from('facturas')
+                .select('id')
+                .eq('id', factura_id)
+                .eq('empresa_id', empresaActual)
+                .maybeSingle();
+            if (errFactura) throw errFactura;
+            if (!facturaValida) throw new Error('La factura indicada no pertenece a esta empresa.');
+        }
 
         let stockActualizado = false;
         let avisoStock = null;
 
-        // Solo reingresa stock si el producto vuelve en buen estado Y se pudo identificar el
-        // producto real de inventario. Defectuoso o sin match = queda solo el registro, sin tocar stock.
+        // El ajuste de stock ocurre ANTES de insertar el registro de la devolución (y no al
+        // revés): si el update de stock fallara a mitad de camino, no queremos que quede un
+        // registro de devolución "fantasma" que dice haber reingresado stock sin haberlo hecho
+        // de verdad. Solo reingresa stock si el producto vuelve en buen estado Y se pudo
+        // identificar el producto real de inventario. Defectuoso o sin match = no se toca stock.
         if (condicion === 'buen_estado' && producto_id) {
             const { data: prod, error: errProd } = await supabase.from('productos')
                 .select('id, sku, stock')
@@ -2068,6 +2065,25 @@ ipcMain.on('registrar-devolucion', async (event, payload) => {
                 avisoStock = 'Stock actualizado, pero no se registró en el historial de movimientos (el producto no tiene SKU).';
             }
         }
+
+        const insertData = {
+            empresa_id: empresaActual,
+            factura_id: factura_id || null,
+            producto_id: producto_id || null,
+            producto_nombre,
+            cantidad: cantidadNum,
+            motivo: motivo || null,
+            condicion,
+            accion,
+            monto: (monto !== undefined && monto !== null && monto !== '') ? parseFloat(monto) : null,
+            usuario: usuario || null
+        };
+
+        const { data: devolucionCreada, error: errDevol } = await supabase.from('devoluciones')
+            .insert([insertData])
+            .select()
+            .single();
+        if (errDevol) throw errDevol;
 
         event.reply('devolucion-registrada', { success: true, id: devolucionCreada.id, stockActualizado, avisoStock });
     } catch (e) {
