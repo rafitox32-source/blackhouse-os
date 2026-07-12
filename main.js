@@ -585,6 +585,28 @@ ipcMain.on('obtener-productos', async (event) => {
     event.reply('lista-de-productos', data || []);
 });
 
+// Elimina un producto del inventario (solo el dueño). No hay FKs que referencien productos.id
+// (el historial de stock se guarda por SKU, no por id), así que un borrado directo es seguro y
+// no deja registros huérfanos. Pensado sobre todo para limpiar duplicados: productos que ya
+// existían por separado y que, al agruparlos en un grupo de compatibilidad, quedaron redundantes
+// (el grupo no fusiona el stock de varias filas en una sola automáticamente).
+ipcMain.on('eliminar-producto', async (event, productoId) => {
+    try {
+        if (rolActual !== 'dueno') {
+            return event.reply('producto-eliminado', { success: false, msg: 'Solo el dueño puede eliminar productos.' });
+        }
+        const { error } = await supabase.from('productos')
+            .delete()
+            .eq('id', productoId)
+            .eq('empresa_id', empresaActual);
+        if (error) throw error;
+        event.reply('producto-eliminado', { success: true, id: productoId });
+    } catch (e) {
+        console.error('Error eliminando producto:', e.message);
+        event.reply('producto-eliminado', { success: false, msg: e.message });
+    }
+});
+
 // === 4D. GRUPOS DE COMPATIBILIDAD DE MODELOS (micas/pantallas que comparten pieza y stock) ===
 const normalizarModeloCompat = (txt) => String(txt || '').replace(/\s+/g, ' ').trim().toUpperCase();
 
@@ -1322,12 +1344,19 @@ ipcMain.on('crear-usuario-nuevo', async (event, data) => {
 
         if (countError) throw countError;
 
-        const LIMITE_PLAN_BASICO = 3;
+        // El límite de puestos es por empresa (columna empresas.limite_de_usuario), no un valor
+        // fijo global — antes este handler ignoraba esa columna y usaba siempre 3 para todos.
+        const { data: empresaLimite } = await supabase
+            .from('empresas')
+            .select('limite_de_usuario')
+            .eq('id', empresaActual)
+            .single();
+        const limitePlan = (empresaLimite && empresaLimite.limite_de_usuario) || 3;
 
-        if (count >= LIMITE_PLAN_BASICO) {
+        if (count >= limitePlan) {
             event.reply('resultado-usuario', {
                 success: false,
-                msg: `💎 Límite de ${LIMITE_PLAN_BASICO} usuarios alcanzado. Contacta a soporte para mejorar tu licencia.`
+                msg: `💎 Límite de ${limitePlan} usuarios alcanzado. Contacta a soporte para mejorar tu licencia.`
             });
             return;
         }

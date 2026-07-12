@@ -4334,6 +4334,20 @@
             showView('inventario', document.getElementById('nav-inv'));
         });
 
+        function eliminarProducto(productoId, nombre) {
+            if (!window.confirm(`¿Eliminar "${nombre}" del inventario? Esta acción no se puede deshacer.`)) return;
+            ipcRenderer.send('eliminar-producto', productoId);
+        }
+
+        ipcRenderer.on('producto-eliminado', (e, res) => {
+            if (res && res.success) {
+                showToast('Producto eliminado', 'success');
+                ipcRenderer.send('obtener-productos');
+            } else {
+                showToast((res && res.msg) || 'No se pudo eliminar el producto', 'danger');
+            }
+        });
+
         ipcRenderer.on('resultado-usuario', (e, res) => {
             if (res.success) { showToast(res.msg, 'success'); document.getElementById('modal-usuario').style.display = 'none'; ipcRenderer.send('obtener-usuarios'); }
             else { showToast(res.msg, 'danger'); }
@@ -7678,8 +7692,9 @@
                         ${p.precio_mayor ? `<div style="font-size:10px; color:#aaa; margin-top:2px;">Mayor: S/ ${parseFloat(p.precio_mayor).toFixed(2)}</div>` : ''}
                     </td>
                     <td style="font-weight:bold; color:${p.stock > 0 ? '#10b981' : '#ef4444'}">${(p.categoria || '').toLowerCase().includes('mica') ? (p.stock > 0 ? 'Disponible' : 'Agotado') : p.stock}</td>
-                    <td>
+                    <td style="white-space:nowrap;">
                         <button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); abrirDetalleProducto(${p.id})">👁️ Detalle</button>
+                        ${localStorage.getItem('userRol') === 'dueno' ? `<button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px; color:#ef4444; margin-left:4px;" title="Eliminar producto" onclick="event.stopPropagation(); eliminarProducto(${p.id}, '${(p.nombre || '').replace(/'/g, "\\'")}')">🗑️</button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
