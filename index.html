@@ -2214,6 +2214,9 @@
                             <button class="bh-btn-white" onclick="showView('compatibilidades-view', null)" title="Ver y gestionar qué modelos comparten la misma mica/pantalla">
                                 <i class='bx bx-git-compare'></i> Compatibilidades
                             </button>
+                            <button class="bh-btn-white" onclick="showView('devoluciones-view', null)" title="Registrar y consultar devoluciones de clientes">
+                                <i class='bx bx-undo'></i> Devoluciones
+                            </button>
                             <div style="position:relative;">
                                 <button id="btn-add-prod" class="bh-btn-purple" onclick="toggleMenuAgregarInventario()">+ Agregar ▾</button>
                             <div id="menu-agregar-inventario" style="display:none; position:absolute; right:0; top:44px; background:#1a1a1a; border:1px solid #333; border-radius:10px; min-width:230px; z-index:200; box-shadow:0 8px 24px rgba(0,0,0,0.5); overflow:hidden;">
@@ -2442,6 +2445,54 @@
                     </div>
                     <div id="compat-lista">
                         <div class="bh-card" style="text-align:center; padding:20px; color:#777;">Cargando grupos de compatibilidad...</div>
+                    </div>
+                </div>
+
+                <div id="devoluciones-view" class="view">
+                    <button onclick="showView('inventario', null)"
+                        style="background:none; border:none; color:var(--bh-purple); cursor:pointer; margin-bottom:20px; font-size:16px; display:flex; align-items:center; gap:5px;">←
+                        Volver</button>
+                    <div class="bh-card" style="margin-bottom:20px;">
+                        <h2 style="margin-top:0; margin-bottom:6px;">Devoluciones</h2>
+                        <p style="color:#aaa; font-size:13px; margin-top:0; margin-bottom:16px;">
+                            Busca la factura del cliente para devolver un ítem vendido, o registra una devolución sin factura.
+                        </p>
+                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                            <div style="position:relative; flex:1; min-width:250px;">
+                                <i class='bx bx-search' style="position:absolute; left:15px; top:50%; transform:translateY(-50%); color:var(--text-muted); font-size:18px;"></i>
+                                <input type="text" id="devol-buscador-factura" class="bh-input"
+                                    placeholder="Buscar por N° de comprobante o nombre de cliente..."
+                                    style="padding-left:40px; width:100%; box-sizing:border-box; background:#1a1a1a;"
+                                    oninput="buscarFacturasDevolucionDebounced()">
+                            </div>
+                            <button class="bh-btn-white" onclick="abrirDevolucionSinFactura()">
+                                <i class='bx bx-package'></i> Devolución sin factura
+                            </button>
+                        </div>
+                        <div id="devol-resultados-facturas" style="margin-top:12px;"></div>
+                    </div>
+
+                    <div id="devol-factura-seleccionada" style="display:none; margin-bottom:20px;"></div>
+
+                    <div class="bh-card">
+                        <h3 style="margin-top:0;">Historial de Devoluciones</h3>
+                        <table style="width:100%;">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Producto</th>
+                                    <th>Cant.</th>
+                                    <th>Cliente / Comprobante</th>
+                                    <th>Condición</th>
+                                    <th>Acción</th>
+                                    <th>Monto</th>
+                                    <th>Usuario</th>
+                                </tr>
+                            </thead>
+                            <tbody id="devol-historial-body">
+                                <tr><td colspan="8" style="text-align:center; padding:20px; color:#777;">Cargando historial...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -3242,6 +3293,77 @@
         </div>
     </div>
 
+    <!-- Modal Registrar Devolución -->
+    <div id="modal-registrar-devolucion" class="modal-overlay">
+        <div class="modal-content" style="width: 540px; max-width: 95%; max-height: 88vh; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h2 style="margin:0; color:white; font-size:18px;">Registrar Devolución</h2>
+                <button type="button" onclick="cerrarModalDevolucion()"
+                    style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✖</button>
+            </div>
+
+            <input type="hidden" id="devol-factura-id" value="">
+
+            <div class="input-group">
+                <label>Producto devuelto (texto de la venta)</label>
+                <input type="text" id="devol-producto-nombre" class="bh-input" placeholder="Nombre del producto">
+            </div>
+
+            <div class="input-group">
+                <label>Producto real en inventario (para reingresar stock)</label>
+                <select id="devol-producto-id" class="bh-input" style="background:#222; color:white;"></select>
+                <div id="devol-producto-match-aviso" style="font-size:12px; margin-top:4px; color:#aaa;"></div>
+            </div>
+
+            <div class="input-group">
+                <label>Cantidad a devolver</label>
+                <input type="number" id="devol-cantidad" class="bh-input" min="1" value="1">
+            </div>
+
+            <div class="input-group">
+                <label>Motivo</label>
+                <textarea id="devol-motivo" class="bh-input" rows="2" placeholder="Ej: No le gustó, producto equivocado, falla de fábrica..."></textarea>
+            </div>
+
+            <div class="input-group">
+                <label>Condición del producto devuelto</label>
+                <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+                    <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer;">
+                        <input type="radio" name="devol-condicion" value="buen_estado" checked onchange="actualizarAvisoCondicionDevolucion()">
+                        Buen estado
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; font-weight:normal; cursor:pointer;">
+                        <input type="radio" name="devol-condicion" value="defectuoso" onchange="actualizarAvisoCondicionDevolucion()">
+                        Defectuoso
+                    </label>
+                </div>
+                <div id="devol-aviso-condicion" style="margin-top:8px; font-size:12.5px; padding:8px 10px; border-radius:8px;"></div>
+            </div>
+
+            <div class="input-group">
+                <label>Acción tomada con el cliente</label>
+                <select id="devol-accion" class="bh-input" style="background:#222; color:white;" onchange="toggleMontoDevolucion()">
+                    <option value="ninguna">Ninguna</option>
+                    <option value="reembolso_efectivo">Reembolso en efectivo</option>
+                    <option value="nota_credito">Nota de crédito</option>
+                    <option value="cambio_producto">Cambio de producto</option>
+                </select>
+            </div>
+
+            <div class="input-group" id="devol-monto-group" style="display:none;">
+                <label>Monto (S/)</label>
+                <input type="number" id="devol-monto" class="bh-input" step="0.01" placeholder="0.00">
+            </div>
+
+            <div id="devol-modal-msg" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444;"></div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
+                <button type="button" class="bh-btn-white" onclick="cerrarModalDevolucion()">Cancelar</button>
+                <button type="button" class="bh-btn-purple" onclick="guardarDevolucion()">Registrar Devolución</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-confirm-custom" class="modal-overlay">
         <div class="confirm-box">
             <div style="font-size:40px; margin-bottom:15px;">👤</div>
@@ -3852,6 +3974,13 @@
         let compatGrupoEditandoId = null; // null = creando uno nuevo; si tiene valor, se está editando ese grupo
         let grupoSugeridoParaProducto = null; // Grupo detectado al elegir un modelo en el formulario de "Nuevo Producto"
 
+        // --- Devoluciones ---
+        let devolFacturaSeleccionada = null; // factura completa elegida en el buscador (o null si es "sin factura")
+        let devolItemSeleccionadoIdx = null; // índice dentro de items_json del ítem que se está devolviendo
+        let devolBuscarTimer = null;
+        let todasLasDevoluciones = [];
+        let devolResultadosFacturasActuales = []; // últimos resultados de buscar-facturas-devolucion, para lookup por índice
+
         function showToast(msg, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -4126,6 +4255,10 @@
             if (id === 'compatibilidades-view' && !window.isDemoMode) {
                 ipcRenderer.send('obtener-grupos-compatibilidad');
             }
+            if (id === 'devoluciones-view' && !window.isDemoMode) {
+                ipcRenderer.send('obtener-productos'); // asegura que todosLosProductos esté fresco para el matching
+                ipcRenderer.send('obtener-devoluciones');
+            }
             if (id === 'reportes' && !window.isDemoMode) ipcRenderer.send('obtener-datos-reporte', 'hoy');
 
             // 1. Aquí pedimos las facturas
@@ -4166,6 +4299,291 @@
                 }).join('');
             }
         });
+
+        // ================= DEVOLUCIONES =================
+
+        function buscarFacturasDevolucionDebounced() {
+            clearTimeout(devolBuscarTimer);
+            const texto = document.getElementById('devol-buscador-factura').value.trim();
+            const cont = document.getElementById('devol-resultados-facturas');
+            if (!texto) { cont.innerHTML = ''; return; }
+            devolBuscarTimer = setTimeout(() => {
+                ipcRenderer.send('buscar-facturas-devolucion', texto);
+            }, 350);
+        }
+
+        ipcRenderer.on('resultado-busqueda-facturas-devolucion', (e, facturas) => {
+            devolResultadosFacturasActuales = facturas || [];
+            const cont = document.getElementById('devol-resultados-facturas');
+            if (devolResultadosFacturasActuales.length === 0) {
+                cont.innerHTML = `<div class="bh-card" style="text-align:center; padding:15px; color:#777;">Ninguna factura coincide con esa búsqueda.</div>`;
+                return;
+            }
+            cont.innerHTML = devolResultadosFacturasActuales.map((f, idx) => {
+                const fecha = f.created_at ? new Date(f.created_at).toLocaleDateString() : '-';
+                return `<div class="bh-card" style="padding:10px 14px; margin-bottom:8px; cursor:pointer;" onclick="seleccionarFacturaDevolucion(${idx})">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <b style="color:white;">${escaparHtmlDevol(f.numero_comprobante) || 'Sin comprobante'}</b>
+                            <span style="color:#999; font-size:12px;"> — ${escaparHtmlDevol(f.cliente_nombre) || 'Sin nombre'} · ${fecha}</span>
+                        </div>
+                        <span style="color:var(--success); font-weight:bold;">S/ ${parseFloat(f.monto_total || 0).toFixed(2)}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        });
+
+        function seleccionarFacturaDevolucion(idx) {
+            const factura = devolResultadosFacturasActuales[idx];
+            if (!factura) return;
+            devolFacturaSeleccionada = factura;
+            document.getElementById('devol-resultados-facturas').innerHTML = '';
+            document.getElementById('devol-buscador-factura').value = '';
+
+            const cont = document.getElementById('devol-factura-seleccionada');
+            const items = Array.isArray(factura.items_json) ? factura.items_json : null;
+
+            let itemsHtml;
+            if (!items || items.length === 0) {
+                itemsHtml = `<div style="color:#999; font-size:13px; padding:10px 0;">
+                    Esta factura no tiene ítems registrados individualmente (factura antigua o ligada a una orden de taller sin detalle).
+                    Puedes registrar la devolución manualmente igual, ligada a este comprobante.
+                    <div style="margin-top:8px;"><button class="bh-btn-white" onclick="abrirFormularioDevolucionItem(null)">Registrar devolución manual</button></div>
+                </div>`;
+            } else {
+                itemsHtml = items.map((item, idx) => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #2a2a2a;">
+                        <div>
+                            <div style="color:white; font-weight:600; font-size:13px;">${escaparHtmlDevol(item.nombre)}</div>
+                            <div style="color:#999; font-size:12px;">Cant. vendida: ${item.cantidad} · S/ ${parseFloat(item.precio || 0).toFixed(2)} c/u</div>
+                        </div>
+                        <button class="bh-btn-white" style="padding:6px 12px; font-size:12px;" onclick="abrirFormularioDevolucionItem(${idx})">Devolver este ítem</button>
+                    </div>`).join('');
+            }
+
+            cont.innerHTML = `<div class="bh-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h3 style="margin:0;">${factura.numero_comprobante || 'Factura'} — ${factura.cliente_nombre || 'Sin nombre'}</h3>
+                    <button class="bh-btn-white" style="padding:4px 10px; font-size:12px;" onclick="cerrarFacturaSeleccionadaDevolucion()">✖ Cerrar</button>
+                </div>
+                ${itemsHtml}
+            </div>`;
+            cont.style.display = 'block';
+        }
+
+        function cerrarFacturaSeleccionadaDevolucion() {
+            devolFacturaSeleccionada = null;
+            const cont = document.getElementById('devol-factura-seleccionada');
+            cont.style.display = 'none';
+            cont.innerHTML = '';
+        }
+
+        function escaparHtmlDevol(txt) {
+            const d = document.createElement('div');
+            d.textContent = txt || '';
+            return d.innerHTML;
+        }
+
+        // Intenta encontrar el producto real de inventario que corresponde a un nombre de texto
+        // (items_json solo trae texto, sin producto_id/sku). Match EXACTO case-insensitive nada
+        // más — cualquier cosa más difusa se deja para que el dueño la corrija a mano en el select.
+        function intentarMatchProductoPorNombre(nombre) {
+            if (!nombre || !Array.isArray(todosLosProductos)) return null;
+            const nombreNorm = nombre.trim().toUpperCase();
+            return todosLosProductos.find(p => (p.nombre || '').trim().toUpperCase() === nombreNorm) || null;
+        }
+
+        function poblarSelectorProductoDevolucion(matchSugerido) {
+            const select = document.getElementById('devol-producto-id');
+            const opciones = (todosLosProductos || [])
+                .slice()
+                .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+                .map(p => `<option value="${p.id}">${escaparHtmlDevol(p.nombre)} ${p.sku ? '(' + p.sku + ')' : ''}</option>`)
+                .join('');
+            select.innerHTML = `<option value="">-- Sin vincular (no reingresa stock) --</option>` + opciones;
+
+            const avisoBox = document.getElementById('devol-producto-match-aviso');
+            if (matchSugerido) {
+                select.value = String(matchSugerido.id);
+                avisoBox.textContent = `✅ Coincidencia automática: "${matchSugerido.nombre}" (SKU: ${matchSugerido.sku || 'sin SKU'}, stock actual: ${matchSugerido.stock}).`;
+                avisoBox.style.color = 'var(--success)';
+            } else {
+                select.value = '';
+                avisoBox.textContent = '⚠️ No se encontró un producto con ese nombre exacto en el inventario. Selecciónalo manualmente si corresponde, o déjalo sin vincular.';
+                avisoBox.style.color = '#f59e0b';
+            }
+        }
+
+        function abrirFormularioDevolucionItem(itemIdx) {
+            devolItemSeleccionadoIdx = itemIdx;
+            const factura = devolFacturaSeleccionada;
+            const item = (factura && itemIdx !== null && Array.isArray(factura.items_json)) ? factura.items_json[itemIdx] : null;
+
+            document.getElementById('devol-factura-id').value = factura ? factura.id : '';
+            document.getElementById('devol-producto-nombre').value = item ? item.nombre : '';
+            document.getElementById('devol-cantidad').value = 1;
+            document.getElementById('devol-cantidad').max = item ? item.cantidad : '';
+            document.getElementById('devol-motivo').value = '';
+            document.querySelector('input[name="devol-condicion"][value="buen_estado"]').checked = true;
+            document.getElementById('devol-accion').value = 'ninguna';
+            document.getElementById('devol-monto').value = '';
+            document.getElementById('devol-modal-msg').style.display = 'none';
+
+            const match = item ? intentarMatchProductoPorNombre(item.nombre) : null;
+            poblarSelectorProductoDevolucion(match);
+            actualizarAvisoCondicionDevolucion();
+            toggleMontoDevolucion();
+
+            document.getElementById('modal-registrar-devolucion').style.display = 'flex';
+        }
+
+        function abrirDevolucionSinFactura() {
+            devolItemSeleccionadoIdx = null;
+            devolFacturaSeleccionada = null;
+
+            document.getElementById('devol-factura-id').value = '';
+            document.getElementById('devol-producto-nombre').value = '';
+            document.getElementById('devol-cantidad').value = 1;
+            document.getElementById('devol-cantidad').removeAttribute('max');
+            document.getElementById('devol-motivo').value = '';
+            document.querySelector('input[name="devol-condicion"][value="buen_estado"]').checked = true;
+            document.getElementById('devol-accion').value = 'ninguna';
+            document.getElementById('devol-monto').value = '';
+            document.getElementById('devol-modal-msg').style.display = 'none';
+
+            poblarSelectorProductoDevolucion(null);
+            actualizarAvisoCondicionDevolucion();
+            toggleMontoDevolucion();
+
+            document.getElementById('modal-registrar-devolucion').style.display = 'flex';
+        }
+
+        function cerrarModalDevolucion() {
+            document.getElementById('modal-registrar-devolucion').style.display = 'none';
+        }
+
+        function actualizarAvisoCondicionDevolucion() {
+            const condicion = document.querySelector('input[name="devol-condicion"]:checked').value;
+            const box = document.getElementById('devol-aviso-condicion');
+            if (condicion === 'buen_estado') {
+                box.textContent = '✅ Buen estado → el producto vuelve al stock disponible.';
+                box.style.background = 'rgba(16,185,129,0.1)';
+                box.style.border = '1px solid rgba(16,185,129,0.3)';
+                box.style.color = 'var(--success)';
+            } else {
+                box.textContent = '⚠️ Defectuoso → NO vuelve al stock. Queda registrado como pérdida.';
+                box.style.background = 'rgba(239,68,68,0.1)';
+                box.style.border = '1px solid rgba(239,68,68,0.3)';
+                box.style.color = '#ef4444';
+            }
+        }
+
+        function toggleMontoDevolucion() {
+            const accion = document.getElementById('devol-accion').value;
+            const grupo = document.getElementById('devol-monto-group');
+            grupo.style.display = (accion === 'reembolso_efectivo' || accion === 'nota_credito') ? 'block' : 'none';
+        }
+
+        function guardarDevolucion() {
+            const msgBox = document.getElementById('devol-modal-msg');
+            const productoNombre = document.getElementById('devol-producto-nombre').value.trim();
+            const cantidad = parseInt(document.getElementById('devol-cantidad').value, 10);
+            const productoIdRaw = document.getElementById('devol-producto-id').value;
+            const condicion = document.querySelector('input[name="devol-condicion"]:checked').value;
+            const accion = document.getElementById('devol-accion').value;
+            const montoRaw = document.getElementById('devol-monto').value;
+
+            if (!productoNombre) {
+                msgBox.textContent = 'Falta el nombre del producto devuelto.';
+                msgBox.style.display = 'block';
+                return;
+            }
+            if (!cantidad || cantidad <= 0) {
+                msgBox.textContent = 'La cantidad debe ser mayor a 0.';
+                msgBox.style.display = 'block';
+                return;
+            }
+            // El atributo "max" del input es solo una guía visual del navegador, no bloquea el
+            // envío si se escribe un número mayor a mano — se valida explícitamente acá.
+            const maxAttr = document.getElementById('devol-cantidad').getAttribute('max');
+            if (maxAttr && cantidad > parseInt(maxAttr, 10)) {
+                msgBox.textContent = `No puedes devolver más de ${maxAttr} unidad(es) (la cantidad vendida en ese ítem).`;
+                msgBox.style.display = 'block';
+                return;
+            }
+            msgBox.style.display = 'none';
+
+            const payload = {
+                factura_id: document.getElementById('devol-factura-id').value || null,
+                producto_id: productoIdRaw ? parseInt(productoIdRaw, 10) : null,
+                producto_nombre: productoNombre,
+                cantidad,
+                motivo: document.getElementById('devol-motivo').value.trim() || null,
+                condicion,
+                accion,
+                monto: montoRaw ? parseFloat(montoRaw) : null,
+                usuario: localStorage.getItem('userNickname') || 'Usuario'
+            };
+
+            ipcRenderer.send('registrar-devolucion', payload);
+        }
+
+        ipcRenderer.on('devolucion-registrada', (e, res) => {
+            if (res && res.success) {
+                let msg = 'Devolución registrada';
+                if (res.stockActualizado) msg += ' — stock actualizado';
+                showToast(msg, 'success');
+                if (res.avisoStock) showToast(res.avisoStock, 'warning');
+                cerrarModalDevolucion();
+                cerrarFacturaSeleccionadaDevolucion();
+                ipcRenderer.send('obtener-devoluciones');
+                ipcRenderer.send('obtener-productos');
+            } else {
+                const msgBox = document.getElementById('devol-modal-msg');
+                msgBox.textContent = (res && res.msg) || 'No se pudo registrar la devolución.';
+                msgBox.style.display = 'block';
+            }
+        });
+
+        function cargarDevoluciones() {
+            ipcRenderer.send('obtener-devoluciones');
+        }
+
+        const ETIQUETA_CONDICION_DEVOL = { buen_estado: '✅ Buen estado', defectuoso: '⚠️ Defectuoso' };
+        const ETIQUETA_ACCION_DEVOL = {
+            reembolso_efectivo: 'Reembolso efectivo', nota_credito: 'Nota de crédito',
+            cambio_producto: 'Cambio de producto', ninguna: 'Ninguna'
+        };
+
+        ipcRenderer.on('lista-devoluciones', (e, rows) => {
+            todasLasDevoluciones = rows || [];
+            renderizarHistorialDevoluciones();
+        });
+
+        function renderizarHistorialDevoluciones() {
+            const tbody = document.getElementById('devol-historial-body');
+            if (!tbody) return;
+            if (todasLasDevoluciones.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:#777;">Todavía no hay devoluciones registradas.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = todasLasDevoluciones.map(d => {
+                const fecha = d.creado_en ? new Date(d.creado_en).toLocaleDateString() : '-';
+                const factura = d.facturas; // join embebido desde main.js (numero_comprobante, cliente_nombre)
+                const clienteTxt = factura ? `${factura.numero_comprobante || ''} ${factura.cliente_nombre ? '· ' + factura.cliente_nombre : ''}`.trim() : 'Sin factura';
+                const condColor = d.condicion === 'buen_estado' ? 'var(--success)' : '#ef4444';
+                return `<tr>
+                    <td style="font-size:12px;">${fecha}</td>
+                    <td style="font-weight:600; color:white;">${escaparHtmlDevol(d.producto_nombre)}</td>
+                    <td>${d.cantidad}</td>
+                    <td style="font-size:12px; color:#ccc;">${escaparHtmlDevol(clienteTxt)}</td>
+                    <td style="color:${condColor}; font-size:12px;">${ETIQUETA_CONDICION_DEVOL[d.condicion] || d.condicion}</td>
+                    <td style="font-size:12px;">${ETIQUETA_ACCION_DEVOL[d.accion] || d.accion}</td>
+                    <td style="font-size:12px;">${d.monto != null ? 'S/ ' + parseFloat(d.monto).toFixed(2) : '-'}</td>
+                    <td style="font-size:12px; color:#999;">${escaparHtmlDevol(d.usuario || '-')}</td>
+                </tr>`;
+            }).join('');
+        }
         // Recibir y mostrar los datos de la empresa en Ajustes
         ipcRenderer.on('datos-empresa-respuesta', (e, data) => {
             if (!data) return;

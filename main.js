@@ -1968,6 +1968,133 @@ ipcMain.on('obtener-facturas', async (event) => {
     event.reply('lista-de-facturas', data || []);
 });
 
+// === MÓDULO DE DEVOLUCIONES (cliente devuelve un producto vendido) ===
+// facturas.items_json es solo un snapshot de texto {nombre, precio, cantidad, subtotal} —
+// NO tiene producto_id ni sku, así que el vínculo con el producto real de inventario se resuelve
+// del lado del renderer (matching por nombre contra todosLosProductos) y viaja en el payload.
+
+ipcMain.on('buscar-facturas-devolucion', async (event, texto) => {
+    try {
+        const termino = String(texto || '').trim();
+        if (!termino) {
+            event.reply('resultado-busqueda-facturas-devolucion', []);
+            return;
+        }
+        const terminoSeguro = termino.replace(/[,()%]/g, '');
+        const { data, error } = await supabase.from('facturas')
+            .select('*')
+            .eq('empresa_id', empresaActual)
+            .or(`numero_comprobante.ilike.%${terminoSeguro}%,cliente_nombre.ilike.%${terminoSeguro}%`)
+            .order('created_at', { ascending: false })
+            .limit(20);
+        if (error) throw error;
+        event.reply('resultado-busqueda-facturas-devolucion', data || []);
+    } catch (e) {
+        console.error('Error buscando facturas para devolución:', e.message);
+        event.reply('resultado-busqueda-facturas-devolucion', []);
+    }
+});
+
+ipcMain.on('registrar-devolucion', async (event, payload) => {
+    try {
+        const {
+            factura_id, producto_id, producto_nombre, cantidad,
+            motivo, condicion, accion, monto, usuario
+        } = payload || {};
+
+        const cantidadNum = parseInt(cantidad, 10);
+        if (!producto_nombre || !cantidadNum || cantidadNum <= 0) {
+            throw new Error('Faltan datos obligatorios (producto y cantidad).');
+        }
+        if (!['buen_estado', 'defectuoso'].includes(condicion)) {
+            throw new Error('Condición inválida.');
+        }
+        if (!['reembolso_efectivo', 'nota_credito', 'cambio_producto', 'ninguna'].includes(accion)) {
+            throw new Error('Acción inválida.');
+        }
+
+        const insertData = {
+            empresa_id: empresaActual,
+            factura_id: factura_id || null,
+            producto_id: producto_id || null,
+            producto_nombre,
+            cantidad: cantidadNum,
+            motivo: motivo || null,
+            condicion,
+            accion,
+            monto: (monto !== undefined && monto !== null && monto !== '') ? parseFloat(monto) : null,
+            usuario: usuario || null
+        };
+
+        const { data: devolucionCreada, error: errDevol } = await supabase.from('devoluciones')
+            .insert([insertData])
+            .select()
+            .single();
+        if (errDevol) throw errDevol;
+
+        let stockActualizado = false;
+        let avisoStock = null;
+
+        // Solo reingresa stock si el producto vuelve en buen estado Y se pudo identificar el
+        // producto real de inventario. Defectuoso o sin match = queda solo el registro, sin tocar stock.
+        if (condicion === 'buen_estado' && producto_id) {
+            const { data: prod, error: errProd } = await supabase.from('productos')
+                .select('id, sku, stock')
+                .eq('id', producto_id)
+                .eq('empresa_id', empresaActual)
+                .single();
+            if (errProd) throw errProd;
+
+            const nuevoStock = (prod.stock || 0) + cantidadNum;
+            const { error: errUpdate } = await supabase.from('productos')
+                .update({ stock: nuevoStock })
+                .eq('id', producto_id)
+                .eq('empresa_id', empresaActual);
+            if (errUpdate) throw errUpdate;
+            stockActualizado = true;
+
+            // movimientos_stock.sku es NOT NULL: si el producto no tiene SKU cargado (caso raro),
+            // se omite el registro del movimiento sin bloquear la devolución completa.
+            if (prod.sku) {
+                const { error: errMov } = await supabase.from('movimientos_stock').insert([{
+                    empresa_id: empresaActual,
+                    sku: prod.sku,
+                    cantidad: cantidadNum,
+                    proveedor: 'DEVOLUCION CLIENTE',
+                    nota: motivo || 'Devolución de cliente (buen estado)'
+                }]);
+                if (errMov) throw errMov;
+            } else {
+                avisoStock = 'Stock actualizado, pero no se registró en el historial de movimientos (el producto no tiene SKU).';
+            }
+        }
+
+        event.reply('devolucion-registrada', { success: true, id: devolucionCreada.id, stockActualizado, avisoStock });
+    } catch (e) {
+        console.error('Error registrando devolución:', e.message);
+        event.reply('devolucion-registrada', { success: false, msg: e.message });
+    }
+});
+
+ipcMain.on('obtener-devoluciones', async (event) => {
+    try {
+        // Select embebido (join) con facturas: seguro acá porque main.js habla directo con Supabase
+        // con la llave de servicio (no es el proxy web restringido de web-limpia, que sí bloquea
+        // recursos embebidos por seguridad). Sirve para mostrar comprobante/cliente en el historial
+        // sin tener que cruzar manualmente contra la lista de facturas ya cargada en el renderer.
+        const { data, error } = await supabase.from('devoluciones')
+            .select('*, facturas(numero_comprobante, cliente_nombre)')
+            .eq('empresa_id', empresaActual)
+            .order('creado_en', { ascending: false })
+            .limit(200);
+        if (error) throw error;
+        event.reply('lista-devoluciones', data || []);
+    } catch (e) {
+        console.error('Error obteniendo devoluciones:', e.message);
+        event.reply('lista-devoluciones', []);
+    }
+});
+
 // === HANDLER: Análisis CRM (clientes inactivos) ===
 ipcMain.on('analisis-crm', async (event) => {
     try {
