@@ -15,6 +15,7 @@
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
 
     <style>
         :root {
@@ -2006,8 +2007,18 @@
                                     </button>
                                 </div>
                             </div>
-                            <div class="input-group"><label>IMEI / Serie</label><input type="text" id="imei"
-                                    class="bh-input" placeholder="Escanee o escriba..."></div>
+                            <div class="input-group">
+                                <label>IMEI / Serie</label>
+                                <div style="display:flex; gap:8px;">
+                                    <input type="text" id="imei" class="bh-input" placeholder="Escanee o escriba..."
+                                        style="flex:1;">
+                                    <button type="button" class="bh-btn-purple" onclick="abrirScannerImei()"
+                                        style="padding: 0 15px; display:flex; align-items:center; justify-content:center;"
+                                        title="Escanear código con la cámara">
+                                        <i class='bx bx-barcode-reader' style="font-size: 18px;"></i>
+                                    </button>
+                                </div>
+                            </div>
                             <div class="input-group" style="grid-column:span 2">
                                 <label>Diagnóstico / Falla Reportada</label>
                                 <textarea id="fal" class="bh-input" rows="3"
@@ -3204,6 +3215,29 @@
                 <button type="button" class="bh-btn-white" onclick="cerrarModalImportarCompat()">Cancelar</button>
                 <button type="button" class="bh-btn-purple" id="compat-import-btn-confirmar" style="display:none;"
                     onclick="confirmarImportacionCompat()">Confirmar e Importar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Escáner de IMEI/código de barras por cámara web (Recepción) -->
+    <div id="modal-scanner-imei" class="modal-overlay">
+        <div class="modal-content" style="width: 480px; max-width: 95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h2 style="margin:0; color:white; font-size:18px; display:flex; align-items:center; gap:8px;">
+                    <i class='bx bx-barcode-reader'></i> Escanear IMEI / Código
+                </h2>
+                <button type="button" onclick="cerrarScannerImei()"
+                    style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✖</button>
+            </div>
+            <div style="position:relative; background:#000; border-radius:8px; overflow:hidden; aspect-ratio: 4 / 3;">
+                <video id="scanner-imei-video" style="width:100%; height:100%; object-fit:cover;" autoplay muted playsinline></video>
+            </div>
+            <p style="color:#999; font-size:12px; margin-top:10px; text-align:center;">
+                Apunta la cámara al código de barras o QR de la caja del equipo (Code128, EAN o QR).
+            </p>
+            <div id="scanner-imei-error" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444; text-align:center;"></div>
+            <div style="text-align:right; margin-top:16px;">
+                <button type="button" class="bh-btn-white" onclick="cerrarScannerImei()">Cancelar</button>
             </div>
         </div>
     </div>
@@ -5887,6 +5921,62 @@
                 reader.onload = () => resolve(reader.result);
                 reader.onerror = error => reject(error);
             });
+        }
+
+        // ================= ESCÁNER DE IMEI POR CÁMARA WEB (Recepción) =================
+        // Usa @zxing/library (cargada por CDN, mismo patrón que XLSX) con BrowserMultiFormatReader,
+        // que soporta Code128/EAN/QR — los formatos típicos de los códigos impresos en cajas de
+        // celular. 100% frontend: Electron no bloquea getUserMedia por defecto en este proyecto.
+        let zxingReaderImei = null;
+
+        async function abrirScannerImei() {
+            const errorBox = document.getElementById('scanner-imei-error');
+            errorBox.style.display = 'none';
+            document.getElementById('modal-scanner-imei').style.display = 'flex';
+
+            try {
+                if (typeof ZXing === 'undefined') {
+                    throw new Error('La librería de escaneo no se pudo cargar (revisa tu conexión a internet).');
+                }
+                if (!zxingReaderImei) {
+                    zxingReaderImei = new ZXing.BrowserMultiFormatReader();
+                }
+                const videoEl = document.getElementById('scanner-imei-video');
+                // decodeFromVideoDevice(undefined, ...) usa la cámara por defecto del sistema y llama
+                // al callback en CADA frame. `err` (NotFoundException) se dispara constantemente
+                // mientras no hay código en cuadro — es normal, no es un error real, se ignora.
+                await zxingReaderImei.decodeFromVideoDevice(undefined, videoEl, (result, err) => {
+                    if (result) {
+                        const texto = result.getText();
+                        document.getElementById('imei').value = texto;
+                        showToast('Código escaneado: ' + texto, 'success');
+                        cerrarScannerImei();
+                    }
+                });
+            } catch (e) {
+                console.error('Error abriendo el escáner de cámara:', e);
+                errorBox.textContent = 'No se pudo acceder a la cámara: ' + e.message;
+                errorBox.style.display = 'block';
+            }
+        }
+
+        function cerrarScannerImei() {
+            document.getElementById('modal-scanner-imei').style.display = 'none';
+            detenerScannerImei();
+        }
+
+        function detenerScannerImei() {
+            // Se detiene el lector de ZXing (internamente para sus propios tracks) Y ADEMÁS se
+            // paran manualmente todos los tracks del stream por si acaso, para nunca dejar la
+            // cámara encendida en segundo plano.
+            if (zxingReaderImei) {
+                try { zxingReaderImei.reset(); } catch (e) { /* no-op */ }
+            }
+            const videoEl = document.getElementById('scanner-imei-video');
+            if (videoEl && videoEl.srcObject) {
+                videoEl.srcObject.getTracks().forEach(track => track.stop());
+                videoEl.srcObject = null;
+            }
         }
 
         ipcRenderer.on('respuesta-analisis-ia', (event, res) => {
