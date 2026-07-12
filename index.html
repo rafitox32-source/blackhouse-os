@@ -6934,11 +6934,23 @@
         function cerrarSesion() {
             if (confirm('¿Seguro que deseas cerrar sesión?')) {
                 const tokenGuardado = localStorage.getItem('sessionToken');
-                if (tokenGuardado) {
-                    ipcRenderer.send('cerrar-sesion-token', { token: tokenGuardado });
-                    localStorage.removeItem('sessionToken');
-                }
-                location.reload();
+                // Se manda SIEMPRE (no solo si hay token) para que main.js reinicie
+                // empresaActual/rolActual en el proceso principal, que no se reinicia solo con el
+                // location.reload() de abajo (ese reload es solo del renderer).
+                ipcRenderer.send('cerrar-sesion-token', { token: tokenGuardado || null });
+
+                // Se limpia TODO lo de la sesión, no solo el token — antes quedaban usuarioLogin,
+                // userRol, miEmpresaId, etc. sin borrar, listos para que cualquier lectura futura
+                // (o un auto-login) los reutilizara sin querer.
+                ['sessionToken', 'usuarioLogin', 'usuarioLoginTemp', 'userNickname', 'userRol',
+                 'miEmpresaId', 'userAvatar', 'recordarTemp'].forEach(k => localStorage.removeItem(k));
+
+                // Pequeño delay antes de recargar: en Electron, un location.reload() inmediatamente
+                // después de un localStorage.removeItem() puede ganarle la carrera al guardado en
+                // disco del storage del renderer, y la página recargada vuelve a leer el valor
+                // viejo — resultado: el auto-login por token reabre la MISMA sesión que se acababa
+                // de cerrar. Un tick alcanza para que el remove quede persistido antes de recargar.
+                setTimeout(() => location.reload(), 50);
             }
         }
         // ================= IA: ANALISTA FINANCIERO =================

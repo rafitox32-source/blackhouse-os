@@ -393,6 +393,13 @@ ipcMain.on('cerrar-sesion-token', async (event, data) => {
     } catch (e) {
         console.warn('No se pudo invalidar el token de sesión:', e.message);
     }
+    // location.reload() en el renderer NO reinicia main.js (sigue siendo el mismo proceso Electron
+    // en ejecución) — sin esto, empresaActual/rolActual se quedaban apuntando al usuario anterior
+    // hasta el próximo login exitoso, y cualquier handler que se disparara mientras tanto (incluido
+    // un auto-login por token que no se haya limpiado a tiempo en el renderer) seguía operando con
+    // los datos de la empresa/rol de la sesión que se acababa de cerrar.
+    empresaActual = null;
+    rolActual = null;
 });
 
 // === 2.1 VERIFICACIÓN DE 2FA (SEGUNDO PASO DE ACCESO) ===
