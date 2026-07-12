@@ -5597,6 +5597,13 @@
             cargarHistorialChatCanal('general');
         }
 
+        // Escapa texto para insertarlo de forma segura tanto en nodos de texto como en atributos HTML
+        function escaparHtml(txt) {
+            const d = document.createElement('div');
+            d.textContent = txt || '';
+            return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
         // Renderizar un mensaje en la pantalla
         function recibirMensaje(datos, esHistorial = false) {
             const chatBody = document.getElementById('chat-messages');
@@ -5614,18 +5621,24 @@
                 incrementarBadgeChat();
             }
 
+            // Nunca confiar en el contenido: aunque tipo === 'sistema', la fila puede haber sido
+            // insertada directamente por cualquiera con la anon key (RLS permite INSERT sin control).
+            const mensajeSeguro = escaparHtml(datos.mensaje);
+
             // Mensaje de sistema (automático)
             if (datos.tipo === 'sistema') {
                 chatBody.insertAdjacentHTML('beforeend', `
             <div class="msg-system-line">
-                <span>${datos.mensaje}</span>
+                <span>${mensajeSeguro}</span>
             </div>`);
                 chatBody.scrollTop = chatBody.scrollHeight;
                 return;
             }
 
+            const usuarioSeguro = escaparHtml(datos.usuario || 'Usuario');
+            const rolKeySeguro = escaparHtml(rolKey);
             const imgUrl = datos.avatar
-                ? datos.avatar
+                ? escaparHtml(datos.avatar)
                 : `https://ui-avatars.com/api/?name=${encodeURIComponent(datos.usuario || 'U')}&background=random&color=fff&bold=true&size=64`;
 
             const anim = esHistorial ? 'none' : 'messageIn 0.3s ease';
@@ -5633,7 +5646,7 @@
             if (esMio) {
                 chatBody.insertAdjacentHTML('beforeend', `
             <div class="chat-msg msg-out" style="animation:${anim};">
-                <div style="line-height:1.5;">${datos.mensaje}</div>
+                <div style="line-height:1.5;">${mensajeSeguro}</div>
                 <span style="font-size:9px;opacity:0.55;display:block;text-align:right;margin-top:5px;">✓ ${time}</span>
             </div>`);
             } else {
@@ -5644,11 +5657,11 @@
                      onerror="this.src='https://ui-avatars.com/api/?name=U&background=333&color=fff'">
                 <div style="flex:1;max-width:82%;">
                     <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;">
-                        <span style="font-size:12px;font-weight:700;color:white;">${datos.usuario || 'Usuario'}</span>
-                        <span style="font-size:9px;font-weight:800;background:${rc.bg};color:${rc.color};padding:2px 8px;border-radius:10px;letter-spacing:0.5px;">${rc.emoji} ${rolKey}</span>
+                        <span style="font-size:12px;font-weight:700;color:white;">${usuarioSeguro}</span>
+                        <span style="font-size:9px;font-weight:800;background:${rc.bg};color:${rc.color};padding:2px 8px;border-radius:10px;letter-spacing:0.5px;">${rc.emoji} ${rolKeySeguro}</span>
                     </div>
                     <div class="chat-msg msg-in" style="margin:0;border-radius:4px 16px 16px 16px;animation:none;">
-                        <div style="line-height:1.5;">${datos.mensaje}</div>
+                        <div style="line-height:1.5;">${mensajeSeguro}</div>
                         <span style="font-size:9px;opacity:0.5;display:block;text-align:right;margin-top:4px;">${time}</span>
                     </div>
                 </div>
@@ -5712,7 +5725,7 @@
             await supabaseChat.from('chat_mensajes').insert([{
                 usuario: '🤖 Sistema',
                 rol: 'SISTEMA',
-                mensaje: `${emojis[nuevoEstado] || '•'} Orden <b>#${String(ordenId).padStart(4, '0')}</b> [${modelo}] → <b>${nuevoEstado}</b>`,
+                mensaje: `${emojis[nuevoEstado] || '•'} Orden #${String(ordenId).padStart(4, '0')} [${modelo}] → ${nuevoEstado}`,
                 tipo: 'sistema',
                 canal: canal
             }]);
