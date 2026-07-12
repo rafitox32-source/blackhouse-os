@@ -4809,7 +4809,7 @@
             const tbody = document.getElementById('tabla-servicios');
             if (tbody) {
                 tbody.innerHTML = rows.map(r => {
-                    let link = `https://wa.me/51${r.telefono}?text=${encodeURIComponent('Hola, el estado de su orden es: ' + r.estado)}`;
+                    let link = `https://wa.me/51${encodeURIComponent(r.telefono || '')}?text=${encodeURIComponent('Hola, el estado de su orden es: ' + r.estado)}`;
                     let bgSelect = '#2a1a1a';
                     if (r.estado === 'En Proceso') bgSelect = '#0f3a35';
                     if (r.estado === 'Completado') bgSelect = '#2d264b';
@@ -4819,21 +4819,26 @@
                     const fechaOrden = r.created_at ? new Date(r.created_at).toLocaleDateString('es-PE') : '-';
                     const saldoPend = parseFloat(r.saldo || 0);
                     const costoTotal = parseFloat(r.costo || 0);
+                    const clienteSeguro = escaparHtml(r.cliente || '');
+                    const modeloSeguro = escaparHtml(r.modelo || '-');
+                    const imeiSeguro = escaparHtml(r.imei || '');
+                    const fallaSeguro = escaparHtml(r.falla || '-');
+                    const telefonoSeguro = escaparHtml(r.telefono || '');
 
                     return `
                     <tr>
                         <td style="color:var(--bh-purple); font-weight:bold;">#${String(r.id).padStart(4, '0')}</td>
                         <td>${fechaOrden}</td>
                         <td>
-                            <div style="font-weight:600; color:white;">${r.cliente}</div>
+                            <div style="font-weight:600; color:white;">${clienteSeguro}</div>
                             <a href="${link}" target="_blank" style="font-size:12px; color:var(--success); text-decoration:none; display:flex; align-items:center; gap:5px;"><span>📞 WhatsApp</span></a>
                         </td>
                         <td>
-                            <div>${r.modelo || '-'}</div>
-                            ${r.imei ? `<div style="font-size:11px; color:#888;">IMEI: ${r.imei}</div>` : ''}
+                            <div>${modeloSeguro}</div>
+                            ${r.imei ? `<div style="font-size:11px; color:#888;">IMEI: ${imeiSeguro}</div>` : ''}
                         </td>
                         <td style="max-width:220px;">
-                            <div style="font-size:12px; color:#ccc; white-space:normal; word-break:break-word;">${r.falla || '-'}</div>
+                            <div style="font-size:12px; color:#ccc; white-space:normal; word-break:break-word;">${fallaSeguro}</div>
                         </td>
                         <td>
                             <div style="color:${saldoPend > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight:600;">S/ ${saldoPend.toFixed(2)}</div>
@@ -4841,21 +4846,36 @@
                         </td>
                         <td>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <select class="status-select" onchange="cambiarEstadoOrden(${r.id}, this.value, '${r.telefono}')" style="background:${bgSelect}; color:white;">
+                            <select class="status-select" data-action="cambiar-estado" data-id="${r.id}" data-telefono="${telefonoSeguro}" style="background:${bgSelect}; color:white;">
                                 <option value="Recibido" ${r.estado === 'Recibido' ? 'selected' : ''}>📥 Recibido</option>
                                 <option value="En Proceso" ${r.estado === 'En Proceso' ? 'selected' : ''}>🔧 En Proceso</option>
                                 <option value="Completado" ${r.estado === 'Completado' ? 'selected' : ''}>✅ Completado</option>
                                 <option value="Entregado" ${r.estado === 'Entregado' ? 'selected' : ''}>📦 Entregado</option>
                             </select>
-                            
-                            <button class="bh-btn-white" style="border-color: var(--info); color: var(--info); padding: 4px 8px; font-size: 11px;" 
-                                    onclick="abrirModalFacturacion(${r.id}, '${r.cliente}', ${r.costo})">
+
+                            <button class="bh-btn-white" style="border-color: var(--info); color: var(--info); padding: 4px 8px; font-size: 11px;"
+                                    data-action="facturar-orden" data-id="${r.id}" data-cliente="${clienteSeguro}" data-costo="${costoTotal}">
                                 🧾 Facturar
                             </button>
                         </div>
                     </td>
                     </tr>`;
                 }).join('');
+
+                if (!tbody.dataset.listenerAttached) {
+                    tbody.addEventListener('change', (e) => {
+                        const sel = e.target.closest('[data-action="cambiar-estado"]');
+                        if (!sel) return;
+                        cambiarEstadoOrden(parseInt(sel.dataset.id, 10), sel.value, sel.dataset.telefono);
+                    });
+                    tbody.addEventListener('click', (e) => {
+                        const btn = e.target.closest('[data-action="facturar-orden"]');
+                        if (!btn) return;
+                        abrirModalFacturacion(parseInt(btn.dataset.id, 10), btn.dataset.cliente, parseFloat(btn.dataset.costo));
+                    });
+                    tbody.dataset.listenerAttached = 'true';
+                }
+
                 const porAsignar = rows.filter(r => r.estado === 'Recibido').length;
                 const enProceso = rows.filter(r => r.estado === 'En Proceso').length;
                 const listos = rows.filter(r => r.estado === 'Completado').length;
@@ -4966,7 +4986,18 @@
             const tbody = document.getElementById('tabla-clientes');
             if (!tbody) return;
             if (!rows || rows.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No hay clientes.</td></tr>'; }
-            else { tbody.innerHTML = rows.map(c => `<tr><td style="font-weight:bold; color:white;">${c.nombre || 'Sin Nombre'}</td><td>${c.telefono || '-'}</td><td>${c.email || '-'}</td><td><button class="bh-btn-white" onclick="window.open('https://wa.me/51${c.telefono}')">WhatsApp 💬</button></td></tr>`).join(''); }
+            else {
+                tbody.innerHTML = rows.map(c => `<tr><td style="font-weight:bold; color:white;">${escaparHtml(c.nombre || 'Sin Nombre')}</td><td>${escaparHtml(c.telefono || '-')}</td><td>${escaparHtml(c.email || '-')}</td><td><button class="bh-btn-white" data-action="whatsapp-cliente" data-telefono="${escaparHtml(c.telefono || '')}">WhatsApp 💬</button></td></tr>`).join('');
+
+                if (!tbody.dataset.listenerAttached) {
+                    tbody.addEventListener('click', (e) => {
+                        const btn = e.target.closest('[data-action="whatsapp-cliente"]');
+                        if (!btn) return;
+                        window.open(`https://wa.me/51${encodeURIComponent(btn.dataset.telefono || '')}`);
+                    });
+                    tbody.dataset.listenerAttached = 'true';
+                }
+            }
         });
 
         ipcRenderer.on('lista-de-usuarios', (e, rows) => {
@@ -4976,21 +5007,27 @@
             if (!rows || rows.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No hay usuarios registrados.</td></tr>';
             } else {
-                tbody.innerHTML = rows.map(u => `
+                tbody.innerHTML = rows.map(u => {
+                    const nombreSeguro = escaparHtml(u.nombre_completo || '');
+                    const usuarioSeguro = escaparHtml(u.usuario || '');
+                    const rolSeguro = escaparHtml(u.rol || '');
+                    const estadoSeguro = escaparHtml(u.estado || '');
+                    return `
                     <tr>
                         <td style="font-weight:bold; color:white;">
                             <div style="display:flex; align-items:center; gap:10px;">
                                 <div style="width:30px; height:30px; background:#333; border-radius:50%; display:flex; align-items:center; justify-content:center;">👤</div>
-                              ${u.nombre_completo ? u.nombre_completo + '<br><span style="font-size:10px;color:#666;">@' + u.usuario + '</span>' : u.usuario}
+                              ${u.nombre_completo ? nombreSeguro + '<br><span style="font-size:10px;color:#666;">@' + usuarioSeguro + '</span>' : usuarioSeguro}
                             </div>
                         </td>
-                        <td style="text-transform:uppercase; font-size:11px; color:#aaa;">${u.rol}</td>
-                        <td><span class="status-badge ${u.estado === 'activo' ? 'bg-entregado' : 'bg-asignar'}">${u.estado}</span></td>
+                        <td style="text-transform:uppercase; font-size:11px; color:#aaa;">${rolSeguro}</td>
+                        <td><span class="status-badge ${u.estado === 'activo' ? 'bg-entregado' : 'bg-asignar'}">${estadoSeguro}</span></td>
                         <td>
                             <button class="bh-btn-white" style="border-color:var(--danger); color:var(--danger); padding:4px 10px;" onclick="cambiarEstadoUsuario(${u.id}, '${u.estado === 'activo' ? 'inactivo' : 'activo'}')">${u.estado === 'activo' ? 'Desactivar' : 'Activar'}</button>
                         </td>
                     </tr>
-                `).join('');
+                `;
+                }).join('');
             }
         });
 
@@ -8214,9 +8251,10 @@
                     catText = '🛡️ Mica';
                 }
 
+                const nombreSeguro = escaparHtml(p.nombre || '');
                 return `<tr>
                     <td style="font-weight:600; color:white;">
-                        ${p.nombre}
+                        ${nombreSeguro}
                         ${p.costo_por_confirmar ? '<span style="font-size:10px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.5); color:#ef4444; padding:2px 6px; border-radius:4px; margin-left:8px;" title="Costo base proviene de múltiples proveedores y requiere verificación.">⚠️ Revisar costo</span>' : ''}
                     </td>
                     <td><span style="font-size:11px; background:${badgeColor}22; border:1px solid ${badgeColor}44; color:${badgeColor}; padding:3px 10px; border-radius:20px; font-weight:bold;">${catText}</span></td>
@@ -8226,11 +8264,26 @@
                     </td>
                     <td style="font-weight:bold; color:${p.stock > 0 ? '#10b981' : '#ef4444'}">${(p.categoria || '').toLowerCase().includes('mica') ? (p.stock > 0 ? 'Disponible' : 'Agotado') : p.stock}</td>
                     <td style="white-space:nowrap;">
-                        <button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); abrirDetalleProducto(${p.id})">👁️ Detalle</button>
-                        ${localStorage.getItem('userRol') === 'dueno' ? `<button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px; color:#ef4444; margin-left:4px;" title="Eliminar producto" onclick="event.stopPropagation(); eliminarProducto(${p.id}, '${(p.nombre || '').replace(/'/g, "\\'")}')">🗑️</button>` : ''}
+                        <button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px;" data-action="detalle-producto" data-id="${p.id}">👁️ Detalle</button>
+                        ${localStorage.getItem('userRol') === 'dueno' ? `<button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px; color:#ef4444; margin-left:4px;" title="Eliminar producto" data-action="eliminar-producto" data-id="${p.id}" data-nombre="${escaparHtml(p.nombre || '')}">🗑️</button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
+
+            if (!tbody.dataset.listenerAttached) {
+                tbody.addEventListener('click', (e) => {
+                    const btn = e.target.closest('[data-action]');
+                    if (!btn) return;
+                    e.stopPropagation();
+                    const id = parseInt(btn.dataset.id, 10);
+                    if (btn.dataset.action === 'detalle-producto') {
+                        abrirDetalleProducto(id);
+                    } else if (btn.dataset.action === 'eliminar-producto') {
+                        eliminarProducto(id, btn.dataset.nombre);
+                    }
+                });
+                tbody.dataset.listenerAttached = 'true';
+            }
         }
 
         let productoDetalleOriginal = null;
@@ -8546,21 +8599,26 @@
             }
 
             grid.innerHTML = proveedores.map((p, index) => {
-                const foto = p.foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.nombre)}&background=7c3aed&color=fff&size=120`;
+                const foto = escaparHtml(p.foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.nombre)}&background=7c3aed&color=fff&size=120`);
                 const cleanPhone = p.tel.replace(/\D/g, '');
+                const nombreSeguro = escaparHtml(p.nombre || '');
+                const catSeguro = escaparHtml(p.cat || '');
+                const telSeguro = escaparHtml(p.tel || '');
+                const emailSeguro = escaparHtml(p.email || '-');
+                const dirSeguro = escaparHtml(p.dir || '-');
                 return `
                 <div class="bh-card" style="display:flex; flex-direction:column; align-items:center; text-align:center; padding:25px; border:1px solid var(--bh-border); transition:0.3s; position:relative; overflow:hidden;">
                     <button onclick="eliminarProveedor(${index})" style="position:absolute; top:12px; right:12px; background:transparent; border:none; color:var(--danger); cursor:pointer; font-size:16px;" title="Eliminar"><i class='bx bx-trash'></i></button>
                     <div style="width:80px; height:80px; border-radius:50%; overflow:hidden; border:2px solid var(--bh-purple); background:#222; display:flex; align-items:center; justify-content:center; margin-bottom:15px;">
                         <img src="${foto}" style="width:100%; height:100%; object-fit:cover;">
                     </div>
-                    <h3 style="margin:0; font-size:16px; color:white; font-weight:700;">${p.nombre}</h3>
-                    <span style="font-size:10px; background:var(--bh-purple)22; border:1px solid var(--bh-purple)44; color:#a78bfa; padding:3px 10px; border-radius:20px; font-weight:bold; margin-top:5px; margin-bottom:15px; display:inline-block;">${p.cat}</span>
-                    
+                    <h3 style="margin:0; font-size:16px; color:white; font-weight:700;">${nombreSeguro}</h3>
+                    <span style="font-size:10px; background:var(--bh-purple)22; border:1px solid var(--bh-purple)44; color:#a78bfa; padding:3px 10px; border-radius:20px; font-weight:bold; margin-top:5px; margin-bottom:15px; display:inline-block;">${catSeguro}</span>
+
                     <div style="width:100%; text-align:left; font-size:13px; color:#aaa; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px; display:flex; flex-direction:column; gap:8px;">
-                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-phone' style="color:#10b981; font-size:16px;"></i> <span>${p.tel}</span></div>
-                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-envelope' style="color:#3b82f6; font-size:16px;"></i> <span>${p.email || '-'}</span></div>
-                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-map' style="color:#e2950f; font-size:16px;"></i> <span>${p.dir || '-'}</span></div>
+                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-phone' style="color:#10b981; font-size:16px;"></i> <span>${telSeguro}</span></div>
+                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-envelope' style="color:#3b82f6; font-size:16px;"></i> <span>${emailSeguro}</span></div>
+                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-map' style="color:#e2950f; font-size:16px;"></i> <span>${dirSeguro}</span></div>
                     </div>
                     
                     <a href="https://wa.me/51${cleanPhone}" target="_blank" class="bh-btn-purple" style="width:100%; margin-top:20px; font-size:12px; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:5px; padding:10px 0; border-radius:8px; font-weight:600;">
@@ -8630,33 +8688,57 @@
             if (isElectron) ipcRenderer.send('obtener-resellers-admin');
         }
 
+        let resellersActuales = [];
+
         if (isElectron) {
             ipcRenderer.on('resellers-admin-respuesta', (e, res) => {
                 if (res.success) {
+                    resellersActuales = res.data || [];
                     const tbody = document.getElementById('tabla-resellers');
                     if (tbody) {
                         if (res.data.length === 0) {
                             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#777;">No hay distribuidores registrados.</td></tr>';
                         } else {
-                            tbody.innerHTML = res.data.map(r => `
+                            tbody.innerHTML = res.data.map(r => {
+                                const avatarSeguro = escaparHtml(r.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(r.nombre_completo));
+                                const nombreSeguro = escaparHtml(r.nombre_completo || '');
+                                const nicknameSeguro = escaparHtml(r.nickname || '');
+                                const paisSeguro = escaparHtml(r.pais || '🌎 Global');
+                                return `
                                 <tr>
                                     <td style="display:flex; align-items:center; gap:10px; border:none; padding:12px;">
-                                        <img src="${r.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(r.nombre_completo)}" style="width:30px; height:30px; border-radius:50%; object-fit:cover;">
-                                        <span style="font-weight:bold; color:white;">${r.nombre_completo}</span>
+                                        <img src="${avatarSeguro}" style="width:30px; height:30px; border-radius:50%; object-fit:cover;">
+                                        <span style="font-weight:bold; color:white;">${nombreSeguro}</span>
                                     </td>
-                                    <td style="color:#aaa;">${r.nickname}</td>
-                                    <td style="color:#fff;">${r.pais || '🌎 Global'}</td>
+                                    <td style="color:#aaa;">${nicknameSeguro}</td>
+                                    <td style="color:#fff;">${paisSeguro}</td>
                                     <td>
                                         <span style="background:${r.estado === 'activo' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}; color:${r.estado === 'activo' ? '#10b981' : '#ef4444'}; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:bold;">
                                             ${r.estado === 'activo' ? 'Activo' : 'Inactivo'}
                                         </span>
                                     </td>
                                     <td style="text-align:right; padding-right:15px;">
-                                        <button class="bh-btn-white" style="padding:4px 8px; font-size:12px; margin:0 3px;" onclick="editarReseller(${JSON.stringify(r).replace(/"/g, '&quot;')})">✏️ Editar</button>
-                                        <button class="bh-btn-white" style="padding:4px 8px; font-size:12px; margin:0 3px; border-color:#ef4444; color:#ef4444; background:transparent;" onclick="eliminarReseller(${r.id})">🗑️ Eliminar</button>
+                                        <button class="bh-btn-white" style="padding:4px 8px; font-size:12px; margin:0 3px;" data-action="editar-reseller" data-id="${r.id}">✏️ Editar</button>
+                                        <button class="bh-btn-white" style="padding:4px 8px; font-size:12px; margin:0 3px; border-color:#ef4444; color:#ef4444; background:transparent;" data-action="eliminar-reseller" data-id="${r.id}">🗑️ Eliminar</button>
                                     </td>
                                 </tr>
-                            `).join('');
+                            `;
+                            }).join('');
+
+                            if (!tbody.dataset.listenerAttached) {
+                                tbody.addEventListener('click', (e) => {
+                                    const btn = e.target.closest('[data-action]');
+                                    if (!btn) return;
+                                    const id = btn.dataset.id;
+                                    if (btn.dataset.action === 'editar-reseller') {
+                                        const r = resellersActuales.find(x => String(x.id) === String(id));
+                                        if (r) editarReseller(r);
+                                    } else if (btn.dataset.action === 'eliminar-reseller') {
+                                        eliminarReseller(id);
+                                    }
+                                });
+                                tbody.dataset.listenerAttached = 'true';
+                            }
                         }
                     }
                 } else {
