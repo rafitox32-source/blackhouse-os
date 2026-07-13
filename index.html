@@ -2217,6 +2217,9 @@
                             <button class="bh-btn-white" onclick="showView('devoluciones-view', null)" title="Registrar y consultar devoluciones de clientes">
                                 <i class='bx bx-undo'></i> Devoluciones
                             </button>
+                            <button class="bh-btn-white" onclick="exportarInventarioExcel()" title="Descarga en Excel los productos de la categoría y filtros actualmente seleccionados">
+                                <i class='bx bx-download'></i> Exportar Excel
+                            </button>
                             <div style="position:relative;">
                                 <button id="btn-add-prod" class="bh-btn-purple" onclick="toggleMenuAgregarInventario()">+ Agregar ▾</button>
                             <div id="menu-agregar-inventario" style="display:none; position:absolute; right:0; top:44px; background:#1a1a1a; border:1px solid #333; border-radius:10px; min-width:230px; z-index:200; box-shadow:0 8px 24px rgba(0,0,0,0.5); overflow:hidden;">
@@ -8130,16 +8133,16 @@
             filtroSub.style.display = 'inline-block';
         }
 
-        function renderizarProductosFiltrados() {
-            const tbody = document.getElementById('tabla-productos');
-            if (!tbody) return;
-
+        // Aplica los mismos filtros que la tabla de inventario (texto, categoría activa,
+        // subcategoría). La usan tanto el render de la tabla como la exportación a Excel,
+        // para que "exportar" siempre traiga exactamente lo que se está viendo en pantalla.
+        function obtenerProductosFiltrados() {
             let filtrados = todosLosProductos;
 
             // 1. Filtrado por texto (Buscador)
             const inputBuscador = document.getElementById('inv-buscador-texto');
             const textoBuscado = inputBuscador ? inputBuscador.value.toUpperCase().trim() : '';
-            
+
             if (textoBuscado) {
                 filtrados = filtrados.filter(p => {
                     const n = (p.nombre || '').toUpperCase();
@@ -8174,6 +8177,17 @@
             if (subActiva) {
                 filtrados = filtrados.filter(p => (p.subcategoria || '') === subActiva);
             }
+
+            return filtrados;
+        }
+
+        function renderizarProductosFiltrados() {
+            const tbody = document.getElementById('tabla-productos');
+            if (!tbody) return;
+
+            const inputBuscador = document.getElementById('inv-buscador-texto');
+            const textoBuscado = inputBuscador ? inputBuscador.value.toUpperCase().trim() : '';
+            const filtrados = obtenerProductosFiltrados();
 
             if (filtrados.length === 0) {
                 if (textoBuscado) {
@@ -8218,6 +8232,38 @@
                     </td>
                 </tr>`;
             }).join('');
+        }
+
+        // Exporta a Excel exactamente los productos que se ven en la tabla en ese momento
+        // (respeta el buscador, la pestaña de categoría activa y la subcategoría elegida).
+        function exportarInventarioExcel() {
+            const filtrados = obtenerProductosFiltrados();
+
+            if (filtrados.length === 0) {
+                showToast('No hay productos para exportar con los filtros actuales', 'warning');
+                return;
+            }
+
+            const filas = filtrados.map(p => ({
+                'SKU': p.sku || '',
+                'Nombre del Producto': p.nombre || '',
+                'Categoría': p.categoria || '',
+                'Subcategoría': p.subcategoria || '',
+                'Modelo Compatible': p.modelo_compatible || '',
+                'Cantidad': p.stock || 0,
+                'Precio': p.precio || 0,
+                'Precio Mayor': p.precio_mayor || ''
+            }));
+
+            const hoja = XLSX.utils.json_to_sheet(filas);
+            const libro = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(libro, hoja, 'Inventario');
+
+            const fecha = new Date().toISOString().slice(0, 10);
+            const categoriaArchivo = categoriaInventarioActiva.replace(/[^a-zA-Z0-9]/g, '');
+            XLSX.writeFile(libro, `Inventario_${categoriaArchivo}_${fecha}.xlsx`);
+
+            showToast(`Excel de "${categoriaInventarioActiva}" descargado (${filas.length} productos)`, 'success');
         }
 
         let productoDetalleOriginal = null;
