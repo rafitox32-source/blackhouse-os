@@ -39,9 +39,9 @@
       "!**/*.ts",
       "!*.map",
       "!.git/*",
-      "!icono/**/*",
-      "!Firmware/**/*",
-      "!Dump/**/*"
+      "!cosas-que-no-uso/**/*",
+      "!tools/**/*",
+      "!docs/**/*"
     ]
   },
   "dependencies": {
