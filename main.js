@@ -1976,8 +1976,14 @@ ipcMain.on('obtener-facturas', async (event) => {
 });
 
 // === HANDLER: Cierre de Caja (solo lectura) ===
-// Órdenes de HOY (medianoche a medianoche, hora local de la PC del taller) para que el
-// vendedor pueda cuadrar la caja física. Siempre filtra por empresa_id en el servidor.
+// Une los dos canales de venta del día para que el dueño vea la actividad completa:
+// 1) Órdenes de taller (escritorio) — cada una con su metodo_pago propio.
+// 2) Ventas rápidas del panel móvil (facturas sin orden_id) — la venta de un producto
+//    que no pasó por una orden de reparación.
+// Se excluyen a propósito las facturas CON orden_id: esas ya representan el cobro de una
+// orden que además se listó en (1), y sumarlas también duplicaría el ingreso.
+// Todo (medianoche a medianoche, hora local de la PC del taller), siempre filtrado por
+// empresa_id en el servidor.
 ipcMain.on('obtener-cierre-caja', async (event) => {
     if (rolActual !== 'dueno' && rolActual !== 'vendedor') {
         return event.reply('cierre-caja-respuesta', { success: false, msg: 'No autorizado' });
@@ -1985,15 +1991,27 @@ ipcMain.on('obtener-cierre-caja', async (event) => {
     try {
         const inicio = new Date(); inicio.setHours(0, 0, 0, 0);
         const fin = new Date(); fin.setHours(23, 59, 59, 999);
-        const { data, error } = await supabase
+
+        const { data: ordenes, error: errOrdenes } = await supabase
             .from('ordenes')
             .select('id, cliente, metodo_pago, costo, adelanto, saldo, created_at')
             .eq('empresa_id', empresaActual)
             .gte('created_at', inicio.toISOString())
             .lte('created_at', fin.toISOString())
             .order('created_at', { ascending: false });
-        if (error) throw error;
-        event.reply('cierre-caja-respuesta', { success: true, data: data || [] });
+        if (errOrdenes) throw errOrdenes;
+
+        const { data: ventasMoviles, error: errVentas } = await supabase
+            .from('facturas')
+            .select('id, cliente_nombre, metodo_pago, monto_total, created_at')
+            .eq('empresa_id', empresaActual)
+            .is('orden_id', null)
+            .gte('created_at', inicio.toISOString())
+            .lte('created_at', fin.toISOString())
+            .order('created_at', { ascending: false });
+        if (errVentas) throw errVentas;
+
+        event.reply('cierre-caja-respuesta', { success: true, ordenes: ordenes || [], ventasMoviles: ventasMoviles || [] });
     } catch (e) {
         console.error('Error obteniendo cierre de caja:', e.message);
         event.reply('cierre-caja-respuesta', { success: false, msg: e.message });

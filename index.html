@@ -2613,6 +2613,7 @@
                             <thead style="background:rgba(255,255,255,0.03);">
                                 <tr>
                                     <th>Hora</th>
+                                    <th>Canal</th>
                                     <th>Cliente</th>
                                     <th>Método de Pago</th>
                                     <th style="text-align:right;">Adelanto</th>
@@ -2622,7 +2623,7 @@
                             </thead>
                             <tbody id="caja-tabla-body">
                                 <tr>
-                                    <td colspan="6" style="text-align:center; padding:20px; color:#777;">Cargando órdenes de hoy...</td>
+                                    <td colspan="7" style="text-align:center; padding:20px; color:#777;">Cargando ventas de hoy...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -4664,47 +4665,62 @@
                 showToast((res && res.msg) || 'No se pudo cargar el cierre de caja.', 'danger');
                 return;
             }
-            const ordenes = res.data || [];
+            // Se unen los dos canales de venta del día en una sola lista: cada orden de
+            // taller y cada venta rápida del panel móvil (esta última ya viene sin las que
+            // tienen orden_id, para no contar dos veces un mismo cobro).
+            const movimientos = [
+                ...(res.ordenes || []).map(o => ({
+                    canal: 'Taller', hora: o.created_at, cliente: o.cliente, metodo_pago: o.metodo_pago,
+                    adelanto: o.adelanto, saldo: o.saldo, monto: parseFloat(o.costo) || 0
+                })),
+                ...(res.ventasMoviles || []).map(v => ({
+                    canal: 'Móvil', hora: v.created_at, cliente: v.cliente_nombre, metodo_pago: v.metodo_pago,
+                    adelanto: null, saldo: null, monto: parseFloat(v.monto_total) || 0
+                }))
+            ].sort((a, b) => new Date(b.hora) - new Date(a.hora));
+
             const subtotales = { efectivo: 0, yape: 0, tarjeta: 0, transferencia: 0, otro: 0 };
             const conteos = { efectivo: 0, yape: 0, tarjeta: 0, transferencia: 0, otro: 0 };
             let totalGeneral = 0;
 
-            ordenes.forEach(o => {
+            movimientos.forEach(m => {
                 // metodo_pago null/vacío o no reconocido se agrupa como "otro" sin romper el cuadre
-                const metodo = ['efectivo', 'yape', 'tarjeta', 'transferencia'].includes(o.metodo_pago) ? o.metodo_pago : 'otro';
-                const monto = parseFloat(o.costo) || 0;
-                subtotales[metodo] += monto;
+                const metodo = ['efectivo', 'yape', 'tarjeta', 'transferencia'].includes(m.metodo_pago) ? m.metodo_pago : 'otro';
+                subtotales[metodo] += m.monto;
                 conteos[metodo]++;
-                totalGeneral += monto;
+                totalGeneral += m.monto;
             });
 
             Object.keys(subtotales).forEach(m => {
                 const el = document.getElementById(`caja-sub-${m}`);
                 if (el) el.textContent = `S/ ${subtotales[m].toFixed(2)}`;
             });
-            // La tarjeta "Otro" solo se muestra si hay órdenes sin método reconocido
+            // La tarjeta "Otro" solo se muestra si hay movimientos sin método reconocido
             const cardOtro = document.getElementById('caja-card-otro');
             if (cardOtro) cardOtro.style.display = conteos.otro > 0 ? 'block' : 'none';
 
             document.getElementById('caja-total-general').textContent = `S/ ${totalGeneral.toFixed(2)}`;
-            document.getElementById('caja-total-ordenes').textContent = `${ordenes.length} ${ordenes.length === 1 ? 'orden registrada' : 'órdenes registradas'} hoy`;
+            document.getElementById('caja-total-ordenes').textContent = `${movimientos.length} ${movimientos.length === 1 ? 'movimiento registrado' : 'movimientos registrados'} hoy (taller + móvil)`;
 
             const tbody = document.getElementById('caja-tabla-body');
             if (!tbody) return;
-            if (ordenes.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#777;">No hay órdenes registradas hoy.</td></tr>`;
+            if (movimientos.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:#777;">No hay ventas registradas hoy.</td></tr>`;
                 return;
             }
-            tbody.innerHTML = ordenes.map(o => {
-                const hora = o.created_at ? new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
-                const metodo = ['efectivo', 'yape', 'tarjeta', 'transferencia'].includes(o.metodo_pago) ? o.metodo_pago : 'otro';
+            tbody.innerHTML = movimientos.map(m => {
+                const hora = m.hora ? new Date(m.hora).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+                const metodo = ['efectivo', 'yape', 'tarjeta', 'transferencia'].includes(m.metodo_pago) ? m.metodo_pago : 'otro';
+                const adelanto = m.adelanto != null ? `S/ ${(parseFloat(m.adelanto) || 0).toFixed(2)}` : '—';
+                const saldo = m.saldo != null ? `S/ ${(parseFloat(m.saldo) || 0).toFixed(2)}` : '—';
                 return `<tr>
                     <td style="font-size:12px;">${hora}</td>
-                    <td style="font-weight:600; color:white;">${escaparHtml(o.cliente || '-')}</td>
+                    <td style="font-size:11px;"><span style="padding:2px 8px; border-radius:10px; background:${m.canal === 'Taller' ? 'rgba(124,58,237,0.15); color:#d8b4fe' : 'rgba(16,185,129,0.15); color:var(--success)'};">${m.canal}</span></td>
+                    <td style="font-weight:600; color:white;">${escaparHtml(m.cliente || '-')}</td>
                     <td style="font-size:12px;">${METODOS_CAJA[metodo]}</td>
-                    <td style="font-size:12px; text-align:right; color:#d8b4fe;">S/ ${(parseFloat(o.adelanto) || 0).toFixed(2)}</td>
-                    <td style="font-size:12px; text-align:right; color:var(--warning);">S/ ${(parseFloat(o.saldo) || 0).toFixed(2)}</td>
-                    <td style="font-weight:bold; text-align:right; color:var(--success);">S/ ${(parseFloat(o.costo) || 0).toFixed(2)}</td>
+                    <td style="font-size:12px; text-align:right; color:#d8b4fe;">${adelanto}</td>
+                    <td style="font-size:12px; text-align:right; color:var(--warning);">${saldo}</td>
+                    <td style="font-weight:bold; text-align:right; color:var(--success);">S/ ${m.monto.toFixed(2)}</td>
                 </tr>`;
             }).join('');
         });
