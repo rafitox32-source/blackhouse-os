@@ -1689,6 +1689,8 @@
                         class='bx bx-bar-chart-alt-2'></i> Reportes</div>
                 <div id="nav-facturas" class="nav-item" onclick="showView('facturas-view', this)"><i
                         class='bx bx-receipt'></i> Facturación</div>
+                <div id="nav-caja" class="nav-item" onclick="showView('cierre-caja-view', this)"><i
+                        class='bx bx-calculator'></i> Cierre de Caja</div>
                 <div id="nav-cal" class="nav-item" onclick="showView('calendario', this)"><i class='bx bx-calendar'></i>
                     Agenda</div>
                 <div id="nav-crm" class="nav-item" onclick="showView('crm', this)"><i
@@ -2566,6 +2568,61 @@
                             <tbody id="tabla-facturas">
                                 <tr>
                                     <td colspan="5" style="text-align:center; padding:20px;">Cargando historial...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="cierre-caja-view" class="view">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+                        <h1 style="margin:0;">Cierre de Caja</h1>
+                        <span id="caja-fecha-hoy" style="color:#aaa; font-size:14px; text-transform:capitalize;"></span>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:20px; margin-bottom:20px;">
+                        <div class="bh-card" style="text-align:center;">
+                            <div style="color:#aaa; font-size:12px; margin-bottom:5px;">💵 Efectivo</div>
+                            <h2 id="caja-sub-efectivo" style="margin:0; font-size:24px;">S/ 0.00</h2>
+                        </div>
+                        <div class="bh-card" style="text-align:center;">
+                            <div style="color:#aaa; font-size:12px; margin-bottom:5px;">🟣 Yape / Plin</div>
+                            <h2 id="caja-sub-yape" style="margin:0; font-size:24px;">S/ 0.00</h2>
+                        </div>
+                        <div class="bh-card" style="text-align:center;">
+                            <div style="color:#aaa; font-size:12px; margin-bottom:5px;">💳 Tarjeta</div>
+                            <h2 id="caja-sub-tarjeta" style="margin:0; font-size:24px;">S/ 0.00</h2>
+                        </div>
+                        <div class="bh-card" style="text-align:center;">
+                            <div style="color:#aaa; font-size:12px; margin-bottom:5px;">🏦 Transferencia</div>
+                            <h2 id="caja-sub-transferencia" style="margin:0; font-size:24px;">S/ 0.00</h2>
+                        </div>
+                        <div id="caja-card-otro" class="bh-card" style="text-align:center; display:none;">
+                            <div style="color:#aaa; font-size:12px; margin-bottom:5px;">❔ Otro / Sin especificar</div>
+                            <h2 id="caja-sub-otro" style="margin:0; font-size:24px;">S/ 0.00</h2>
+                        </div>
+                    </div>
+
+                    <div class="bh-card" style="text-align:center; margin-bottom:25px; border:1px solid var(--bh-purple); background:rgba(124, 58, 237, 0.08);">
+                        <div style="color:#d8b4fe; font-size:13px; margin-bottom:5px; letter-spacing:1px;">TOTAL GENERAL DEL DÍA</div>
+                        <h1 id="caja-total-general" style="margin:0; font-size:36px; color:var(--success);">S/ 0.00</h1>
+                        <div id="caja-total-ordenes" style="color:#aaa; font-size:12px; margin-top:5px;">0 órdenes registradas hoy</div>
+                    </div>
+
+                    <div class="bh-card" style="padding:0; overflow:hidden;">
+                        <table style="width:100%;">
+                            <thead style="background:rgba(255,255,255,0.03);">
+                                <tr>
+                                    <th>Hora</th>
+                                    <th>Cliente</th>
+                                    <th>Método de Pago</th>
+                                    <th style="text-align:right;">Adelanto</th>
+                                    <th style="text-align:right;">Saldo</th>
+                                    <th style="text-align:right;">Monto (S/)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="caja-tabla-body">
+                                <tr>
+                                    <td colspan="6" style="text-align:center; padding:20px; color:#777;">Cargando órdenes de hoy...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -4205,7 +4262,7 @@
                 avatarContainer.innerHTML = `<img src="${avatarUrl}" style="width:100%; height:100%; object-fit:cover;">`;
             }
 
-            const items = ['nav-dash', 'nav-recep', 'nav-taller', 'nav-clientes', 'nav-inv', 'nav-proveedores', 'nav-report', 'nav-config', 'nav-facturas'];
+            const items = ['nav-dash', 'nav-recep', 'nav-taller', 'nav-clientes', 'nav-inv', 'nav-proveedores', 'nav-report', 'nav-config', 'nav-facturas', 'nav-caja'];
             items.forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'none'; });
 
             const btnMenuTop = document.getElementById('menu-config-btn');
@@ -4218,7 +4275,7 @@
                 if (btnMenuTop) btnMenuTop.style.display = 'block';
 
             } else if (rol === 'vendedor') {
-                ['nav-dash', 'nav-clientes', 'nav-inv'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
+                ['nav-dash', 'nav-clientes', 'nav-inv', 'nav-caja'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
                 if (document.getElementById('btn-add-prod')) document.getElementById('btn-add-prod').style.display = 'none';
             } else if (rol === 'tecnico') {
                 ['nav-dash', 'nav-recep', 'nav-taller', 'nav-inv'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
@@ -4260,6 +4317,8 @@
                 ipcRenderer.send('obtener-devoluciones');
             }
             if (id === 'reportes' && !window.isDemoMode) ipcRenderer.send('obtener-datos-reporte', 'hoy');
+
+            if (id === 'cierre-caja-view' && !window.isDemoMode) cargarCierreCaja();
 
             // 1. Aquí pedimos las facturas
             if (id === 'facturas-view' && !window.isDemoMode) ipcRenderer.send('obtener-facturas');
@@ -4584,6 +4643,72 @@
                 </tr>`;
             }).join('');
         }
+
+        // === CIERRE DE CAJA (solo lectura) ===
+        const METODOS_CAJA = {
+            efectivo: '💵 Efectivo',
+            yape: '🟣 Yape / Plin',
+            tarjeta: '💳 Tarjeta',
+            transferencia: '🏦 Transferencia',
+            otro: '❔ Otro / Sin especificar'
+        };
+
+        function cargarCierreCaja() {
+            const fechaEl = document.getElementById('caja-fecha-hoy');
+            if (fechaEl) fechaEl.textContent = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            ipcRenderer.send('obtener-cierre-caja');
+        }
+
+        ipcRenderer.on('cierre-caja-respuesta', (e, res) => {
+            if (!res || !res.success) {
+                showToast((res && res.msg) || 'No se pudo cargar el cierre de caja.', 'danger');
+                return;
+            }
+            const ordenes = res.data || [];
+            const subtotales = { efectivo: 0, yape: 0, tarjeta: 0, transferencia: 0, otro: 0 };
+            const conteos = { efectivo: 0, yape: 0, tarjeta: 0, transferencia: 0, otro: 0 };
+            let totalGeneral = 0;
+
+            ordenes.forEach(o => {
+                // metodo_pago null/vacío o no reconocido se agrupa como "otro" sin romper el cuadre
+                const metodo = ['efectivo', 'yape', 'tarjeta', 'transferencia'].includes(o.metodo_pago) ? o.metodo_pago : 'otro';
+                const monto = parseFloat(o.costo) || 0;
+                subtotales[metodo] += monto;
+                conteos[metodo]++;
+                totalGeneral += monto;
+            });
+
+            Object.keys(subtotales).forEach(m => {
+                const el = document.getElementById(`caja-sub-${m}`);
+                if (el) el.textContent = `S/ ${subtotales[m].toFixed(2)}`;
+            });
+            // La tarjeta "Otro" solo se muestra si hay órdenes sin método reconocido
+            const cardOtro = document.getElementById('caja-card-otro');
+            if (cardOtro) cardOtro.style.display = conteos.otro > 0 ? 'block' : 'none';
+
+            document.getElementById('caja-total-general').textContent = `S/ ${totalGeneral.toFixed(2)}`;
+            document.getElementById('caja-total-ordenes').textContent = `${ordenes.length} ${ordenes.length === 1 ? 'orden registrada' : 'órdenes registradas'} hoy`;
+
+            const tbody = document.getElementById('caja-tabla-body');
+            if (!tbody) return;
+            if (ordenes.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#777;">No hay órdenes registradas hoy.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = ordenes.map(o => {
+                const hora = o.created_at ? new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+                const metodo = ['efectivo', 'yape', 'tarjeta', 'transferencia'].includes(o.metodo_pago) ? o.metodo_pago : 'otro';
+                return `<tr>
+                    <td style="font-size:12px;">${hora}</td>
+                    <td style="font-weight:600; color:white;">${escaparHtml(o.cliente || '-')}</td>
+                    <td style="font-size:12px;">${METODOS_CAJA[metodo]}</td>
+                    <td style="font-size:12px; text-align:right; color:#d8b4fe;">S/ ${(parseFloat(o.adelanto) || 0).toFixed(2)}</td>
+                    <td style="font-size:12px; text-align:right; color:var(--warning);">S/ ${(parseFloat(o.saldo) || 0).toFixed(2)}</td>
+                    <td style="font-weight:bold; text-align:right; color:var(--success);">S/ ${(parseFloat(o.costo) || 0).toFixed(2)}</td>
+                </tr>`;
+            }).join('');
+        });
+
         // Recibir y mostrar los datos de la empresa en Ajustes
         ipcRenderer.on('datos-empresa-respuesta', (e, data) => {
             if (!data) return;

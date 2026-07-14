@@ -16,7 +16,7 @@ const CANALES_SEND = [
     'guardar-mi-perfil', 'guardar-orden', 'guardar-proveedor-db', 'guardar-reseller-admin',
     'ia-laboratorio', 'ia-recepcion', 'importar-excel-inventario', 'iniciar-sesion',
     'iniciar-sesion-token', 'instalar-actualizacion-ahora', 'marcar-asistencia-manual',
-    'nuevo-producto-sql', 'obtener-clientes', 'obtener-datos-reporte', 'obtener-devoluciones',
+    'nuevo-producto-sql', 'obtener-cierre-caja', 'obtener-clientes', 'obtener-datos-reporte', 'obtener-devoluciones',
     'obtener-estado-plan', 'obtener-facturas', 'obtener-grupos-compatibilidad',
     'obtener-marcas-modelos', 'obtener-ordenes', 'obtener-productos', 'obtener-proveedores-db',
     'obtener-resellers-admin', 'obtener-subcategorias-custom', 'obtener-usuarios',
@@ -27,7 +27,7 @@ const CANALES_SEND = [
 
 const CANALES_ON = [
     'actualizacion-disponible', 'actualizacion-lista', 'asistencia-respuesta',
-    'bitacora-actualizada', 'codigo-creado-exito', 'datos-crm', 'datos-empresa-respuesta',
+    'bitacora-actualizada', 'cierre-caja-respuesta', 'codigo-creado-exito', 'datos-crm', 'datos-empresa-respuesta',
     'datos-reporte', 'devolucion-registrada', 'eliminar-reseller-respuesta',
     'estado-plan-respuesta', 'factura-emitida-exito', 'grupo-compatibilidad-eliminado',
     'grupo-compatibilidad-guardado', 'guardar-reseller-respuesta', 'lista-de-clientes',

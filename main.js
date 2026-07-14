@@ -1975,6 +1975,31 @@ ipcMain.on('obtener-facturas', async (event) => {
     event.reply('lista-de-facturas', data || []);
 });
 
+// === HANDLER: Cierre de Caja (solo lectura) ===
+// Órdenes de HOY (medianoche a medianoche, hora local de la PC del taller) para que el
+// vendedor pueda cuadrar la caja física. Siempre filtra por empresa_id en el servidor.
+ipcMain.on('obtener-cierre-caja', async (event) => {
+    if (rolActual !== 'dueno' && rolActual !== 'vendedor') {
+        return event.reply('cierre-caja-respuesta', { success: false, msg: 'No autorizado' });
+    }
+    try {
+        const inicio = new Date(); inicio.setHours(0, 0, 0, 0);
+        const fin = new Date(); fin.setHours(23, 59, 59, 999);
+        const { data, error } = await supabase
+            .from('ordenes')
+            .select('id, cliente, metodo_pago, costo, adelanto, saldo, created_at')
+            .eq('empresa_id', empresaActual)
+            .gte('created_at', inicio.toISOString())
+            .lte('created_at', fin.toISOString())
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        event.reply('cierre-caja-respuesta', { success: true, data: data || [] });
+    } catch (e) {
+        console.error('Error obteniendo cierre de caja:', e.message);
+        event.reply('cierre-caja-respuesta', { success: false, msg: e.message });
+    }
+});
+
 // === MÓDULO DE DEVOLUCIONES (cliente devuelve un producto vendido) ===
 // facturas.items_json es solo un snapshot de texto {nombre, precio, cantidad, subtotal} —
 // NO tiene producto_id ni sku, así que el vínculo con el producto real de inventario se resuelve
