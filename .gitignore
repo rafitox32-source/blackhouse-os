@@ -2,3 +2,8 @@
 token gibhut.txt
 node_modules/
 dist/
+
+# Carpeta de cosas archivadas/sin uso (ver README dentro). No agregar nada nuevo
+# a git desde aca -- icono/ en particular tiene instaladores/zips pesados que no
+# deben terminar en el historial del repo.
+cosas-que-no-uso/
