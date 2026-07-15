@@ -2167,6 +2167,167 @@ ipcMain.on('actualizar-estado-orden', async (event, data) => {
     event.reply('orden-actualizada', { success: !error });
 });
 
+// === REPUESTOS DE TALLER: descontar piezas de inventario al usarlas en una reparación ===
+// Antes, cuando el técnico ponía una pantalla, la orden guardaba solo el "precio_repuesto"
+// como texto pero el producto real NUNCA salía de productos.stock, así que el inventario no
+// reflejaba las piezas gastadas en reparaciones. Estos handlers cierran ese hueco: cada
+// consumo descuenta stock, deja un movimiento (salida) y queda registrado en orden_repuestos.
+
+// Listar los repuestos ya consumidos por una orden (para mostrarlos en el Laboratorio).
+ipcMain.on('obtener-repuestos-orden', async (event, ordenId) => {
+    try {
+        const { data, error } = await supabase
+            .from('orden_repuestos')
+            .select('*')
+            .eq('orden_id', ordenId)
+            .eq('empresa_id', empresaActual)
+            .order('creado_en', { ascending: false });
+        if (error) throw error;
+        event.reply('lista-repuestos-orden', { success: true, ordenId, repuestos: data || [] });
+    } catch (e) {
+        event.reply('lista-repuestos-orden', { success: false, msg: e.message, repuestos: [] });
+    }
+});
+
+// Consumir un repuesto: valida stock, lo descuenta, registra el movimiento y la traza.
+ipcMain.on('consumir-repuesto-orden', async (event, payload) => {
+    try {
+        const { orden_id, producto_id, cantidad, usuario } = payload || {};
+        const cantidadNum = parseInt(cantidad, 10);
+        if (!orden_id) throw new Error('Primero carga una orden en el Laboratorio.');
+        if (!producto_id) throw new Error('Selecciona un repuesto del inventario.');
+        if (!cantidadNum || cantidadNum <= 0) throw new Error('La cantidad debe ser mayor a 0.');
+
+        // La orden debe existir y pertenecer a esta empresa (evita descontar stock por una
+        // orden de otra empresa mandada desde un renderer manipulado).
+        const { data: orden, error: errOrden } = await supabase.from('ordenes')
+            .select('id')
+            .eq('id', orden_id)
+            .eq('empresa_id', empresaActual)
+            .maybeSingle();
+        if (errOrden) throw errOrden;
+        if (!orden) throw new Error('La orden indicada no pertenece a esta empresa.');
+
+        // Traer el producto real y validar que haya stock suficiente.
+        const { data: prod, error: errProd } = await supabase.from('productos')
+            .select('id, nombre, sku, stock, costo, precio')
+            .eq('id', producto_id)
+            .eq('empresa_id', empresaActual)
+            .single();
+        if (errProd) throw errProd;
+        const stockActual = prod.stock || 0;
+        if (stockActual < cantidadNum) {
+            throw new Error(`Stock insuficiente de "${prod.nombre}". Disponible: ${stockActual}, solicitado: ${cantidadNum}.`);
+        }
+
+        // 1) Descontar stock ANTES de registrar (mismo criterio que registrar-devolucion): si algo
+        //    fallara después, preferimos no dejar un registro que diga haber consumido sin haber
+        //    tocado el stock. Aquí es al revés que la devolución: el stock BAJA.
+        const nuevoStock = stockActual - cantidadNum;
+        const { error: errUpd } = await supabase.from('productos')
+            .update({ stock: nuevoStock })
+            .eq('id', producto_id)
+            .eq('empresa_id', empresaActual);
+        if (errUpd) throw errUpd;
+
+        // 2) Movimiento de stock (salida => cantidad negativa). Se omite solo si el producto no
+        //    tiene SKU (movimientos_stock.sku es NOT NULL), sin bloquear el consumo.
+        if (prod.sku) {
+            const { error: errMov } = await supabase.from('movimientos_stock').insert([{
+                empresa_id: empresaActual,
+                sku: prod.sku,
+                cantidad: -cantidadNum,
+                proveedor: 'CONSUMO TALLER',
+                costo: prod.costo || null,
+                nota: `Repuesto usado en orden #${orden_id}`
+            }]);
+            if (errMov) throw errMov;
+        }
+
+        // 3) Traza orden ↔ pieza (permite listar, reportar y revertir).
+        const { data: repCreado, error: errRep } = await supabase.from('orden_repuestos').insert([{
+            empresa_id: empresaActual,
+            orden_id: orden_id,
+            producto_id: producto_id,
+            sku: prod.sku || null,
+            producto_nombre: prod.nombre,
+            cantidad: cantidadNum,
+            costo_unitario: prod.costo || null,
+            precio_unitario: prod.precio || null,
+            usuario: usuario || null
+        }]).select().single();
+        if (errRep) throw errRep;
+
+        event.reply('repuesto-consumido', {
+            success: true,
+            repuesto: repCreado,
+            nuevoStock,
+            nombre: prod.nombre
+        });
+    } catch (e) {
+        console.error('Error consumiendo repuesto:', e.message);
+        event.reply('repuesto-consumido', { success: false, msg: e.message });
+    }
+});
+
+// Revertir un consumo (el técnico se equivocó o no usó la pieza): reingresa el stock,
+// deja el movimiento inverso y borra la traza.
+ipcMain.on('revertir-repuesto-orden', async (event, payload) => {
+    try {
+        const { repuesto_id } = payload || {};
+        if (!repuesto_id) throw new Error('Falta el repuesto a revertir.');
+
+        // Traer el registro validando empresa.
+        const { data: rep, error: errRep } = await supabase.from('orden_repuestos')
+            .select('*')
+            .eq('id', repuesto_id)
+            .eq('empresa_id', empresaActual)
+            .single();
+        if (errRep) throw errRep;
+
+        // Reingresar el stock si el producto todavía existe.
+        if (rep.producto_id) {
+            const { data: prod, error: errProd } = await supabase.from('productos')
+                .select('id, sku, stock, costo')
+                .eq('id', rep.producto_id)
+                .eq('empresa_id', empresaActual)
+                .maybeSingle();
+            if (errProd) throw errProd;
+            if (prod) {
+                const nuevoStock = (prod.stock || 0) + rep.cantidad;
+                const { error: errUpd } = await supabase.from('productos')
+                    .update({ stock: nuevoStock })
+                    .eq('id', prod.id)
+                    .eq('empresa_id', empresaActual);
+                if (errUpd) throw errUpd;
+
+                if (prod.sku) {
+                    await supabase.from('movimientos_stock').insert([{
+                        empresa_id: empresaActual,
+                        sku: prod.sku,
+                        cantidad: rep.cantidad,
+                        proveedor: 'REVERSION CONSUMO TALLER',
+                        costo: prod.costo || null,
+                        nota: `Reversión de repuesto de la orden #${rep.orden_id}`
+                    }]);
+                }
+            }
+        }
+
+        // Borrar la traza (el reingreso de stock ya quedó como movimiento).
+        const { error: errDel } = await supabase.from('orden_repuestos')
+            .delete()
+            .eq('id', repuesto_id)
+            .eq('empresa_id', empresaActual);
+        if (errDel) throw errDel;
+
+        event.reply('repuesto-revertido', { success: true, orden_id: rep.orden_id });
+    } catch (e) {
+        console.error('Error revirtiendo repuesto:', e.message);
+        event.reply('repuesto-revertido', { success: false, msg: e.message });
+    }
+});
+
 // === HANDLER: Listar usuarios ===
 ipcMain.on('obtener-usuarios', async (event) => {
     const { data } = await supabase

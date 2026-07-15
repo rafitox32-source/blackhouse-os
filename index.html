@@ -1940,11 +1940,34 @@
                             <div class="bh-card" style="margin-bottom:0; padding:20px;">
                                 <h3 style="margin-top:0; font-size:14px; text-transform:uppercase; color:#aaa;"><i
                                         class='bx bx-box'></i> Stock Rápido</h3>
+                                <div id="stock-tec-aviso-orden"
+                                    style="font-size:11px; color:var(--warning); background:rgba(245,158,11,0.08); border-left:3px solid var(--warning); padding:8px 10px; border-radius:6px; margin-bottom:10px;">
+                                    Carga una orden arriba para poder descontar repuestos de stock.
+                                </div>
                                 <input type="text" class="bh-input" placeholder="Buscar pantalla, batería, IC..."
                                     id="search-stock-tec" onkeyup="filtrarStockTecnico()">
 
                                 <div id="stock-resultados-tec"
                                     style="margin-top:15px; max-height:180px; overflow-y:auto;">
+                                </div>
+                            </div>
+
+                            <!-- Repuestos consumidos en la orden cargada (descuento real de inventario) -->
+                            <div class="bh-card" style="margin-bottom:0; padding:20px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                    <h3 style="margin:0; font-size:14px; text-transform:uppercase; color:#aaa;"><i
+                                            class='bx bx-wrench'></i> Repuestos Usados</h3>
+                                    <span id="repuestos-orden-total"
+                                        style="font-size:12px; font-weight:bold; color:var(--success);"></span>
+                                </div>
+                                <div style="font-size:11px; color:#666; margin-bottom:10px;">
+                                    Piezas descontadas de inventario para <span id="repuestos-orden-ref">esta orden</span>.
+                                </div>
+                                <div id="repuestos-orden-lista"
+                                    style="max-height:180px; overflow-y:auto;">
+                                    <div style="color:#555; font-size:11px; padding:12px; text-align:center;">
+                                        Carga una orden para ver sus repuestos.
+                                    </div>
                                 </div>
                             </div>
 
@@ -5839,6 +5862,9 @@
         let seconds = 0;
         let isTimerRunning = false;
 
+        // Orden actualmente cargada en el Laboratorio (para descontar repuestos de su stock).
+        let ordenLabActual = null;
+
         function toggleTimer() {
             const btn = document.getElementById('btn-timer');
             const display = document.getElementById('timer-display');
@@ -5883,9 +5909,16 @@
             ipcRenderer.send('buscar-stock-tecnico', valor);
         }
 
+        // Cache de la última búsqueda de stock (para que el botón "Descontar" recupere el
+        // producto por id sin volver a consultar la BD).
+        let ultimoStockTecnico = {};
+
         ipcRenderer.on('resultados-stock-tecnico', (e, productos) => {
             const contenedor = document.getElementById('stock-resultados-tec');
             if (!contenedor) return;
+
+            ultimoStockTecnico = {};
+            (productos || []).forEach(p => { ultimoStockTecnico[p.id] = p; });
 
             if (!productos || productos.length === 0) {
                 contenedor.innerHTML = `
@@ -5895,23 +5928,118 @@
                 return;
             }
 
-            contenedor.innerHTML = productos.map(p => `
-        <div style="display:flex; justify-content:space-between; align-items:center; 
+            const hayOrden = !!ordenLabActual;
+            contenedor.innerHTML = productos.map(p => {
+                const sinStock = (p.stock || 0) <= 0;
+                const puede = hayOrden && !sinStock;
+                const btnTitulo = !hayOrden
+                    ? 'Carga una orden para descontar'
+                    : (sinStock ? 'Sin stock disponible' : 'Descontar 1 de stock y usar en la orden');
+                return `
+        <div style="display:flex; justify-content:space-between; align-items:center;
                     padding:8px 4px; border-bottom:1px solid rgba(255,255,255,0.04);">
-            <div>
+            <div style="min-width:0;">
                 <div style="font-size:12px; color:white; font-weight:500;">${p.nombre}</div>
                 <div style="font-size:10px; color:#666; margin-top:2px;">${p.categoria || 'Sin categoría'}</div>
             </div>
             <div style="text-align:right; flex-shrink:0; margin-left:8px;">
                 <div style="color:var(--success); font-size:12px; font-weight:bold;">
-                    S/ ${parseFloat(p.precio).toFixed(2)}
+                    S/ ${parseFloat(p.precio || 0).toFixed(2)}
                 </div>
                 <div style="font-size:10px; color:${p.stock > 3 ? '#555' : 'var(--danger)'};">
                     Stock: ${p.stock}
                 </div>
+                <button onclick="consumirRepuestoLab(${p.id})" ${puede ? '' : 'disabled'}
+                    title="${btnTitulo}"
+                    style="margin-top:4px; font-size:10px; padding:3px 8px; border-radius:5px; border:none; cursor:${puede ? 'pointer' : 'not-allowed'}; background:${puede ? 'var(--bh-purple)' : '#333'}; color:${puede ? 'white' : '#777'};">
+                    ➖ Descontar
+                </button>
             </div>
         </div>
-    `).join('');
+    `;
+            }).join('');
+        });
+
+        // Descontar un repuesto de stock y ligarlo a la orden abierta en el Laboratorio.
+        function consumirRepuestoLab(productoId) {
+            if (!ordenLabActual) {
+                return showToast('Primero carga una orden en el Laboratorio', 'warning');
+            }
+            const prod = ultimoStockTecnico[productoId];
+            if (!prod) return showToast('Producto no encontrado, vuelve a buscar', 'danger');
+            if ((prod.stock || 0) <= 0) {
+                return showToast(`Sin stock de "${prod.nombre}"`, 'danger');
+            }
+            ipcRenderer.send('consumir-repuesto-orden', {
+                orden_id: ordenLabActual,
+                producto_id: productoId,
+                cantidad: 1,
+                usuario: localStorage.getItem('userNickname') || ''
+            });
+        }
+
+        // Confirmación del descuento de stock.
+        ipcRenderer.on('repuesto-consumido', (e, res) => {
+            if (res && res.success) {
+                showToast(`Repuesto descontado: ${res.nombre} (stock: ${res.nuevoStock})`, 'success');
+                // Reflejar el nuevo stock en la lista de búsqueda y recargar los repuestos de la orden.
+                if (ultimoStockTecnico[res.repuesto.producto_id]) {
+                    ultimoStockTecnico[res.repuesto.producto_id].stock = res.nuevoStock;
+                }
+                if (ordenLabActual) ipcRenderer.send('obtener-repuestos-orden', ordenLabActual);
+                // Re-disparar el render de la búsqueda para actualizar el stock mostrado.
+                filtrarStockTecnico();
+            } else {
+                showToast('No se pudo descontar: ' + (res && res.msg ? res.msg : 'error'), 'danger');
+            }
+        });
+
+        // Pintar la lista de repuestos consumidos por la orden.
+        ipcRenderer.on('lista-repuestos-orden', (e, res) => {
+            const cont = document.getElementById('repuestos-orden-lista');
+            const totalEl = document.getElementById('repuestos-orden-total');
+            if (!cont) return;
+            const reps = (res && res.repuestos) || [];
+            if (reps.length === 0) {
+                cont.innerHTML = `<div style="color:#555; font-size:11px; padding:12px; text-align:center;">
+                    Aún no se ha descontado ningún repuesto para esta orden.
+                </div>`;
+                if (totalEl) totalEl.textContent = '';
+                return;
+            }
+            let total = 0;
+            cont.innerHTML = reps.map(r => {
+                const sub = (r.cantidad || 0) * parseFloat(r.precio_unitario || 0);
+                total += sub;
+                return `
+        <div style="display:flex; justify-content:space-between; align-items:center;
+                    padding:8px 4px; border-bottom:1px solid rgba(255,255,255,0.04);">
+            <div style="min-width:0;">
+                <div style="font-size:12px; color:white; font-weight:500;">${r.producto_nombre}</div>
+                <div style="font-size:10px; color:#666; margin-top:2px;">x${r.cantidad} · S/ ${sub.toFixed(2)}</div>
+            </div>
+            <button onclick="revertirRepuestoLab(${r.id})" title="Devolver al stock (deshacer)"
+                style="flex-shrink:0; margin-left:8px; font-size:11px; padding:4px 8px; border-radius:5px; border:1px solid var(--danger); cursor:pointer; background:transparent; color:var(--danger);">
+                ↩ Devolver
+            </button>
+        </div>`;
+            }).join('');
+            if (totalEl) totalEl.textContent = 'S/ ' + total.toFixed(2);
+        });
+
+        // Deshacer un consumo: devuelve la pieza al inventario.
+        function revertirRepuestoLab(repuestoId) {
+            ipcRenderer.send('revertir-repuesto-orden', { repuesto_id: repuestoId });
+        }
+
+        ipcRenderer.on('repuesto-revertido', (e, res) => {
+            if (res && res.success) {
+                showToast('Repuesto devuelto al stock', 'success');
+                if (ordenLabActual) ipcRenderer.send('obtener-repuestos-orden', ordenLabActual);
+                filtrarStockTecnico();
+            } else {
+                showToast('No se pudo devolver: ' + (res && res.msg ? res.msg : 'error'), 'danger');
+            }
         });
         // 3. Buscar Orden en el Laboratorio
         function buscarOrdenLab(e) {
@@ -5942,13 +6070,45 @@
                 // Si la orden ya tenía notas previas, las cargamos en la bitácora
                 document.getElementById('lab-bitacora').value = orden.bitacora || '';
 
+                // Habilitar el descuento de repuestos para esta orden y cargar los ya usados.
+                ordenLabActual = orden.id;
+                const aviso = document.getElementById('stock-tec-aviso-orden');
+                if (aviso) {
+                    aviso.style.display = 'none';
+                }
+                const ref = document.getElementById('repuestos-orden-ref');
+                if (ref) ref.textContent = `la orden #${orden.id}`;
+                ipcRenderer.send('obtener-repuestos-orden', orden.id);
+                // Refrescar la búsqueda de stock para habilitar los botones "Descontar".
+                filtrarStockTecnico();
+
                 showToast("Datos cargados correctamente", "success");
             } else {
                 infoPanel.style.display = 'none';
                 document.getElementById('lab-bitacora').value = '';
+                ordenLabActual = null;
+                resetRepuestosLab();
                 showToast("Orden no encontrada", "danger");
             }
         });
+
+        // Limpia el panel de repuestos del Laboratorio (sin orden cargada).
+        function resetRepuestosLab() {
+            const aviso = document.getElementById('stock-tec-aviso-orden');
+            if (aviso) aviso.style.display = 'block';
+            const ref = document.getElementById('repuestos-orden-ref');
+            if (ref) ref.textContent = 'esta orden';
+            const totalEl = document.getElementById('repuestos-orden-total');
+            if (totalEl) totalEl.textContent = '';
+            const lista = document.getElementById('repuestos-orden-lista');
+            if (lista) {
+                lista.innerHTML = `<div style="color:#555; font-size:11px; padding:12px; text-align:center;">
+                    Carga una orden para ver sus repuestos.
+                </div>`;
+            }
+            // Re-render de la búsqueda para deshabilitar los botones "Descontar".
+            if (typeof filtrarStockTecnico === 'function') filtrarStockTecnico();
+        }
 
         // 5. Guardar la Bitácora y cambiar el estado a Reparado
         function guardarReparacionLab() {
@@ -5977,6 +6137,10 @@
             document.getElementById('lab-orden-id').value = '';
             document.getElementById('lab-info-equipo').style.display = 'none';
             document.getElementById('lab-bitacora').value = '';
+
+            // Cerrar la orden activa y limpiar el panel de repuestos.
+            ordenLabActual = null;
+            resetRepuestosLab();
 
             // Desmarcar todos los checkboxes de QC
             document.querySelectorAll('#laboratorio input[type="checkbox"]').forEach(cb => cb.checked = false);
