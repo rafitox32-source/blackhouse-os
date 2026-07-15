@@ -1830,6 +1830,7 @@
                                             onclick="consultarCopilotoLab()">
                                             🧠 Consultar a la IA
                                         </button>
+
                                         <div id="ai-lab-response" class="ai-box"
                                             style="margin-top: 10px; display: none;"></div>
                                     </div>
@@ -1966,9 +1967,12 @@
                                     <i class='bx bx-bolt-circle'></i> Diagnóstico de Consumo
                                 </button>
 
-                                <button class="bh-btn-white" style="width:100%; text-align:left; padding:12px;"
+                                <button class="bh-btn-white" style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
                                     onclick="ipcRenderer.send('abrir-carpeta', 'firmware')"><i class='bx bx-hdd'></i>
                                     Repositorio de Firmware</button>
+                                <button class="bh-btn-white" style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
+                                    onclick="abrirSoftwareAmbicion()"><i class='bx bx-laptop'></i>
+                                    Software</button>
                                 <button id="btn-abrir-chat" class="bh-btn-purple"
                                     style="width:100%;margin-bottom:15px;text-align:left;padding:12px;background:linear-gradient(135deg,#10b981 0%,#047857 100%);position:relative;"
                                     onclick="toggleChat(); limpiarBadgeChat()">
@@ -2526,8 +2530,16 @@
                     <div
                         style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:25px; margin-bottom:30px;">
                         <div class="bh-card" style="text-align:center;">
-                            <div style="color:#aaa; font-size:12px; margin-bottom:5px;">Ingresos</div>
+                            <div style="color:#aaa; font-size:12px; margin-bottom:5px;">Ingresos Totales</div>
                             <h2 id="kpi-ingresos" style="margin:0; font-size:28px;">S/ 0.00</h2>
+                        </div>
+                        <div class="bh-card" style="text-align:center; border: 1px solid rgba(239,68,68,0.2);">
+                            <div style="color:#ef4444; font-size:12px; margin-bottom:5px;">Inversión (Repuestos)</div>
+                            <h2 id="kpi-gastos" style="margin:0; font-size:28px; color: #ef4444;">S/ 0.00</h2>
+                        </div>
+                        <div class="bh-card" style="text-align:center; border: 1px solid rgba(16,185,129,0.2);">
+                            <div style="color:#10b981; font-size:12px; margin-bottom:5px;">Ganancia Neta</div>
+                            <h2 id="kpi-ganancias" style="margin:0; font-size:28px; color: #10b981;">S/ 0.00</h2>
                         </div>
                         <div class="bh-card" style="text-align:center;">
                             <div style="color:#aaa; font-size:12px; margin-bottom:5px;">Órdenes</div>
@@ -3505,7 +3517,7 @@
                         <label style="color:var(--text-muted); font-size:11px;">Stock Actual</label>
                         <div style="display:flex; gap:10px; align-items:center;">
                             <div id="det-stock" style="background:#222; padding:8px; border-radius:6px; font-weight:bold; color:var(--success); flex:1;">-</div>
-                            <button class="bh-btn-white" style="padding:6px; font-size:11px;" onclick="toggleAjusteStock()">Ajustar</button>
+                            <button id="btn-ajustar-stock-modal" class="bh-btn-white" style="padding:6px; font-size:11px;" onclick="toggleAjusteStock()">Ajustar</button>
                         </div>
                     </div>
                     
@@ -4892,6 +4904,8 @@
         ipcRenderer.on('datos-reporte', (e, data) => {
             try {
                 if (document.getElementById('kpi-ingresos')) document.getElementById('kpi-ingresos').innerText = `S/ ${data.totalIngresos.toFixed(2)}`;
+                if (document.getElementById('kpi-gastos')) document.getElementById('kpi-gastos').innerText = `S/ ${(data.totalGastos || 0).toFixed(2)}`;
+                if (document.getElementById('kpi-ganancias')) document.getElementById('kpi-ganancias').innerText = `S/ ${(data.totalGanancias || 0).toFixed(2)}`;
                 if (document.getElementById('kpi-ordenes')) document.getElementById('kpi-ordenes').innerText = data.totalOrdenes;
                 if (document.getElementById('kpi-reparados')) document.getElementById('kpi-reparados').innerText = data.totalReparados;
                 if (document.getElementById('revenueChart') && typeof Chart !== 'undefined') {
@@ -5906,13 +5920,49 @@
                 <div style="color:var(--success); font-size:12px; font-weight:bold;">
                     S/ ${parseFloat(p.precio).toFixed(2)}
                 </div>
-                <div style="font-size:10px; color:${p.stock > 3 ? '#555' : 'var(--danger)'};">
+                <div style="font-size:10px; color:${p.stock > 0 ? '#555' : 'var(--danger)'};">
                     Stock: ${p.stock}
                 </div>
+                ${p.stock > 0 ? `<button class="bh-btn-white" style="padding:2px 6px; font-size:10px; margin-top:4px;" onclick="usarRepuestoLab('${p.id}', '${p.sku || ''}', '${p.nombre.replace(/'/g, "\\'")}', ${p.precio})">Usar</button>` : ''}
             </div>
         </div>
     `).join('');
         });
+
+        // 3.1 Función para Usar Repuesto en Laboratorio
+        function usarRepuestoLab(productoId, sku, nombre, precio) {
+            let idVal = document.getElementById('lab-orden-id').value.trim();
+            idVal = idVal.replace('#', '').replace(/^0+/, '');
+
+            if (!idVal) {
+                return showToast("Debes cargar una orden en curso primero para usar repuestos", "warning");
+            }
+
+            if (confirm(`¿Estás seguro de descontar 1 unidad de "${nombre}" y agregarlo a la orden #${idVal}?`)) {
+                ipcRenderer.send('usar-repuesto-lab', {
+                    ordenId: idVal,
+                    productoId,
+                    sku,
+                    nombre,
+                    precio
+                });
+            }
+        }
+
+        ipcRenderer.on('repuesto-usado-lab', (e, res) => {
+            if (res.success) {
+                showToast(`Repuesto usado correctamente`, "success");
+                // Actualizar bitácora local
+                let bitacoraElement = document.getElementById('lab-bitacora');
+                bitacoraElement.value = bitacoraElement.value + (bitacoraElement.value ? '\n' : '') + `✅ Repuesto utilizado: ${res.nombre} (S/ ${res.precio})`;
+                
+                // Refrescar lista de stock en UI
+                filtrarStockTecnico();
+            } else {
+                showToast(res.msg || "Error al usar repuesto", "danger");
+            }
+        });
+
         // 3. Buscar Orden en el Laboratorio
         function buscarOrdenLab(e) {
             // Si presiona la tecla Enter (código 13)
@@ -5980,6 +6030,11 @@
 
             // Desmarcar todos los checkboxes de QC
             document.querySelectorAll('#laboratorio input[type="checkbox"]').forEach(cb => cb.checked = false);
+        }
+
+        function abrirSoftwareAmbicion() {
+            showToast("Abriendo sesión de software...", "info");
+            ipcRenderer.send('abrir-ambicion');
         }
 
         // Escuchar confirmación de guardado
@@ -8262,8 +8317,16 @@
             document.getElementById('form-ajuste-stock').style.display = 'none';
             document.getElementById('btn-guardar-detalle').disabled = true;
 
+            // Ocultar botón de ajustar si no es dueño
+            if (localStorage.getItem('userRol') !== 'dueno') {
+                if(document.getElementById('btn-ajustar-stock-modal')) document.getElementById('btn-ajustar-stock-modal').style.display = 'none';
+            } else {
+                if(document.getElementById('btn-ajustar-stock-modal')) document.getElementById('btn-ajustar-stock-modal').style.display = 'inline-block';
+            }
+
             document.getElementById('det-historial-body').innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:#777;">Cargando historial...</td></tr>`;
             document.getElementById('modal-detalle-producto').style.display = 'flex';
+
 
             cargarHistorialDetalle();
         }

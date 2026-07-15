@@ -90,6 +90,7 @@ function prepararPlantillasInventario() {
 let mainWindow = null;
 let empresaActual = null;
 let rolActual = null;
+let usuarioActual = null;
 const otpMemoryCache = new Map(); // Fallback en memoria si faltan columnas de base de datos
 
 function createWindow() {
@@ -293,6 +294,7 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
         // Establecer las variables de estado global de la sesión en el main.js
         empresaActual = users.empresa_id;
         rolActual = users.rol;
+        usuarioActual = users.usuario;
 
         let sessionToken = null;
         if (data.recordar) {
@@ -363,6 +365,7 @@ ipcMain.on('iniciar-sesion-token', async (event, data) => {
 
         empresaActual = users.empresa_id;
         rolActual = users.rol;
+        usuarioActual = users.usuario;
 
         // Rotamos el token en cada login automático (mitiga robo/reuso del token guardado)
         const nuevoToken = await emitirTokenSesion(users.id);
@@ -400,6 +403,7 @@ ipcMain.on('cerrar-sesion-token', async (event, data) => {
     // los datos de la empresa/rol de la sesión que se acababa de cerrar.
     empresaActual = null;
     rolActual = null;
+    usuarioActual = null;
 });
 
 // === 2.1 VERIFICACIÓN DE 2FA (SEGUNDO PASO DE ACCESO) ===
@@ -475,6 +479,7 @@ ipcMain.on('verificar-2fa', async (event, data) => {
         // Establecemos el estado de la sesión actual en el main.js
         empresaActual = userPayload.empresa_id;
         rolActual = userPayload.rol;
+        usuarioActual = userPayload.usuario;
 
         console.log(`🔒 [2FA] Verificación exitosa para el usuario: ${usuario}`);
 
@@ -502,6 +507,7 @@ ipcMain.on('verificar-2fa', async (event, data) => {
 ipcMain.on('guardar-cliente', async (event, cliente) => {
     try {
         cliente.empresa_id = empresaActual;
+        cliente.tecnico_id = usuarioActual;
         const { error } = await supabase.from('clientes').insert([cliente]);
         if (error) throw error;
         event.reply('resultado-cliente', { success: true, msg: 'Cliente guardado' });
@@ -509,10 +515,15 @@ ipcMain.on('guardar-cliente', async (event, cliente) => {
 });
 
 ipcMain.on('obtener-clientes', async (event) => {
-    const { data } = await supabase.from('clientes')
+    let query = supabase.from('clientes')
         .select('*')
-        .eq('empresa_id', empresaActual)
-        .order('id', { ascending: false });
+        .eq('empresa_id', empresaActual);
+        
+    if (rolActual === 'tecnico') {
+        query = query.eq('tecnico_id', usuarioActual);
+    }
+    
+    const { data } = await query.order('id', { ascending: false });
     event.reply('lista-de-clientes', data || []);
 });
 
@@ -1231,6 +1242,7 @@ ipcMain.handle('actualizar-producto-detalle', async (event, params) => {
 });
 
 ipcMain.handle('ajustar-stock-manual', async (event, params) => {
+    if (rolActual !== 'dueno') throw new Error("Solo el administrador puede ajustar el stock manualmente.");
     const { id, sku, nuevoStock, cantidadDiferencia, motivo } = params;
     if (nuevoStock < 0) throw new Error("El stock no puede ser negativo.");
 
@@ -1265,6 +1277,7 @@ ipcMain.on('guardar-orden', async (event, orden) => {
         const { data, error } = await supabase.from('ordenes').insert([{
             ...orden,
             empresa_id: empresaActual,
+            tecnico_id: usuarioActual,
             costo: parseFloat(orden.costo),
             precio_repuesto: parseFloat(orden.precio_repuesto),
             precio_servicio: parseFloat(orden.precio_servicio),
@@ -1280,23 +1293,34 @@ ipcMain.on('guardar-orden', async (event, orden) => {
 });
 
 ipcMain.on('obtener-ordenes', async (event) => {
-    const { data } = await supabase.from('ordenes')
+    let query = supabase.from('ordenes')
         .select('*')
-        .eq('empresa_id', empresaActual)
-        .order('id', { ascending: false });
+        .eq('empresa_id', empresaActual);
+        
+    if (rolActual === 'tecnico') {
+        query = query.eq('tecnico_id', usuarioActual);
+    }
+    
+    const { data } = await query.order('id', { ascending: false });
     event.reply('lista-de-ordenes', data || []);
 });
 
 // === 6. REPORTES (SUMA SOLO EL DINERO DE MI EMPRESA) ===
 ipcMain.on('obtener-datos-reporte', async (event) => {
-    const { data, error } = await supabase.from('ordenes')
-        .select('costo, adelanto, estado, created_at')
-        .eq('empresa_id', empresaActual)
-        .order('created_at', { ascending: true });
+    let query = supabase.from('ordenes')
+        .select('costo, adelanto, estado, created_at, precio_repuesto, precio_servicio')
+        .eq('empresa_id', empresaActual);
+        
+    if (rolActual === 'tecnico') {
+        query = query.eq('tecnico_id', usuarioActual);
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) console.error('Error obteniendo datos de reporte:', error.message);
 
     let total = 0, reparados = 0;
+    let totalGastos = 0, totalGanancias = 0;
     const ingresosPorDia = {}; // { 'dd/mm/aaaa': monto }
 
     if (data) {
@@ -1309,6 +1333,12 @@ ipcMain.on('obtener-datos-reporte', async (event) => {
                 ? parseFloat(o.costo || 0)
                 : parseFloat(o.adelanto || 0);
             total += ingreso;
+            
+            // Calculo de gastos y ganancias
+            if (o.estado === 'Entregado') {
+                totalGastos += parseFloat(o.precio_repuesto || 0);
+                totalGanancias += parseFloat(o.precio_servicio || 0);
+            }
 
             if (o.estado === 'Completado' || o.estado === 'Entregado') reparados++;
 
@@ -1321,6 +1351,8 @@ ipcMain.on('obtener-datos-reporte', async (event) => {
 
     event.reply('datos-reporte', {
         totalIngresos: total,
+        totalGastos: totalGastos,
+        totalGanancias: totalGanancias,
         totalOrdenes: data ? data.length : 0,
         totalReparados: reparados,
         // Serie real por día (antes era un único punto ficticio ['Ventas'])
@@ -1925,6 +1957,83 @@ ipcMain.on('buscar-stock-tecnico', async (event, valor) => {
         event.reply('resultados-stock-tecnico', data || []);
     } catch {
         event.reply('resultados-stock-tecnico', []);
+    }
+});
+
+ipcMain.on('abrir-ambicion', (event) => {
+    try {
+        const ambicionPath = path.join(__dirname, 'software', 'ambicion', 'ambicion.exe');
+        if (fs.existsSync(ambicionPath)) {
+            const { spawn } = require('child_process');
+            spawn(ambicionPath, [], { detached: true, stdio: 'ignore' }).unref();
+        } else {
+            console.error("No se encontró el ejecutable de Ambicion en:", ambicionPath);
+        }
+    } catch (err) {
+        console.error("Error abriendo Ambicion:", err);
+    }
+});
+
+ipcMain.on('usar-repuesto-lab', async (event, params) => {
+    try {
+        const { ordenId, productoId, sku, nombre, precio } = params;
+
+        // 1. Verificar y descontar stock
+        const { data: prodData, error: errProd } = await supabase
+            .from('productos')
+            .select('stock, costo')
+            .eq('id', productoId)
+            .single();
+
+        if (errProd || !prodData) throw new Error("Producto no encontrado");
+        if (prodData.stock <= 0) throw new Error("Stock insuficiente");
+
+        const nuevoStock = prodData.stock - 1;
+        const { error: errUpdateProd } = await supabase
+            .from('productos')
+            .update({ stock: nuevoStock })
+            .eq('id', productoId);
+            
+        if (errUpdateProd) throw new Error("Error al actualizar stock");
+
+        // 2. Registrar movimiento de stock
+        await supabase.from('movimientos_stock').insert([{
+            empresa_id: empresaActual,
+            producto_id: productoId,
+            sku: sku || 'S/N',
+            tipo: 'SALIDA',
+            cantidad: 1,
+            origen: 'Uso en laboratorio',
+            motivo: `Orden #${ordenId}`,
+            usuario: usuarioActual
+        }]);
+
+        // 3. Actualizar la Orden
+        const { data: ordenData, error: errOrden } = await supabase
+            .from('ordenes')
+            .select('*')
+            .eq('id', ordenId)
+            .eq('empresa_id', empresaActual)
+            .single();
+
+        if (!errOrden && ordenData) {
+            const nuevaBitacora = (ordenData.bitacora || '') + (ordenData.bitacora ? '\n' : '') + `✅ Repuesto utilizado: ${nombre} (S/ ${precio})`;
+            const nuevoPrecioRepuesto = (parseFloat(ordenData.precio_repuesto) || 0) + parseFloat(precio);
+            const nuevoCosto = (parseFloat(ordenData.costo) || 0) + parseFloat(precio);
+            const nuevoSaldo = (parseFloat(ordenData.saldo) || 0) + parseFloat(precio);
+            
+            await supabase.from('ordenes').update({
+                bitacora: nuevaBitacora,
+                precio_repuesto: nuevoPrecioRepuesto,
+                costo: nuevoCosto,
+                saldo: nuevoSaldo
+            }).eq('id', ordenId);
+        }
+
+        event.reply('repuesto-usado-lab', { success: true, nombre, precio });
+
+    } catch (err) {
+        event.reply('repuesto-usado-lab', { success: false, msg: err.message });
     }
 });
 
