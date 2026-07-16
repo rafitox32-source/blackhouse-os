@@ -1665,7 +1665,11 @@ ipcMain.on('emitir-factura-saas', async (event, data) => {
         event.reply('factura-emitida-exito', { numero: numeroFinal, tipo: data.tipo });
 
     } catch (err) {
+        // Antes este catch solo hacía console.error y NO respondía al renderer, así que si el
+        // guardado fallaba la UI se quedaba muda ("no genera nada" sin ningún aviso). Ahora
+        // avisamos del error para que el usuario sepa qué pasó.
         console.error("Error al emitir comprobante:", err);
+        event.reply('factura-emitida-error', { msg: err.message });
     }
 });
 
