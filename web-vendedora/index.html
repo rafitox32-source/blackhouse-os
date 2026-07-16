@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Ventas · BlackHouse</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- ===================== LOGIN ===================== -->
+  <section id="pantalla-login" class="pantalla activa">
+    <div class="login-card">
+      <div class="logo">🛒</div>
+      <h1>Punto de Venta</h1>
+      <p class="sub">Ingresa con tu usuario de vendedora</p>
+      <form id="form-login" autocomplete="off">
+        <label>Usuario
+          <input id="in-usuario" type="text" inputmode="text" autocapitalize="none" required />
+        </label>
+        <label>Contraseña
+          <input id="in-password" type="password" required />
+        </label>
+        <button type="submit" class="btn-primario" id="btn-login">Entrar</button>
+        <p id="login-error" class="error" hidden></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===================== POS PRINCIPAL ===================== -->
+  <section id="pantalla-pos" class="pantalla">
+    <header class="barra-superior">
+      <div class="usuario-info">
+        <span class="hola">Hola,</span>
+        <strong id="lbl-nombre">…</strong>
+      </div>
+      <div class="acciones-top">
+        <button id="btn-cierre" class="btn-icono" title="Cierre de caja">📊</button>
+        <button id="btn-salir" class="btn-icono" title="Salir">⏻</button>
+      </div>
+    </header>
+
+    <div class="buscador-wrap">
+      <input id="in-buscar" type="search" placeholder="Buscar producto…" autocomplete="off" />
+      <button id="btn-nuevo-libre" class="btn-libre" title="Vender algo que no tengo en stock">+ No tengo en stock</button>
+    </div>
+
+    <div id="lista-productos" class="lista-productos"></div>
+
+    <!-- Carrito (barra inferior + panel expandible) -->
+    <div id="carrito-barra" class="carrito-barra" hidden>
+      <button id="btn-ver-carrito" class="carrito-resumen">
+        <span class="carrito-count" id="carrito-count">0</span>
+        <span>Ver venta</span>
+        <span class="carrito-total" id="carrito-total">$0</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ===================== PANEL CARRITO ===================== -->
+  <section id="panel-carrito" class="modal">
+    <div class="modal-contenido hoja">
+      <div class="modal-head">
+        <h2>Venta actual</h2>
+        <button class="btn-cerrar" data-cerrar="panel-carrito">✕</button>
+      </div>
+      <div id="carrito-items" class="carrito-items"></div>
+      <div class="pago-wrap">
+        <label>Medio de pago
+          <select id="sel-pago">
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="tarjeta">Tarjeta</option>
+            <option value="otro">Otro</option>
+          </select>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <div class="gran-total">
+          <span>Total</span>
+          <strong id="panel-total">$0</strong>
+        </div>
+        <button id="btn-cobrar" class="btn-primario grande">Cobrar</button>
+        <button id="btn-vaciar" class="btn-texto">Vaciar</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== MODAL PRODUCTO LIBRE ===================== -->
+  <section id="modal-libre" class="modal">
+    <div class="modal-contenido">
+      <div class="modal-head">
+        <h2>Producto que no tengo en stock</h2>
+        <button class="btn-cerrar" data-cerrar="modal-libre">✕</button>
+      </div>
+      <p class="ayuda">No modifica tu inventario. Queda guardado para venderlo la próxima vez.</p>
+      <form id="form-libre">
+        <label>Nombre del producto
+          <input id="libre-nombre" type="text" placeholder="Ej: Chip" required />
+        </label>
+        <label>Precio de venta
+          <input id="libre-precio" type="number" inputmode="decimal" min="0" step="any" placeholder="0" required />
+        </label>
+        <button type="submit" class="btn-primario">Agregar a la venta</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===================== MODAL CIERRE DE CAJA ===================== -->
+  <section id="modal-cierre" class="modal">
+    <div class="modal-contenido hoja">
+      <div class="modal-head">
+        <h2>Cierre de caja</h2>
+        <button class="btn-cerrar" data-cerrar="modal-cierre">✕</button>
+      </div>
+      <div id="cierre-cuerpo" class="cierre-cuerpo">
+        <p class="cargando">Calculando…</p>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-confirmar-cierre" class="btn-primario grande">Cerrar caja del día</button>
+        <button id="btn-imprimir-cierre" class="btn-texto">Compartir / Imprimir</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Aviso flotante (toast) -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
