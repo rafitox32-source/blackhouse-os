@@ -2014,8 +2014,16 @@
                     </div>
                     <div class="bh-card">
                         <div class="grid-inputs">
-                            <div class="input-group"><label>Cliente</label><input type="text" id="cli" class="bh-input"
-                                    placeholder="Buscar o crear cliente..."></div>
+                            <div class="input-group" style="position:relative;">
+                                <label>Cliente</label>
+                                <input type="text" id="cli" class="bh-input" autocomplete="off"
+                                    placeholder="Buscar o crear cliente..."
+                                    oninput="buscarClienteRecepcion(this.value)"
+                                    onfocus="buscarClienteRecepcion(this.value)">
+                                <div id="cli-sugerencias"
+                                    style="display:none; position:absolute; top:100%; left:0; right:0; z-index:50; background:#1a1a1a; border:1px solid var(--bh-purple); border-top:none; border-radius:0 0 8px 8px; max-height:220px; overflow-y:auto; box-shadow:0 8px 20px rgba(0,0,0,0.5);">
+                                </div>
+                            </div>
                             <div class="input-group"><label>Teléfono (WhatsApp)</label><input type="text" id="tel"
                                     class="bh-input" placeholder="Ej: 999888777"></div>
                             <div class="input-group">
@@ -4264,6 +4272,9 @@
             document.querySelectorAll('.view').forEach(v => { v.classList.remove('active'); v.style.display = 'none'; });
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             if (id === 'clientes-view' && !window.isDemoMode) ipcRenderer.send('obtener-clientes');
+            // Recepción también necesita la lista de clientes para el autocompletado (reutilizar
+            // un cliente que ya vino antes, aunque sea para otro trabajo distinto).
+            if (id === 'recepcion' && !window.isDemoMode) ipcRenderer.send('obtener-clientes');
             const target = document.getElementById(id);
             if (target) { target.style.display = 'block'; setTimeout(() => target.classList.add('active'), 10); }
             if (el) el.classList.add('active');
@@ -4985,11 +4996,69 @@
             else { body.innerHTML = rows.map(c => `<tr><td>${c.nombre}</td><td>${c.ultima_visita || '-'}</td><td><button class="bh-btn-white">Enviar Promo</button></td></tr>`).join(''); }
         });
 
+        // Cache de clientes de la empresa, para el autocompletado en Recepción.
+        let todosLosClientes = [];
+
         ipcRenderer.on('lista-de-clientes', (e, rows) => {
+            todosLosClientes = rows || [];
             const tbody = document.getElementById('tabla-clientes');
             if (!tbody) return;
             if (!rows || rows.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No hay clientes.</td></tr>'; }
             else { tbody.innerHTML = rows.map(c => `<tr><td style="font-weight:bold; color:white;">${c.nombre || 'Sin Nombre'}</td><td>${c.telefono || '-'}</td><td>${c.email || '-'}</td><td><button class="bh-btn-white" onclick="window.open('https://wa.me/51${c.telefono}')">WhatsApp 💬</button></td></tr>`).join(''); }
+        });
+
+        // === Autocompletado de cliente en Recepción ===
+        // Permite reutilizar un cliente que ya vino antes (aunque sea para otro trabajo distinto):
+        // busca por nombre o teléfono y al elegirlo rellena nombre + teléfono.
+        function buscarClienteRecepcion(valor) {
+            const cont = document.getElementById('cli-sugerencias');
+            if (!cont) return;
+            const q = (valor || '').trim().toLowerCase();
+            if (q.length < 1) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+
+            const matches = todosLosClientes.filter(c =>
+                (c.nombre || '').toLowerCase().includes(q) ||
+                (c.telefono || '').toLowerCase().includes(q)
+            ).slice(0, 8);
+
+            if (matches.length === 0) {
+                cont.innerHTML = `<div style="padding:10px 12px; font-size:12px; color:#666;">
+                    Sin coincidencias — se creará como cliente nuevo.
+                </div>`;
+                cont.style.display = 'block';
+                return;
+            }
+
+            cont.innerHTML = matches.map(c => {
+                const nombre = (c.nombre || 'Sin nombre').replace(/'/g, "\\'");
+                const tel = (c.telefono || '').replace(/'/g, "\\'");
+                return `
+                <div onclick="seleccionarClienteRecepcion('${nombre}', '${tel}')"
+                    style="padding:10px 12px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;"
+                    onmouseover="this.style.background='rgba(124,58,237,0.15)'"
+                    onmouseout="this.style.background='transparent'">
+                    <span style="color:white; font-size:13px; font-weight:500;">${c.nombre || 'Sin nombre'}</span>
+                    <span style="color:#888; font-size:12px;">📞 ${c.telefono || '-'}</span>
+                </div>`;
+            }).join('');
+            cont.style.display = 'block';
+        }
+
+        function seleccionarClienteRecepcion(nombre, telefono) {
+            document.getElementById('cli').value = nombre;
+            if (telefono) document.getElementById('tel').value = telefono;
+            const cont = document.getElementById('cli-sugerencias');
+            if (cont) { cont.style.display = 'none'; cont.innerHTML = ''; }
+            showToast('Cliente seleccionado: ' + nombre, 'success');
+        }
+
+        // Cerrar el desplegable de sugerencias al hacer clic fuera.
+        document.addEventListener('click', (e) => {
+            const cont = document.getElementById('cli-sugerencias');
+            const input = document.getElementById('cli');
+            if (cont && cont.style.display === 'block' && e.target !== input && !cont.contains(e.target)) {
+                cont.style.display = 'none';
+            }
         });
 
         ipcRenderer.on('lista-de-usuarios', (e, rows) => {
