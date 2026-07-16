@@ -1277,7 +1277,10 @@ ipcMain.on('guardar-orden', async (event, orden) => {
         const { data, error } = await supabase.from('ordenes').insert([{
             ...orden,
             empresa_id: empresaActual,
-            tecnico_id: usuarioActual,
+            // El técnico responsable se elige en Recepción (orden.tecnico_id). Antes se ponía
+            // siempre usuarioActual (quien crea la orden, normalmente el dueño/vendedor), así que
+            // el técnico que repara nunca quedaba asignado y no le aparecía en su listado.
+            tecnico_id: orden.tecnico_id || null,
             costo: parseFloat(orden.costo),
             precio_repuesto: parseFloat(orden.precio_repuesto),
             precio_servicio: parseFloat(orden.precio_servicio),
@@ -1303,6 +1306,31 @@ ipcMain.on('obtener-ordenes', async (event) => {
     
     const { data } = await query.order('id', { ascending: false });
     event.reply('lista-de-ordenes', data || []);
+});
+
+// Lista de técnicos de la empresa (para los desplegables de asignación en Recepción y Taller).
+ipcMain.on('obtener-tecnicos', async (event) => {
+    const { data } = await supabase.from('usuarios')
+        .select('usuario, nombre_completo')
+        .eq('empresa_id', empresaActual)
+        .eq('rol', 'tecnico')
+        .order('usuario');
+    event.reply('lista-de-tecnicos', data || []);
+});
+
+// Asignar / reasignar el técnico responsable de una orden (desde la tabla de Control de Taller).
+ipcMain.on('asignar-tecnico-orden', async (event, data) => {
+    try {
+        const tecnico = (data && data.tecnico) ? data.tecnico : null; // '' => desasignar
+        const { error } = await supabase.from('ordenes')
+            .update({ tecnico_id: tecnico })
+            .eq('id', data.id)
+            .eq('empresa_id', empresaActual);
+        if (error) throw error;
+        event.reply('tecnico-asignado', { success: true, id: data.id, tecnico });
+    } catch (e) {
+        event.reply('tecnico-asignado', { success: false, msg: e.message });
+    }
 });
 
 // === 6. REPORTES (SUMA SOLO EL DINERO DE MI EMPRESA) ===
@@ -2001,16 +2029,19 @@ ipcMain.on('usar-repuesto-lab', async (event, params) => {
         if (errUpdateProd) throw new Error("Error al actualizar stock");
 
         // 2. Registrar movimiento de stock
-        await supabase.from('movimientos_stock').insert([{
+        // (Antes este insert usaba columnas que NO existen en movimientos_stock —producto_id,
+        //  tipo, origen, motivo, usuario— así que el movimiento nunca se guardaba y el stock
+        //  quedaba sin historial. Se corrige a las columnas reales: sku/cantidad/proveedor/costo/nota.
+        //  Salida => cantidad negativa, igual que el resto del sistema.)
+        const { error: errMov } = await supabase.from('movimientos_stock').insert([{
             empresa_id: empresaActual,
-            producto_id: productoId,
             sku: sku || 'S/N',
-            tipo: 'SALIDA',
-            cantidad: 1,
-            origen: 'Uso en laboratorio',
-            motivo: `Orden #${ordenId}`,
-            usuario: usuarioActual
+            cantidad: -1,
+            proveedor: 'CONSUMO TALLER',
+            costo: prodData.costo || null,
+            nota: `Repuesto usado en orden #${ordenId} - ${nombre}`
         }]);
+        if (errMov) console.error('No se pudo registrar el movimiento de stock:', errMov.message);
 
         // 3. Actualizar la Orden
         const { data: ordenData, error: errOrden } = await supabase
