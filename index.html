@@ -5628,6 +5628,69 @@
         // ================= MÓDULO DE FACTURACIÓN =================
         let ordenAFacturar = null;
 
+        // Convierte un monto a su representación en letras (español), estilo comprobante:
+        // "SON: CIENTO VEINTE CON 50/100 SOLES". Esta función se usaba en el generador de
+        // facturas pero NUNCA estaba definida: al llamarla lanzaba ReferenceError y abortaba
+        // la generación del documento (el registro sí se guardaba en la BD, pero no se
+        // generaba/descargaba nada). Definirla arregla ese "se llena todo pero no genera nada".
+        function numeroALetras(monto, moneda) {
+            monto = parseFloat(monto) || 0;
+            const negativo = monto < 0;
+            monto = Math.abs(monto);
+
+            const entero = Math.floor(monto);
+            const centavos = Math.round((monto - entero) * 100);
+
+            const UNIDADES = ['', 'UNO', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE',
+                'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE',
+                'VEINTE'];
+            const DECENAS = ['', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+            const CENTENAS = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS',
+                'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+
+            function menorDeCien(n) {
+                if (n <= 20) return UNIDADES[n];
+                if (n < 30) return 'VEINTI' + UNIDADES[n - 20];
+                const d = Math.floor(n / 10);
+                const u = n % 10;
+                return DECENAS[d] + (u ? ' Y ' + UNIDADES[u] : '');
+            }
+
+            function menorDeMil(n) {
+                if (n === 0) return '';
+                if (n === 100) return 'CIEN';
+                const c = Math.floor(n / 100);
+                const resto = n % 100;
+                const centTxt = CENTENAS[c];
+                const restoTxt = menorDeCien(resto);
+                return (centTxt + (restoTxt ? ' ' + restoTxt : '')).trim();
+            }
+
+            function convertir(n) {
+                if (n === 0) return 'CERO';
+                let txt = '';
+                const millones = Math.floor(n / 1000000);
+                const miles = Math.floor((n % 1000000) / 1000);
+                const resto = n % 1000;
+
+                if (millones) {
+                    txt += (millones === 1 ? 'UN MILLÓN' : menorDeMil(millones) + ' MILLONES') + ' ';
+                }
+                if (miles) {
+                    txt += (miles === 1 ? 'MIL' : menorDeMil(miles) + ' MIL') + ' ';
+                }
+                if (resto) {
+                    txt += menorDeMil(resto);
+                }
+                return txt.trim();
+            }
+
+            const monedaTxt = (moneda === '$' || moneda === 'USD') ? 'DÓLARES AMERICANOS' : 'SOLES';
+            const letras = convertir(entero);
+            const centTxt = String(centavos).padStart(2, '0');
+            return `${negativo ? 'MENOS ' : ''}SON: ${letras} CON ${centTxt}/100 ${monedaTxt}`;
+        }
+
         function abrirModalFacturacion(idOrden, nombreCliente, costo) {
             ordenAFacturar = idOrden;
 
@@ -5891,7 +5954,12 @@
             }]);
         }
 
+        ipcRenderer.on('factura-emitida-error', (e, res) => {
+            showToast('No se pudo generar el comprobante: ' + ((res && res.msg) || 'error'), 'danger');
+        });
+
         ipcRenderer.on('factura-emitida-exito', (e, res) => {
+          try {
             document.getElementById('modal-facturacion').style.display = 'none';
 
             const appName = localStorage.getItem('appName') || 'BlackHouse OS';
@@ -6006,6 +6074,10 @@
                     showToast('Librería de exportación no disponible.', 'error');
                 }
             }, 800);
+          } catch (err) {
+            console.error('Error al renderizar el comprobante:', err);
+            showToast('Error al generar el comprobante: ' + err.message, 'danger');
+          }
         });
         // Lógica del cronómetro del técnico
         let timerInterval;
