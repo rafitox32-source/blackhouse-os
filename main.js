@@ -90,6 +90,7 @@ function prepararPlantillasInventario() {
 let mainWindow = null;
 let empresaActual = null;
 let rolActual = null;
+let usuarioActual = null; // usuario (login) de la sesión activa; se usa para filtrar el taller por técnico
 const otpMemoryCache = new Map(); // Fallback en memoria si faltan columnas de base de datos
 
 function createWindow() {
@@ -293,6 +294,7 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
         // Establecer las variables de estado global de la sesión en el main.js
         empresaActual = users.empresa_id;
         rolActual = users.rol;
+        usuarioActual = users.usuario;
 
         let sessionToken = null;
         if (data.recordar) {
@@ -363,6 +365,7 @@ ipcMain.on('iniciar-sesion-token', async (event, data) => {
 
         empresaActual = users.empresa_id;
         rolActual = users.rol;
+        usuarioActual = users.usuario;
 
         // Rotamos el token en cada login automático (mitiga robo/reuso del token guardado)
         const nuevoToken = await emitirTokenSesion(users.id);
@@ -400,6 +403,7 @@ ipcMain.on('cerrar-sesion-token', async (event, data) => {
     // los datos de la empresa/rol de la sesión que se acababa de cerrar.
     empresaActual = null;
     rolActual = null;
+    usuarioActual = null;
 });
 
 // === 2.1 VERIFICACIÓN DE 2FA (SEGUNDO PASO DE ACCESO) ===
@@ -475,6 +479,7 @@ ipcMain.on('verificar-2fa', async (event, data) => {
         // Establecemos el estado de la sesión actual en el main.js
         empresaActual = userPayload.empresa_id;
         rolActual = userPayload.rol;
+        usuarioActual = userPayload.usuario;
 
         console.log(`🔒 [2FA] Verificación exitosa para el usuario: ${usuario}`);
 
@@ -1280,11 +1285,43 @@ ipcMain.on('guardar-orden', async (event, orden) => {
 });
 
 ipcMain.on('obtener-ordenes', async (event) => {
-    const { data } = await supabase.from('ordenes')
+    let query = supabase.from('ordenes')
         .select('*')
-        .eq('empresa_id', empresaActual)
-        .order('id', { ascending: false });
+        .eq('empresa_id', empresaActual);
+
+    // Separación por técnico: un técnico solo ve las órdenes que le fueron asignadas.
+    // El dueño y el vendedor siguen viendo todas las de la empresa.
+    if (rolActual === 'tecnico') {
+        query = query.eq('tecnico_asignado', usuarioActual);
+    }
+
+    const { data } = await query.order('id', { ascending: false });
     event.reply('lista-de-ordenes', data || []);
+});
+
+// Lista de técnicos de la empresa (para los desplegables de asignación en Recepción y Taller).
+ipcMain.on('obtener-tecnicos', async (event) => {
+    const { data } = await supabase.from('usuarios')
+        .select('usuario, nombre_completo')
+        .eq('empresa_id', empresaActual)
+        .eq('rol', 'tecnico')
+        .order('usuario');
+    event.reply('lista-de-tecnicos', data || []);
+});
+
+// Asignar / reasignar el técnico de una orden (desde la tabla de Control de Taller).
+ipcMain.on('asignar-tecnico-orden', async (event, data) => {
+    try {
+        const tecnico = (data && data.tecnico) ? data.tecnico : null; // '' => desasignar
+        const { error } = await supabase.from('ordenes')
+            .update({ tecnico_asignado: tecnico })
+            .eq('id', data.id)
+            .eq('empresa_id', empresaActual);
+        if (error) throw error;
+        event.reply('tecnico-asignado', { success: true, id: data.id, tecnico });
+    } catch (e) {
+        event.reply('tecnico-asignado', { success: false, msg: e.message });
+    }
 });
 
 // === 6. REPORTES (SUMA SOLO EL DINERO DE MI EMPRESA) ===

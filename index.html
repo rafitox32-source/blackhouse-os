@@ -2078,6 +2078,10 @@
                                     <option value="tarjeta">💳 Tarjeta</option>
                                     <option value="transferencia">🏦 Transferencia</option>
                                 </select></div>
+                            <div class="input-group"><label>👨‍🔧 Técnico Asignado</label><select id="rec-tecnico"
+                                    class="bh-input" style="background:#222;">
+                                    <option value="">Sin asignar</option>
+                                </select></div>
                         </div>
 
                         <div class="bh-card" style="margin-top:20px; border:1px dashed var(--bh-purple);">
@@ -2148,6 +2152,7 @@
                                     <th>Equipo</th>
                                     <th>Falla</th>
                                     <th>Cuenta</th>
+                                    <th>Técnico</th>
                                     <th>Estado</th>
                                 </tr>
                             </thead>
@@ -4274,13 +4279,19 @@
             if (id === 'clientes-view' && !window.isDemoMode) ipcRenderer.send('obtener-clientes');
             // Recepción también necesita la lista de clientes para el autocompletado (reutilizar
             // un cliente que ya vino antes, aunque sea para otro trabajo distinto).
-            if (id === 'recepcion' && !window.isDemoMode) ipcRenderer.send('obtener-clientes');
+            if (id === 'recepcion' && !window.isDemoMode) {
+                ipcRenderer.send('obtener-clientes');
+                ipcRenderer.send('obtener-tecnicos');
+            }
             const target = document.getElementById(id);
             if (target) { target.style.display = 'block'; setTimeout(() => target.classList.add('active'), 10); }
             if (el) el.classList.add('active');
 
             if (id === 'crm' && !window.isDemoMode) ipcRenderer.send('analisis-crm');
-            if ((id === 'taller' || id === 'dashboard') && !window.isDemoMode) ipcRenderer.send('obtener-ordenes');
+            if ((id === 'taller' || id === 'dashboard') && !window.isDemoMode) {
+                ipcRenderer.send('obtener-tecnicos');
+                ipcRenderer.send('obtener-ordenes');
+            }
             if (id === 'inventario' && !window.isDemoMode) {
                 ipcRenderer.send('obtener-productos');
                 ipcRenderer.send('obtener-subcategorias-custom');
@@ -4674,6 +4685,7 @@
                 adelanto: document.getElementById('pay-advance').value || '0',
                 saldo: document.getElementById('pay-balance').value || '0',
                 metodo_pago: document.getElementById('pay-method').value,
+                tecnico_asignado: (document.getElementById('rec-tecnico') && document.getElementById('rec-tecnico').value) || null,
                 firma: firmaData, evidencia: evidenciaData, estado: 'Recibido'
             };
             document.getElementById('modal-confirm-custom').style.display = 'flex';
@@ -4839,7 +4851,18 @@
             else { showToast(res.msg, 'danger'); }
         });
 
+        // Últimas órdenes recibidas (para poder re-renderizar cuando llega la lista de técnicos).
+        let ordenesActuales = [];
+
         ipcRenderer.on('lista-de-ordenes', (e, rows) => {
+            ordenesActuales = rows || [];
+            renderOrdenesTaller(ordenesActuales);
+        });
+
+        function renderOrdenesTaller(rows) {
+            rows = rows || [];
+            // Solo el dueño/vendedor puede (re)asignar el técnico; el técnico lo ve como etiqueta.
+            const puedeAsignar = (localStorage.getItem('userRol') || '') !== 'tecnico';
             const tbody = document.getElementById('tabla-servicios');
             if (tbody) {
                 tbody.innerHTML = rows.map(r => {
@@ -4853,6 +4876,20 @@
                     const fechaOrden = r.created_at ? new Date(r.created_at).toLocaleDateString('es-PE') : '-';
                     const saldoPend = parseFloat(r.saldo || 0);
                     const costoTotal = parseFloat(r.costo || 0);
+                    const asignado = r.tecnico_asignado || '';
+
+                    // Celda de técnico: desplegable si puede asignar (dueño/vendedor), etiqueta si no.
+                    let tecCell;
+                    if (puedeAsignar) {
+                        const opts = '<option value="">Sin asignar</option>' +
+                            todosLosTecnicos.map(t =>
+                                `<option value="${t.usuario}" ${t.usuario === asignado ? 'selected' : ''}>${t.nombre_completo || t.usuario}</option>`
+                            ).join('');
+                        tecCell = `<select class="status-select" style="background:#222; color:white; min-width:110px;"
+                                        onchange="asignarTecnicoOrden(${r.id}, this.value)">${opts}</select>`;
+                    } else {
+                        tecCell = `<span style="font-size:12px; color:${asignado ? 'var(--info)' : '#666'};">${asignado ? nombreTecnico(asignado) : 'Sin asignar'}</span>`;
+                    }
 
                     return `
                     <tr>
@@ -4873,6 +4910,7 @@
                             <div style="color:${saldoPend > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight:600;">S/ ${saldoPend.toFixed(2)}</div>
                             <div style="font-size:11px; color:#888;">Total: S/ ${costoTotal.toFixed(2)}</div>
                         </td>
+                        <td>${tecCell}</td>
                         <td>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             <select class="status-select" onchange="cambiarEstadoOrden(${r.id}, this.value, '${r.telefono}')" style="background:${bgSelect}; color:white;">
@@ -4897,7 +4935,12 @@
                 if (document.getElementById('dash-proceso')) document.getElementById('dash-proceso').innerText = enProceso;
                 if (document.getElementById('dash-listos')) document.getElementById('dash-listos').innerText = listos;
             }
-        });
+        }
+
+        // (Re)asignar el técnico de una orden desde la tabla de Control de Taller.
+        function asignarTecnicoOrden(id, tecnico) {
+            ipcRenderer.send('asignar-tecnico-orden', { id, tecnico });
+        }
 
         ipcRenderer.on('lista-de-productos', (e, rows) => {
             todosLosProductos = rows || [];
@@ -5058,6 +5101,43 @@
             const input = document.getElementById('cli');
             if (cont && cont.style.display === 'block' && e.target !== input && !cont.contains(e.target)) {
                 cont.style.display = 'none';
+            }
+        });
+
+        // Cache de técnicos de la empresa (para los desplegables de asignación).
+        let todosLosTecnicos = [];
+
+        ipcRenderer.on('lista-de-tecnicos', (e, rows) => {
+            todosLosTecnicos = rows || [];
+            // Poblar el desplegable de Recepción conservando la opción "Sin asignar".
+            const sel = document.getElementById('rec-tecnico');
+            if (sel) {
+                const actual = sel.value;
+                sel.innerHTML = '<option value="">Sin asignar</option>' +
+                    todosLosTecnicos.map(t =>
+                        `<option value="${t.usuario}">${t.nombre_completo || t.usuario}</option>`
+                    ).join('');
+                sel.value = actual;
+            }
+            // Si el taller ya está pintado, refrescarlo para que muestre los selectores de técnico.
+            if (typeof ordenesActuales !== 'undefined' && ordenesActuales.length) {
+                renderOrdenesTaller(ordenesActuales);
+            }
+        });
+
+        // Nombre legible de un técnico a partir de su usuario de login.
+        function nombreTecnico(usuario) {
+            if (!usuario) return 'Sin asignar';
+            const t = todosLosTecnicos.find(x => x.usuario === usuario);
+            return t ? (t.nombre_completo || t.usuario) : usuario;
+        }
+
+        ipcRenderer.on('tecnico-asignado', (e, res) => {
+            if (res && res.success) {
+                showToast('Técnico actualizado: ' + nombreTecnico(res.tecnico), 'success');
+                ipcRenderer.send('obtener-ordenes');
+            } else {
+                showToast('No se pudo asignar el técnico: ' + (res && res.msg ? res.msg : 'error'), 'danger');
             }
         });
 
@@ -5262,6 +5342,7 @@
                 <div style="font-size:12px;color:#ccc;white-space:normal;word-break:break-word;">${r.falla}</div>
             </td>
             <td><span style="font-size:12px;color:var(--success);font-weight:600;">S/ ${r.costo}.00</span></td>
+            <td><span style="font-size:12px;color:#666;">${r.tecnico || 'Sin asignar'}</span></td>
             <td>
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     <span class="status-badge ${r.badge}">${r.estado}</span>
@@ -7138,6 +7219,7 @@
                     <div style="font-size:12px; color:#ccc; white-space:normal; word-break:break-word;">${r.falla || '-'}</div>
                 </td>
                 <td>S/ ${parseFloat(r.saldo || 0).toFixed(2)}</td>
+                <td><span style="font-size:12px; color:${r.tecnico_asignado ? 'var(--info)' : '#666'};">${r.tecnico_asignado ? nombreTecnico(r.tecnico_asignado) : 'Sin asignar'}</span></td>
                 <td><span class="status-badge bg-proceso">${r.estado}</span></td>
             </tr>
         `).join('');
