@@ -128,30 +128,27 @@ Campos de la orden: `precio_repuesto`, `precio_servicio`, `costo` (=repuesto+ser
 
 ## 5. PLAN DE TRABAJO (por fases, priorizado)
 
-### FASE 1 — Costo real del repuesto en la orden  *(impacto alto, esfuerzo bajo)*
-- [ ] Agregar columna `costo_repuesto_real numeric DEFAULT 0` a `ordenes` (migración SQL nueva).
-- [ ] En `usar-repuesto-lab` (main.js ~2009): al descontar stock, sumar `productos.costo` a
-      `ordenes.costo_repuesto_real` de esa orden.
-- [ ] En `registrar-repuesto-externo` (main.js): sumar el `costo` externo a
-      `ordenes.costo_repuesto_real` de la orden indicada (además de guardarlo en compras_externas).
-- [ ] (Opcional) Campo manual "costo del repuesto" en la orden para casos sin stock ni registro.
+### FASE 1 — Costo real del repuesto en la orden  ✅ HECHA (2026-07-17)
+- [x] Columna `costo_repuesto_real` en `ordenes` → **migración `008_costo_real_y_gastos.sql`** (APLICAR EN SUPABASE).
+- [x] `usar-repuesto-lab`: suma `productos.costo` a `ordenes.costo_repuesto_real` (update tolerante si falta la 008).
+- [x] `registrar-repuesto-externo`: suma el costo externo a `costo_repuesto_real`.
+- [ ] (Opcional) Campo manual "costo del repuesto" en la orden para casos sin registro.
 
-### FASE 2 — Corregir el reporte de ganancia  *(impacto alto)*
-- [ ] En `obtener-datos-reporte` (main.js ~1337): cambiar el cálculo:
-      `costoReal = costo_repuesto_real` (no precio_repuesto);
-      `ganancia = (precio_repuesto − costo_repuesto_real) + precio_servicio`.
-- [ ] Renombrar KPI "Inversión (Repuestos)" → "Costo de repuestos" y que muestre el costo real.
-- [ ] Mostrar **margen por orden** en el listado del taller (verde/rojo).
+### FASE 2 — Corregir el reporte de ganancia  ✅ HECHA (2026-07-17)
+- [x] `obtener-datos-reporte` reescrito: ganancia = (precio_repuesto − costo_repuesto_real) + precio_servicio.
+- [x] KPI renombrado a "Costo Repuestos (real)".
+- [ ] Mostrar **margen por orden** en el listado del taller (verde/rojo). ← pendiente
 
-### FASE 3 — Módulo de Gastos operativos  *(necesario para ganancia real)*
-- [ ] Tabla `gastos` (empresa_id, categoria, descripcion, monto, fecha, usuario, creado_en) + RLS.
-- [ ] UI: vista "Gastos" con alta rápida y lista por categoría.
-- [ ] Restar los gastos del período a la ganancia en el reporte.
+### FASE 3 — Módulo de Gastos operativos  ✅ HECHA (2026-07-17)
+- [x] Tabla `gastos` (en migración 008) + handlers `registrar-gasto`/`eliminar-gasto` (solo dueño elimina).
+- [x] UI: botón "− Registrar Gasto" en Métricas + modal + lista "Gastos del período" con eliminar.
+- [x] Los gastos del período se restan de la Ganancia Neta.
 
-### FASE 4 — Reporte unificado + período  *(ordena todo)*
-- [ ] Sumar ingresos de POS (`ventas_pos`) y restar devoluciones al reporte.
-- [ ] Hacer que el filtro por fecha funcione (Hoy / Semana / Mes).
-- [ ] Un tablero: Ingresos − Costos − Gastos = Ganancia real, por período.
+### FASE 4 — Reporte unificado + período  ✅ HECHA en su mayoría (2026-07-17)
+- [x] Ingresos de POS sumados (con su costo real vía ventas_pos_items × productos.costo).
+- [x] Filtro por período funcional (Hoy / 7 días / Mes / Todo) — botones en la vista Métricas.
+- [x] Tablero: Ingresos (taller+POS) − Costo repuestos − Gastos = Ganancia real; KPI nuevo "Gastos Operativos"; desglose taller/ventas bajo Ingresos.
+- [ ] Restar devoluciones al reporte. ← pendiente
 
 ### FASE 5 — Control del técnico  *(evita fugas)*
 - [ ] Aviso/bloqueo si `precio_repuesto < costo_repuesto_real`.

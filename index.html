@@ -2511,13 +2511,20 @@
 
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                         <h1 style="margin:0;">Métricas</h1>
-                        <div style="display:flex; gap:10px;">
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
                             <button class="bh-btn-purple"
                                 style="background: linear-gradient(135deg, #10b981 0%, #047857 100%); font-size: 13px;"
                                 onclick="generarResumenIA()">
                                 🧠 Analizar con IA
                             </button>
-                            <button class="bh-btn-white">Hoy</button>
+                            <button class="bh-btn-purple" style="background:#ef4444; font-size:13px;"
+                                onclick="abrirModalGasto()">− Registrar Gasto</button>
+                            <div style="display:flex; gap:4px; background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:3px;" id="rep-periodos">
+                                <button class="bh-btn-white rep-per" data-per="hoy" onclick="cambiarPeriodoReporte('hoy')" style="border:none; padding:6px 12px;">Hoy</button>
+                                <button class="bh-btn-white rep-per" data-per="semana" onclick="cambiarPeriodoReporte('semana')" style="border:none; padding:6px 12px;">7 días</button>
+                                <button class="bh-btn-white rep-per" data-per="mes" onclick="cambiarPeriodoReporte('mes')" style="border:none; padding:6px 12px;">Mes</button>
+                                <button class="bh-btn-white rep-per" data-per="todo" onclick="cambiarPeriodoReporte('todo')" style="border:none; padding:6px 12px;">Todo</button>
+                            </div>
                         </div>
                     </div>
 
@@ -2532,20 +2539,21 @@
 
                     <div
                         style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:25px; margin-bottom:30px;">
-                        <div style="display:flex; gap:10px;"><button class="bh-btn-white">Hoy</button></div>
-                    </div>
-                    <div
-                        style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:25px; margin-bottom:30px;">
                         <div class="bh-card" style="text-align:center;">
                             <div style="color:#aaa; font-size:12px; margin-bottom:5px;">Ingresos Totales</div>
                             <h2 id="kpi-ingresos" style="margin:0; font-size:28px;">S/ 0.00</h2>
+                            <div id="kpi-ingresos-det" style="color:#666; font-size:10px; margin-top:4px;"></div>
                         </div>
                         <div class="bh-card" style="text-align:center; border: 1px solid rgba(239,68,68,0.2);">
-                            <div style="color:#ef4444; font-size:12px; margin-bottom:5px;">Inversión (Repuestos)</div>
+                            <div style="color:#ef4444; font-size:12px; margin-bottom:5px;">Costo Repuestos (real)</div>
                             <h2 id="kpi-gastos" style="margin:0; font-size:28px; color: #ef4444;">S/ 0.00</h2>
                         </div>
+                        <div class="bh-card" style="text-align:center; border: 1px solid rgba(239,68,68,0.2);">
+                            <div style="color:#f59e0b; font-size:12px; margin-bottom:5px;">Gastos Operativos</div>
+                            <h2 id="kpi-gastos-op" style="margin:0; font-size:28px; color: #f59e0b;">S/ 0.00</h2>
+                        </div>
                         <div class="bh-card" style="text-align:center; border: 1px solid rgba(16,185,129,0.2);">
-                            <div style="color:#10b981; font-size:12px; margin-bottom:5px;">Ganancia Neta</div>
+                            <div style="color:#10b981; font-size:12px; margin-bottom:5px;">Ganancia Neta (real)</div>
                             <h2 id="kpi-ganancias" style="margin:0; font-size:28px; color: #10b981;">S/ 0.00</h2>
                         </div>
                         <div class="bh-card" style="text-align:center;">
@@ -2563,6 +2571,14 @@
                     </div>
                     <div class="bh-card" style="height:400px;">
                         <canvas id="revenueChart"></canvas>
+                    </div>
+
+                    <div class="bh-card" style="margin-top:25px;">
+                        <h3 style="margin-top:0; font-size:14px; text-transform:uppercase; color:#aaa;">
+                            <i class='bx bx-wallet'></i> Gastos del período</h3>
+                        <div id="gastos-lista">
+                            <p style="color:#666; font-size:13px;">Sin gastos registrados en este período.</p>
+                        </div>
                     </div>
                 </div>
                 <div id="facturas-view" class="view">
@@ -3794,6 +3810,44 @@
         </div>
     </div>
 
+    <!-- Modal: Registrar gasto operativo -->
+    <div id="modal-gasto" class="modal-overlay">
+        <div class="modal-content" style="width: 400px;">
+            <h2 style="margin-top:0; color: #ef4444;"><i class='bx bx-wallet'></i> Registrar Gasto</h2>
+            <p style="color:#aaa; font-size:13px; margin-bottom:16px;">Gastos del negocio (alquiler, sueldos, luz, compras…). Se restan de la ganancia neta.</p>
+            <div class="grid-inputs" style="grid-template-columns: 1fr;">
+                <div class="input-group">
+                    <label>Categoría</label>
+                    <select id="gasto-categoria" class="bh-input" style="background:#222; color:white;">
+                        <option>Alquiler</option>
+                        <option>Sueldos</option>
+                        <option>Servicios (luz/agua/internet)</option>
+                        <option>Compra de stock</option>
+                        <option>Publicidad</option>
+                        <option>Movilidad</option>
+                        <option>Otros</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Descripción (opcional)</label>
+                    <input type="text" id="gasto-desc" class="bh-input" placeholder="Ej: Alquiler local julio">
+                </div>
+                <div class="input-group">
+                    <label>Monto</label>
+                    <input type="number" id="gasto-monto" class="bh-input" min="0" step="any" placeholder="0.00">
+                </div>
+                <div class="input-group">
+                    <label>Fecha</label>
+                    <input type="date" id="gasto-fecha" class="bh-input">
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:20px;">
+                <button class="bh-btn-white" onclick="document.getElementById('modal-gasto').style.display='none'">Cancelar</button>
+                <button class="bh-btn-purple" style="background:#ef4444;" onclick="guardarGasto()"><i class='bx bx-save'></i> Guardar Gasto</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Compras externas del día (cierre por proveedor) -->
     <div id="modal-compras-dia" class="modal-overlay">
         <div class="modal-content" style="width: 480px;">
@@ -4345,7 +4399,7 @@
                 ipcRenderer.send('obtener-productos'); // asegura que todosLosProductos esté fresco para el matching
                 ipcRenderer.send('obtener-devoluciones');
             }
-            if (id === 'reportes' && !window.isDemoMode) ipcRenderer.send('obtener-datos-reporte', 'hoy');
+            if (id === 'reportes' && !window.isDemoMode) cambiarPeriodoReporte(periodoReporte || 'hoy');
 
             // 1. Aquí pedimos las facturas
             if (id === 'facturas-view' && !window.isDemoMode) ipcRenderer.send('obtener-facturas');
@@ -5009,6 +5063,18 @@
             subcategoriasCustom = data || {};
         });
 
+        // Período activo del reporte financiero (los botones Hoy/7 días/Mes/Todo lo cambian).
+        let periodoReporte = 'hoy';
+
+        function cambiarPeriodoReporte(p) {
+            periodoReporte = p;
+            document.querySelectorAll('#rep-periodos .rep-per').forEach(b => {
+                b.style.background = (b.dataset.per === p) ? 'var(--bh-purple)' : 'transparent';
+                b.style.color = (b.dataset.per === p) ? 'white' : '';
+            });
+            ipcRenderer.send('obtener-datos-reporte', p);
+        }
+
         ipcRenderer.on('datos-reporte', (e, data) => {
             try {
                 if (document.getElementById('kpi-ingresos')) document.getElementById('kpi-ingresos').innerText = `S/ ${data.totalIngresos.toFixed(2)}`;
@@ -5016,6 +5082,33 @@
                 if (document.getElementById('kpi-ganancias')) document.getElementById('kpi-ganancias').innerText = `S/ ${(data.totalGanancias || 0).toFixed(2)}`;
                 if (document.getElementById('kpi-ordenes')) document.getElementById('kpi-ordenes').innerText = data.totalOrdenes;
                 if (document.getElementById('kpi-reparados')) document.getElementById('kpi-reparados').innerText = data.totalReparados;
+                // Detalle nuevo (reporte unificado): desglose de ingresos, gastos operativos y lista de gastos.
+                if (document.getElementById('kpi-gastos-op')) document.getElementById('kpi-gastos-op').innerText = `S/ ${(data.gastosOperativos || 0).toFixed(2)}`;
+                if (document.getElementById('kpi-ingresos-det') && data.ingresosOrdenes !== undefined) {
+                    document.getElementById('kpi-ingresos-det').innerText =
+                        `Taller S/ ${(data.ingresosOrdenes || 0).toFixed(2)} · Ventas S/ ${(data.ventasPOS || 0).toFixed(2)}`;
+                }
+                const contG = document.getElementById('gastos-lista');
+                if (contG) {
+                    const gastos = data.gastos || [];
+                    if (!gastos.length) {
+                        contG.innerHTML = '<p style="color:#666; font-size:13px;">Sin gastos registrados en este período.</p>';
+                    } else {
+                        const escG = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+                        contG.innerHTML = gastos.map(g => `
+                            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 4px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;">
+                                <div>
+                                    <span style="background:rgba(239,68,68,0.15); color:#f87171; padding:2px 8px; border-radius:999px; font-size:11px;">${escG(g.categoria)}</span>
+                                    <span style="color:#ddd; margin-left:8px;">${escG(g.descripcion || '')}</span>
+                                    <span style="color:#666; margin-left:8px; font-size:11px;">${escG(g.fecha)}</span>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <strong style="color:#ef4444;">S/ ${(parseFloat(g.monto) || 0).toFixed(2)}</strong>
+                                    <button onclick="eliminarGasto(${g.id})" title="Eliminar" style="background:none; border:none; color:#666; cursor:pointer;">✕</button>
+                                </div>
+                            </div>`).join('');
+                    }
+                }
                 if (document.getElementById('revenueChart') && typeof Chart !== 'undefined') {
                     const ticket = data.totalOrdenes > 0
                         ? (data.totalIngresos / data.totalOrdenes)
@@ -5030,6 +5123,49 @@
                     });
                 }
             } catch (err) { }
+        });
+
+        // === GASTOS OPERATIVOS (modal + acciones) ===
+        function abrirModalGasto() {
+            document.getElementById('gasto-desc').value = '';
+            document.getElementById('gasto-monto').value = '';
+            document.getElementById('gasto-fecha').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('modal-gasto').style.display = 'flex';
+            setTimeout(() => document.getElementById('gasto-monto').focus(), 100);
+        }
+
+        function guardarGasto() {
+            const monto = parseFloat(document.getElementById('gasto-monto').value);
+            if (isNaN(monto) || monto <= 0) return showToast('Escribe el monto del gasto', 'warning');
+            ipcRenderer.send('registrar-gasto', {
+                categoria: document.getElementById('gasto-categoria').value,
+                descripcion: document.getElementById('gasto-desc').value.trim(),
+                monto,
+                fecha: document.getElementById('gasto-fecha').value || undefined
+            });
+        }
+
+        ipcRenderer.on('gasto-registrado', (e, res) => {
+            if (res.success) {
+                showToast('Gasto registrado ✅', 'success');
+                document.getElementById('modal-gasto').style.display = 'none';
+                ipcRenderer.send('obtener-datos-reporte', periodoReporte);
+            } else {
+                showToast(res.msg || 'Error al guardar el gasto (¿falta la migración 008?)', 'danger');
+            }
+        });
+
+        function eliminarGasto(id) {
+            if (confirm('¿Eliminar este gasto?')) ipcRenderer.send('eliminar-gasto', { id });
+        }
+
+        ipcRenderer.on('gasto-eliminado', (e, res) => {
+            if (res.success) {
+                showToast('Gasto eliminado', 'success');
+                ipcRenderer.send('obtener-datos-reporte', periodoReporte);
+            } else {
+                showToast(res.msg || 'No se pudo eliminar', 'danger');
+            }
         });
 
         if (document.getElementById('reg-costo')) {

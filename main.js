@@ -1334,61 +1334,147 @@ ipcMain.on('asignar-tecnico-orden', async (event, data) => {
 });
 
 // === 6. REPORTES (SUMA SOLO EL DINERO DE MI EMPRESA) ===
-ipcMain.on('obtener-datos-reporte', async (event) => {
-    let query = supabase.from('ordenes')
-        .select('costo, adelanto, estado, created_at, precio_repuesto, precio_servicio')
-        .eq('empresa_id', empresaActual);
-        
-    if (rolActual === 'tecnico') {
-        query = query.eq('tecnico_id', usuarioActual);
-    }
-    
-    const { data, error } = await query.order('created_at', { ascending: true });
+// FASE 2 del plan finanzas: ganancia REAL con costo real del repuesto, filtro por período, y
+// unificación de fuentes: órdenes + ventas POS − gastos operativos.
+//   ganancia orden = (precio_repuesto − costo_repuesto_real) + precio_servicio  (solo Entregado)
+//   ganancia POS   = ventas − costo de los items de stock (productos.costo)
+//   ganancia neta  = margen órdenes + margen POS − gastos operativos
+// Mantiene las claves viejas de la respuesta (totalIngresos/totalGastos/totalGanancias/…) para
+// no romper renderers anteriores; agrega claves nuevas con el detalle.
+ipcMain.on('obtener-datos-reporte', async (event, periodo) => {
+    const cf = v => parseFloat(v) || 0;
 
+    // Rango de fecha según el período pedido por la UI ('hoy'|'semana'|'mes'|'todo').
+    const ahora = new Date();
+    let desde = null;
+    if (periodo === 'hoy') desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    else if (periodo === 'semana') desde = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+    else if (periodo === 'mes') desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+    // 'todo' o sin parámetro => sin filtro (histórico completo)
+
+    // 1) ÓRDENES — select('*') a propósito: tolera que costo_repuesto_real no exista todavía
+    // (migración 008 sin aplicar) sin tumbar la consulta.
+    let query = supabase.from('ordenes').select('*').eq('empresa_id', empresaActual);
+    if (rolActual === 'tecnico') query = query.eq('tecnico_id', usuarioActual);
+    if (desde) query = query.gte('created_at', desde.toISOString());
+    const { data, error } = await query.order('created_at', { ascending: true });
     if (error) console.error('Error obteniendo datos de reporte:', error.message);
 
-    let total = 0, reparados = 0;
-    let totalGastos = 0, totalGanancias = 0;
+    let ingresosOrdenes = 0, reparados = 0;
+    let costoRepuestos = 0, margenOrdenes = 0;
     const ingresosPorDia = {}; // { 'dd/mm/aaaa': monto }
 
-    if (data) {
-        data.forEach(o => {
-            // Ingreso REAL cobrado: si la orden ya fue Entregada se cobró el costo total;
-            // si todavía está en el taller, lo único cobrado es el adelanto.
-            // (Antes se sumaba el costo de TODAS las órdenes, incluso las no cobradas,
-            //  por lo que el KPI de ingresos no reflejaba la realidad.)
-            const ingreso = (o.estado === 'Entregado')
-                ? parseFloat(o.costo || 0)
-                : parseFloat(o.adelanto || 0);
-            total += ingreso;
-            
-            // Calculo de gastos y ganancias
-            if (o.estado === 'Entregado') {
-                totalGastos += parseFloat(o.precio_repuesto || 0);
-                totalGanancias += parseFloat(o.precio_servicio || 0);
+    (data || []).forEach(o => {
+        // Ingreso REAL cobrado: Entregado => costo total; si no, solo el adelanto.
+        const ingreso = (o.estado === 'Entregado') ? cf(o.costo) : cf(o.adelanto);
+        ingresosOrdenes += ingreso;
+
+        if (o.estado === 'Entregado') {
+            // Costo REAL del repuesto (acumulado desde stock/compras externas), NO el precio cobrado.
+            const costoReal = cf(o.costo_repuesto_real);
+            costoRepuestos += costoReal;
+            margenOrdenes += (cf(o.precio_repuesto) - costoReal) + cf(o.precio_servicio);
+        }
+        if (o.estado === 'Completado' || o.estado === 'Entregado') reparados++;
+
+        const dia = o.created_at ? new Date(o.created_at).toLocaleDateString('es-PE') : 'Sin fecha';
+        ingresosPorDia[dia] = (ingresosPorDia[dia] || 0) + ingreso;
+    });
+
+    // 2) VENTAS POS (vendedora) del período: ingreso + costo real de los items de stock.
+    let ventasPOS = 0, costoPOS = 0;
+    try {
+        let qv = supabase.from('ventas_pos').select('id, total, creado_en').eq('empresa_id', empresaActual);
+        if (desde) qv = qv.gte('creado_en', desde.toISOString());
+        const { data: ventas, error: errV } = await qv;
+        if (!errV && ventas) {
+            ventas.forEach(v => {
+                ventasPOS += cf(v.total);
+                const dia = v.creado_en ? new Date(v.creado_en).toLocaleDateString('es-PE') : 'Sin fecha';
+                ingresosPorDia[dia] = (ingresosPorDia[dia] || 0) + cf(v.total);
+            });
+            const ids = ventas.map(v => v.id);
+            if (ids.length) {
+                const { data: items } = await supabase.from('ventas_pos_items')
+                    .select('producto_id, cantidad, origen')
+                    .in('venta_id', ids).eq('origen', 'stock');
+                const pids = [...new Set((items || []).map(i => i.producto_id).filter(Boolean))];
+                if (pids.length) {
+                    const { data: prods } = await supabase.from('productos').select('id, costo').in('id', pids);
+                    const mapaCosto = {};
+                    (prods || []).forEach(p => { mapaCosto[p.id] = cf(p.costo); });
+                    costoPOS = (items || []).reduce((s, i) => s + (mapaCosto[i.producto_id] || 0) * cf(i.cantidad), 0);
+                }
             }
+        }
+    } catch (e) { /* POS sin migrar en esta empresa: se ignora */ }
 
-            if (o.estado === 'Completado' || o.estado === 'Entregado') reparados++;
+    // 3) GASTOS OPERATIVOS del período (tabla gastos, migración 008). Tolerante si aún no existe.
+    let gastosOperativos = 0;
+    let listaGastos = [];
+    try {
+        let qg = supabase.from('gastos').select('*').eq('empresa_id', empresaActual);
+        if (desde) qg = qg.gte('fecha', desde.toISOString().slice(0, 10));
+        const { data: gastos, error: errG } = await qg.order('fecha', { ascending: false }).limit(100);
+        if (!errG && gastos) {
+            listaGastos = gastos;
+            gastosOperativos = gastos.reduce((s, g) => s + cf(g.monto), 0);
+        }
+    } catch (e) { /* tabla gastos sin migrar: se ignora */ }
 
-            const dia = o.created_at
-                ? new Date(o.created_at).toLocaleDateString('es-PE')
-                : 'Sin fecha';
-            ingresosPorDia[dia] = (ingresosPorDia[dia] || 0) + ingreso;
-        });
-    }
+    const margenPOS = ventasPOS - costoPOS;
+    const gananciaNeta = margenOrdenes + margenPOS - gastosOperativos;
 
     event.reply('datos-reporte', {
-        totalIngresos: total,
-        totalGastos: totalGastos,
-        totalGanancias: totalGanancias,
+        // Claves originales (compatibilidad): ahora con significado corregido.
+        totalIngresos: ingresosOrdenes + ventasPOS,
+        totalGastos: costoRepuestos,           // KPI "Costo Repuestos": costo REAL, no precio cobrado
+        totalGanancias: gananciaNeta,          // KPI "Ganancia Neta": margen real − gastos
         totalOrdenes: data ? data.length : 0,
         totalReparados: reparados,
-        // Serie real por día (antes era un único punto ficticio ['Ventas'])
+        // Detalle nuevo (para las tarjetas ampliadas y el desglose)
+        periodo: periodo || 'todo',
+        ingresosOrdenes, ventasPOS, costoPOS, margenOrdenes, margenPOS,
+        gastosOperativos, gastos: listaGastos,
         grafica: {
             labels: Object.keys(ingresosPorDia),
             values: Object.values(ingresosPorDia).map(v => Math.round(v * 100) / 100)
         }
     });
+});
+
+// === 6b. GASTOS OPERATIVOS (alquiler, sueldos, luz, etc. — migración 008) ===
+ipcMain.on('registrar-gasto', async (event, g) => {
+    try {
+        const monto = parseFloat(g && g.monto);
+        if (isNaN(monto) || monto < 0) throw new Error('El monto no es válido');
+        const { error } = await supabase.from('gastos').insert([{
+            empresa_id: empresaActual,
+            categoria: (g.categoria || 'Otros').trim(),
+            descripcion: (g.descripcion || '').trim() || null,
+            monto,
+            fecha: g.fecha || new Date().toISOString().slice(0, 10),
+            usuario: usuarioActual || null
+        }]);
+        if (error) throw error;
+        event.reply('gasto-registrado', { success: true });
+    } catch (err) {
+        event.reply('gasto-registrado', { success: false, msg: err.message });
+    }
+});
+
+ipcMain.on('eliminar-gasto', async (event, data) => {
+    try {
+        if (rolActual !== 'dueno') throw new Error('Solo el dueño puede eliminar gastos');
+        const { error } = await supabase.from('gastos')
+            .delete()
+            .eq('id', data.id)
+            .eq('empresa_id', empresaActual);
+        if (error) throw error;
+        event.reply('gasto-eliminado', { success: true });
+    } catch (err) {
+        event.reply('gasto-eliminado', { success: false, msg: err.message });
+    }
 });
 
 // === 7. GESTIÓN DE USUARIOS (SOLO DE MI EMPRESA) ===
@@ -2061,6 +2147,19 @@ ipcMain.on('usar-repuesto-lab', async (event, params) => {
             await supabase.from('ordenes').update({
                 bitacora: nuevaBitacora
             }).eq('id', ordenId);
+
+            // FASE 1 (plan finanzas): acumular el COSTO REAL del repuesto en la orden, tomado
+            // automáticamente de productos.costo (no de lo que se cobra). Con esto el reporte puede
+            // calcular la ganancia real. Update separado y tolerante: si la migración 008 aún no se
+            // aplicó (columna inexistente), falla solo esto y la bitácora/stock ya quedaron bien.
+            try {
+                const costoUnit = parseFloat(prodData.costo) || 0;
+                const nuevoCostoReal = (parseFloat(ordenData.costo_repuesto_real) || 0) + costoUnit;
+                const { error: errCosto } = await supabase.from('ordenes')
+                    .update({ costo_repuesto_real: nuevoCostoReal })
+                    .eq('id', ordenId);
+                if (errCosto) console.warn('No se pudo acumular costo_repuesto_real (¿falta migración 008?):', errCosto.message);
+            } catch (e) { console.warn('costo_repuesto_real:', e.message); }
         }
 
         event.reply('repuesto-usado-lab', { success: true, nombre, precio });
@@ -2095,7 +2194,7 @@ ipcMain.on('registrar-repuesto-externo', async (event, params) => {
         // Anotar en la bitácora de la orden (si se indicó una orden válida de esta empresa).
         if (ordenId) {
             const { data: ord } = await supabase.from('ordenes')
-                .select('bitacora')
+                .select('*')
                 .eq('id', ordenId)
                 .eq('empresa_id', empresaActual)
                 .single();
@@ -2103,6 +2202,16 @@ ipcMain.on('registrar-repuesto-externo', async (event, params) => {
                 const nota = `🔻 Repuesto externo (${prov})${desc ? ' - ' + desc : ''} - pagado S/ ${cst}`;
                 const nuevaBitacora = (ord.bitacora || '') + (ord.bitacora ? '\n' : '') + nota;
                 await supabase.from('ordenes').update({ bitacora: nuevaBitacora }).eq('id', ordenId);
+
+                // FASE 1 (plan finanzas): el costo pagado al proveedor externo también acumula en
+                // costo_repuesto_real de la orden. Tolerante a que falte la migración 008.
+                try {
+                    const nuevoCostoReal = (parseFloat(ord.costo_repuesto_real) || 0) + cst;
+                    const { error: errCosto } = await supabase.from('ordenes')
+                        .update({ costo_repuesto_real: nuevoCostoReal })
+                        .eq('id', ordenId);
+                    if (errCosto) console.warn('No se pudo acumular costo_repuesto_real (¿falta migración 008?):', errCosto.message);
+                } catch (e) { console.warn('costo_repuesto_real:', e.message); }
             }
         }
 
