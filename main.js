@@ -527,6 +527,54 @@ ipcMain.on('obtener-clientes', async (event) => {
     event.reply('lista-de-clientes', data || []);
 });
 
+// Búsqueda rápida de clientes para autocompletar la Recepción (misma visibilidad por rol que
+// obtener-clientes: el técnico solo encuentra sus propios clientes, igual que en su vista).
+ipcMain.on('buscar-clientes', async (event, texto) => {
+    try {
+        const t = String(texto || '').trim().replace(/[,()%]/g, '');
+        if (t.length < 2) return event.reply('clientes-sugeridos', []);
+        let q = supabase.from('clientes')
+            .select('id, nombre, telefono, email')
+            .eq('empresa_id', empresaActual)
+            .or(`nombre.ilike.%${t}%,telefono.ilike.%${t}%`)
+            .limit(8);
+        if (rolActual === 'tecnico') q = q.eq('tecnico_id', usuarioActual);
+        const { data } = await q;
+        event.reply('clientes-sugeridos', data || []);
+    } catch (e) {
+        event.reply('clientes-sugeridos', []);
+    }
+});
+
+// Sugerir repuestos EN STOCK compatibles con el modelo del equipo que se está recibiendo.
+// Matching de solo lectura (no toca nada): por modelo_compatible (variantes separadas por "/")
+// o por tokens del modelo contenidos en el nombre del producto. Reusa normalizarModeloCompat.
+ipcMain.on('sugerir-stock-modelo', async (event, modelo) => {
+    try {
+        const norm = normalizarModeloCompat(modelo);
+        if (norm.length < 3) return event.reply('stock-sugerido-modelo', []);
+        const { data: prods } = await supabase.from('productos')
+            .select('id, nombre, categoria, precio, stock, modelo_compatible')
+            .eq('empresa_id', empresaActual)
+            .gt('stock', 0);
+        const tokens = norm.split(' ').filter(t => t.length > 1);
+        const coincide = (p) => {
+            const compat = normalizarModeloCompat(p.modelo_compatible);
+            if (compat) {
+                const variantes = compat.split('/').map(v => v.trim()).filter(Boolean);
+                if (variantes.some(v => norm.includes(v) || v.includes(norm))) return true;
+            }
+            const nombreN = normalizarModeloCompat(p.nombre);
+            return tokens.length > 0 && tokens.every(t => nombreN.includes(t));
+        };
+        const matches = (prods || []).filter(coincide).slice(0, 6)
+            .map(p => ({ id: p.id, nombre: p.nombre, categoria: p.categoria, precio: p.precio, stock: p.stock }));
+        event.reply('stock-sugerido-modelo', matches);
+    } catch (e) {
+        event.reply('stock-sugerido-modelo', []);
+    }
+});
+
 // === PROVEEDORES (PERSISTENCIA SEGURA EN SUPABASE + CONTROL DE FALLOS) ===
 ipcMain.on('guardar-proveedor-db', async (event, prov) => {
     try {
@@ -1422,12 +1470,25 @@ ipcMain.on('obtener-datos-reporte', async (event, periodo) => {
         }
     } catch (e) { /* tabla gastos sin migrar: se ignora */ }
 
+    // 4) DEVOLUCIONES en efectivo del período: dinero que salió de caja (accion reembolso_efectivo).
+    //    Nota: devoluciones.empresa_id es text (migración 005); la comparación funciona igual.
+    let devolucionesMonto = 0;
+    try {
+        let qd = supabase.from('devoluciones')
+            .select('monto, creado_en')
+            .eq('empresa_id', empresaActual)
+            .eq('accion', 'reembolso_efectivo');
+        if (desde) qd = qd.gte('creado_en', desde.toISOString());
+        const { data: devs, error: errD } = await qd;
+        if (!errD && devs) devolucionesMonto = devs.reduce((s, d) => s + cf(d.monto), 0);
+    } catch (e) { /* tabla devoluciones sin migrar: se ignora */ }
+
     const margenPOS = ventasPOS - costoPOS;
-    const gananciaNeta = margenOrdenes + margenPOS - gastosOperativos;
+    const gananciaNeta = margenOrdenes + margenPOS - gastosOperativos - devolucionesMonto;
 
     event.reply('datos-reporte', {
         // Claves originales (compatibilidad): ahora con significado corregido.
-        totalIngresos: ingresosOrdenes + ventasPOS,
+        totalIngresos: ingresosOrdenes + ventasPOS - devolucionesMonto,
         totalGastos: costoRepuestos,           // KPI "Costo Repuestos": costo REAL, no precio cobrado
         totalGanancias: gananciaNeta,          // KPI "Ganancia Neta": margen real − gastos
         totalOrdenes: data ? data.length : 0,
@@ -1435,7 +1496,7 @@ ipcMain.on('obtener-datos-reporte', async (event, periodo) => {
         // Detalle nuevo (para las tarjetas ampliadas y el desglose)
         periodo: periodo || 'todo',
         ingresosOrdenes, ventasPOS, costoPOS, margenOrdenes, margenPOS,
-        gastosOperativos, gastos: listaGastos,
+        gastosOperativos, gastos: listaGastos, devolucionesMonto,
         grafica: {
             labels: Object.keys(ingresosPorDia),
             values: Object.values(ingresosPorDia).map(v => Math.round(v * 100) / 100)

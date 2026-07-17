@@ -2005,15 +2005,19 @@
                     <div class="bh-card">
                         <div class="grid-inputs">
                             <div class="input-group"><label>Cliente</label><input type="text" id="cli" class="bh-input"
-                                    placeholder="Buscar o crear cliente..."></div>
+                                    placeholder="Buscar o crear cliente..." list="cli-sugerencias" autocomplete="off"
+                                    oninput="buscarClienteRecepcion(this.value)">
+                                <datalist id="cli-sugerencias"></datalist>
+                            </div>
                             <div class="input-group"><label>Teléfono (WhatsApp)</label><input type="text" id="tel"
                                     class="bh-input" placeholder="Ej: 999888777"></div>
                             <div class="input-group">
                                 <label>Modelo Dispositivo</label>
                                 <div style="display:flex; gap:8px;">
                                     <input type="text" id="mod" class="bh-input" placeholder="Ej: iPhone 13 Pro"
-                                        style="flex:1;">
+                                        style="flex:1;" oninput="sugerirStockModelo(this.value)">
                                 </div>
+                                <div id="stock-modelo-hint" style="display:none; margin-top:8px; padding:10px 12px; background:rgba(16,185,129,0.07); border:1px dashed var(--success); border-radius:8px;"></div>
                             </div>
                             <div class="input-group">
                                 <label>IMEI / Serie</label>
@@ -4760,6 +4764,48 @@
 
         let ordenTemporal = null;
 
+        // === RECEPCIÓN: reconocer cliente registrado (autocompleta nombre + teléfono) ===
+        let clientesSugeridosCache = [];
+        let timerBuscarCliente = null;
+        function buscarClienteRecepcion(texto) {
+            // Si el texto coincide exacto con una sugerencia, el usuario la eligió del desplegable.
+            const match = clientesSugeridosCache.find(c => (c.nombre || '') === texto);
+            if (match) {
+                if (match.telefono) document.getElementById('tel').value = match.telefono;
+                showToast(`Cliente reconocido: ${match.nombre} ✅`, 'success');
+                return;
+            }
+            clearTimeout(timerBuscarCliente);
+            if ((texto || '').trim().length < 2) return;
+            timerBuscarCliente = setTimeout(() => ipcRenderer.send('buscar-clientes', texto), 350);
+        }
+        ipcRenderer.on('clientes-sugeridos', (e, rows) => {
+            clientesSugeridosCache = rows || [];
+            const dl = document.getElementById('cli-sugerencias');
+            if (dl) dl.innerHTML = clientesSugeridosCache.map(c =>
+                `<option value="${(c.nombre || '').replace(/"/g, '&quot;')}">${c.telefono || ''}</option>`).join('');
+        });
+
+        // === RECEPCIÓN: avisar si hay repuestos en stock para el modelo que se está recibiendo ===
+        let timerStockModelo = null;
+        function sugerirStockModelo(modelo) {
+            clearTimeout(timerStockModelo);
+            const hint = document.getElementById('stock-modelo-hint');
+            if ((modelo || '').trim().length < 3) { if (hint) hint.style.display = 'none'; return; }
+            timerStockModelo = setTimeout(() => ipcRenderer.send('sugerir-stock-modelo', modelo), 450);
+        }
+        ipcRenderer.on('stock-sugerido-modelo', (e, rows) => {
+            const hint = document.getElementById('stock-modelo-hint');
+            if (!hint) return;
+            if (!rows || !rows.length) { hint.style.display = 'none'; return; }
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            hint.innerHTML = '<div style="font-weight:700; color:var(--success); font-size:12px; margin-bottom:6px;">✅ Tienes en stock para este modelo:</div>' +
+                rows.map(p => `<div style="display:flex; justify-content:space-between; gap:8px; padding:3px 0; font-size:12px;">
+                    <span style="color:#ddd;">${esc(p.nombre)}</span>
+                    <span style="color:#888; white-space:nowrap;">${p.stock} und · <b style="color:var(--success);">S/ ${(parseFloat(p.precio) || 0).toFixed(2)}</b></span></div>`).join('');
+            hint.style.display = 'block';
+        });
+
         function guardarOrden() {
             const nombre = document.getElementById('cli').value;
             const modelo = document.getElementById('mod').value;
@@ -4974,6 +5020,10 @@
                     const saldoPend = parseFloat(r.saldo || 0);
                     const costoTotal = parseFloat(r.costo || 0);
                     const asignado = r.tecnico_id || '';
+                    // Margen real de la orden (solo visible para el dueño): lo cobrado por repuesto
+                    // menos su costo real (stock/externo, migración 008) más la mano de obra.
+                    const esDueno = (localStorage.getItem('userRol') || '') === 'dueno';
+                    const margenOrden = (parseFloat(r.precio_repuesto) || 0) - (parseFloat(r.costo_repuesto_real) || 0) + (parseFloat(r.precio_servicio) || 0);
 
                     // Celda de técnico: desplegable si puede asignar (dueño/vendedor), etiqueta si no.
                     let tecCell;
@@ -5006,6 +5056,7 @@
                         <td>
                             <div style="color:${saldoPend > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight:600;">S/ ${saldoPend.toFixed(2)}</div>
                             <div style="font-size:11px; color:#888;">Total: S/ ${costoTotal.toFixed(2)}</div>
+                            ${esDueno ? `<div style="font-size:11px; color:${margenOrden >= 0 ? 'var(--success)' : 'var(--danger)'};">Margen: S/ ${margenOrden.toFixed(2)}</div>` : ''}
                         </td>
                         <td>${tecCell}</td>
                         <td>
@@ -5086,7 +5137,8 @@
                 if (document.getElementById('kpi-gastos-op')) document.getElementById('kpi-gastos-op').innerText = `S/ ${(data.gastosOperativos || 0).toFixed(2)}`;
                 if (document.getElementById('kpi-ingresos-det') && data.ingresosOrdenes !== undefined) {
                     document.getElementById('kpi-ingresos-det').innerText =
-                        `Taller S/ ${(data.ingresosOrdenes || 0).toFixed(2)} · Ventas S/ ${(data.ventasPOS || 0).toFixed(2)}`;
+                        `Taller S/ ${(data.ingresosOrdenes || 0).toFixed(2)} · Ventas S/ ${(data.ventasPOS || 0).toFixed(2)}`
+                        + ((data.devolucionesMonto || 0) > 0 ? ` · Devoluciones −S/ ${data.devolucionesMonto.toFixed(2)}` : '');
                 }
                 const contG = document.getElementById('gastos-lista');
                 if (contG) {

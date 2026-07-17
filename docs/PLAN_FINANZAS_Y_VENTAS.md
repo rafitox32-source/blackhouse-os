@@ -137,7 +137,7 @@ Campos de la orden: `precio_repuesto`, `precio_servicio`, `costo` (=repuesto+ser
 ### FASE 2 — Corregir el reporte de ganancia  ✅ HECHA (2026-07-17)
 - [x] `obtener-datos-reporte` reescrito: ganancia = (precio_repuesto − costo_repuesto_real) + precio_servicio.
 - [x] KPI renombrado a "Costo Repuestos (real)".
-- [ ] Mostrar **margen por orden** en el listado del taller (verde/rojo). ← pendiente
+- [x] Margen por orden en el listado del taller (verde/rojo, solo visible para el dueño). ✅ 2026-07-17
 
 ### FASE 3 — Módulo de Gastos operativos  ✅ HECHA (2026-07-17)
 - [x] Tabla `gastos` (en migración 008) + handlers `registrar-gasto`/`eliminar-gasto` (solo dueño elimina).
@@ -148,7 +148,9 @@ Campos de la orden: `precio_repuesto`, `precio_servicio`, `costo` (=repuesto+ser
 - [x] Ingresos de POS sumados (con su costo real vía ventas_pos_items × productos.costo).
 - [x] Filtro por período funcional (Hoy / 7 días / Mes / Todo) — botones en la vista Métricas.
 - [x] Tablero: Ingresos (taller+POS) − Costo repuestos − Gastos = Ganancia real; KPI nuevo "Gastos Operativos"; desglose taller/ventas bajo Ingresos.
-- [ ] Restar devoluciones al reporte. ← pendiente
+- [x] Devoluciones en efectivo restadas de ingresos y ganancia (con desglose bajo Ingresos). ✅ 2026-07-17
+
+> Migración 008 APLICADA en Supabase el 2026-07-17 (verificado por REST).
 
 ### FASE 5 — Control del técnico  *(evita fugas)*
 - [ ] Aviso/bloqueo si `precio_repuesto < costo_repuesto_real`.
@@ -192,6 +194,10 @@ que es lo que más plata está costando hoy y no rompe lo existente.
 ## 8. Mejoras de flujo al crear la orden (pedido 2026-07-17)
 
 Dos dolores del dueño. En AMBOS **la base ya existe; falta conectarla al formulario de orden.**
+
+> 8.1 y 8.2 IMPLEMENTADAS el 2026-07-17: handler `buscar-clientes` + datalist en `#cli`
+> (autocompleta teléfono al elegir), y handler `sugerir-stock-modelo` + hint bajo `#mod`
+> ("✅ Tienes en stock para este modelo" con stock y precio). Detalle original abajo.
 
 ### 8.1 Reconocer al cliente ya registrado (hoy se reescriben datos)
 - Existe tabla `clientes` + handlers `guardar-cliente` / `obtener-clientes` (main.js ~507-527).
