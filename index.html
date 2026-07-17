@@ -2523,6 +2523,8 @@
                             </button>
                             <button class="bh-btn-purple" style="background:#ef4444; font-size:13px;"
                                 onclick="abrirModalGasto()">− Registrar Gasto</button>
+                            <button class="bh-btn-purple" style="background:#0ea5e9; font-size:13px;"
+                                onclick="abrirCierreDia()">🧾 Cierre del Día</button>
                             <div style="display:flex; gap:4px; background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:3px;" id="rep-periodos">
                                 <button class="bh-btn-white rep-per" data-per="hoy" onclick="cambiarPeriodoReporte('hoy')" style="border:none; padding:6px 12px;">Hoy</button>
                                 <button class="bh-btn-white rep-per" data-per="semana" onclick="cambiarPeriodoReporte('semana')" style="border:none; padding:6px 12px;">7 días</button>
@@ -3810,6 +3812,23 @@
             <div style="display:flex; justify-content:space-between; margin-top:20px;">
                 <button class="bh-btn-white" onclick="document.getElementById('modal-repuesto-externo').style.display='none'">Cancelar</button>
                 <button class="bh-btn-purple" onclick="registrarRepuestoExterno()"><i class='bx bx-save'></i> Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Cierre del Día unificado (taller + POS − gastos − compras − devoluciones) -->
+    <div id="modal-cierre-dia" class="modal-overlay">
+        <div class="modal-content" style="width: 480px;">
+            <h2 style="margin-top:0; color: #0ea5e9;">🧾 Cierre del Día</h2>
+            <div id="cierre-dia-cuerpo" style="max-height:380px; overflow-y:auto;">
+                <p style="color:#aaa; text-align:center; padding:20px;">Calculando…</p>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:10px; margin-top:16px;">
+                <button class="bh-btn-white" onclick="copiarCierreDia()">📋 Copiar resumen</button>
+                <div style="display:flex; gap:10px;">
+                    <button class="bh-btn-white" onclick="document.getElementById('modal-cierre-dia').style.display='none'">Cerrar</button>
+                    <button class="bh-btn-purple" id="btn-guardar-cierre-dia" style="background:#0ea5e9;" onclick="confirmarCierreDia()">Guardar cierre</button>
+                </div>
             </div>
         </div>
     </div>
@@ -5219,6 +5238,83 @@
                 showToast(res.msg || 'No se pudo eliminar', 'danger');
             }
         });
+
+        // === CIERRE DEL DÍA UNIFICADO (Fase 6: taller + POS − gastos − compras − devoluciones) ===
+        let cierreDiaCache = null;
+
+        function abrirCierreDia() {
+            document.getElementById('cierre-dia-cuerpo').innerHTML = '<p style="color:#aaa; text-align:center; padding:20px;">Calculando…</p>';
+            document.getElementById('modal-cierre-dia').style.display = 'flex';
+            ipcRenderer.send('obtener-cierre-dia', {});
+        }
+
+        function confirmarCierreDia() {
+            if (confirm('¿Guardar el cierre del día? Queda registrado con los totales de hoy.')) {
+                ipcRenderer.send('obtener-cierre-dia', { registrar: true });
+            }
+        }
+
+        ipcRenderer.on('cierre-dia-datos', (e, res) => {
+            const cont = document.getElementById('cierre-dia-cuerpo');
+            if (!cont) return;
+            if (!res.success) {
+                cont.innerHTML = `<p style="color:var(--danger); text-align:center; padding:20px;">${res.msg || 'Error'}</p>`;
+                return;
+            }
+            cierreDiaCache = res;
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            const f = n => `S/ ${(parseFloat(n) || 0).toFixed(2)}`;
+            const fila = (lbl, val, color, extra) =>
+                `<div style="display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;">
+                    <span style="color:#ccc;">${lbl}${extra ? ` <span style='color:#666; font-size:11px;'>${extra}</span>` : ''}</span>
+                    <strong style="color:${color};">${val}</strong></div>`;
+
+            let html = `<div style="text-align:center; margin-bottom:12px;">
+                <div style="font-size:34px; font-weight:800; color:${res.neto >= 0 ? 'var(--success)' : 'var(--danger)'};">${f(res.neto)}</div>
+                <div style="font-size:12px; color:#aaa;">Neto del día · ${esc(res.fecha)}${res.registrado ? ' · <b style="color:#0ea5e9;">GUARDADO</b>' : ''}</div></div>`;
+
+            html += `<div style="font-size:11px; color:#10b981; text-transform:uppercase; letter-spacing:.05em; margin:10px 0 4px;">Entró</div>`;
+            html += fila('Taller — adelantos de hoy', f(res.adelantos), 'var(--success)');
+            html += fila('Taller — saldos de órdenes entregadas hoy', f(res.saldosCobrados), 'var(--success)');
+            html += fila('Ventas (POS)', f(res.ingresosPOS), 'var(--success)', res.ventasPosCount ? `${res.ventasPosCount} ventas` : '');
+
+            html += `<div style="font-size:11px; color:#ef4444; text-transform:uppercase; letter-spacing:.05em; margin:14px 0 4px;">Salió</div>`;
+            html += fila('Gastos operativos', '−' + f(res.gastos), '#ef4444');
+            html += fila('Compras a otros proveedores', '−' + f(res.comprasExternas), '#ef4444');
+            html += fila('Devoluciones en efectivo', '−' + f(res.devoluciones), '#ef4444');
+
+            const detalles = [];
+            (res.listaCompras || []).forEach(c => detalles.push(`· ${esc(c.proveedor)}${c.descripcion ? ' — ' + esc(c.descripcion) : ''}${c.orden_id ? ' (orden #' + esc(c.orden_id) + ')' : ''}: ${f(c.costo)}`));
+            (res.listaGastos || []).forEach(g => detalles.push(`· ${esc(g.categoria)}${g.descripcion ? ' — ' + esc(g.descripcion) : ''}: ${f(g.monto)}`));
+            if (detalles.length) {
+                html += `<div style="font-size:11px; color:#888; margin-top:12px; line-height:1.6;">${detalles.join('<br>')}</div>`;
+            }
+            cont.innerHTML = html;
+
+            const btn = document.getElementById('btn-guardar-cierre-dia');
+            if (btn) btn.style.display = res.registrado ? 'none' : '';
+            if (res.registrado) showToast('Cierre del día guardado ✅', 'success');
+        });
+
+        function copiarCierreDia() {
+            if (!cierreDiaCache) return;
+            const r = cierreDiaCache;
+            const f = n => `S/ ${(parseFloat(n) || 0).toFixed(2)}`;
+            const txt = `CIERRE DEL DÍA — ${r.fecha}\n` +
+                `ENTRÓ:\n` +
+                `  Taller (adelantos): ${f(r.adelantos)}\n` +
+                `  Taller (saldos entregados): ${f(r.saldosCobrados)}\n` +
+                `  Ventas POS: ${f(r.ingresosPOS)}\n` +
+                `SALIÓ:\n` +
+                `  Gastos: ${f(r.gastos)}\n` +
+                `  Compras a proveedores: ${f(r.comprasExternas)}\n` +
+                `  Devoluciones: ${f(r.devoluciones)}\n` +
+                `NETO DEL DÍA: ${f(r.neto)}`;
+            try {
+                navigator.clipboard.writeText(txt);
+                showToast('Resumen copiado 📋', 'success');
+            } catch (e) { showToast('No se pudo copiar', 'danger'); }
+        }
 
         if (document.getElementById('reg-costo')) {
             document.getElementById('reg-costo').addEventListener('input', function () {

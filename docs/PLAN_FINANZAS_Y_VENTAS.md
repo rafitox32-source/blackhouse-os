@@ -159,9 +159,17 @@ Campos de la orden: `precio_repuesto`, `precio_servicio`, `costo` (=repuesto+ser
       Se eligió avisar (no bloquear): el repuesto ya se usó; el dueño decide corregir el precio.
 - [ ] (Opcional) que el precio del repuesto lo sugiera el sistema desde el inventario.
 
-### FASE 6 — Libro de caja único  *(ideal, mediano plazo)*
-- [ ] Tabla `movimientos_financieros` que consolide todas las fuentes.
-- [ ] Cierre de caja diario unificado (taller + POS − gastos).
+### FASE 6 — Libro de caja único  ✅ HECHA (2026-07-17)
+- [x] **Migración `009_cierre_dia.sql`** (APLICAR EN SUPABASE): `ordenes.fecha_entregado`
+      (sello de cuándo se entregó → qué día se cobró el saldo; lo pone actualizar-estado-orden)
+      + tabla `cierres_dia` (snapshot inmutable por día = el "libro de caja").
+- [x] Handler `obtener-cierre-dia`: unifica en una foto ENTRÓ (adelantos de órdenes creadas hoy
+      + saldos de órdenes entregadas hoy + ventas POS) − SALIÓ (gastos + compras externas +
+      devoluciones efectivo) = NETO. Con registrar=true guarda en cierres_dia (solo dueño).
+- [x] UI: botón "🧾 Cierre del Día" en Métricas → modal con desglose, guardar cierre y copiar
+      resumen (para WhatsApp). Todas las consultas tolerantes a migraciones faltantes.
+- Nota: se optó por unificación en lectura + snapshot diario en vez de una tabla
+  movimientos_financieros con doble escritura (menos riesgo de descuadre).
 
 ---
 

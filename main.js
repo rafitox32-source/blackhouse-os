@@ -1538,6 +1538,124 @@ ipcMain.on('eliminar-gasto', async (event, data) => {
     }
 });
 
+// === 6c. CIERRE DEL DÍA UNIFICADO (FASE 6 del plan finanzas — el "libro de caja") ===
+// Junta en una sola foto lo que ENTRÓ hoy (adelantos de órdenes creadas hoy + saldos de órdenes
+// entregadas hoy + ventas POS) y lo que SALIÓ (gastos + compras externas + devoluciones en
+// efectivo). Con p_registrar=true guarda el snapshot en cierres_dia (migración 009).
+ipcMain.on('obtener-cierre-dia', async (event, params) => {
+    const cf = v => parseFloat(v) || 0;
+    try {
+        const base = (params && params.fecha) ? new Date(params.fecha + 'T12:00:00') : new Date();
+        const desde = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+        const hasta = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1);
+        const fechaTxt = `${desde.getFullYear()}-${String(desde.getMonth() + 1).padStart(2, '0')}-${String(desde.getDate()).padStart(2, '0')}`;
+
+        // 1) Taller — adelantos cobrados hoy (órdenes creadas hoy con adelanto).
+        let adelantos = 0;
+        const { data: creadas } = await supabase.from('ordenes')
+            .select('adelanto')
+            .eq('empresa_id', empresaActual)
+            .gte('created_at', desde.toISOString())
+            .lt('created_at', hasta.toISOString());
+        (creadas || []).forEach(o => { adelantos += cf(o.adelanto); });
+
+        // 2) Taller — saldos cobrados hoy (órdenes ENTREGADAS hoy: costo − adelanto).
+        //    Tolerante: si falta la migración 009 (columna fecha_entregado) se omite.
+        let saldosCobrados = 0;
+        try {
+            const { data: entregadas, error: errE } = await supabase.from('ordenes')
+                .select('costo, adelanto')
+                .eq('empresa_id', empresaActual)
+                .gte('fecha_entregado', desde.toISOString())
+                .lt('fecha_entregado', hasta.toISOString());
+            if (!errE) (entregadas || []).forEach(o => {
+                saldosCobrados += Math.max(cf(o.costo) - cf(o.adelanto), 0);
+            });
+        } catch (e) { /* sin migración 009 */ }
+
+        // 3) Ventas POS de hoy.
+        let ingresosPOS = 0, ventasPosCount = 0;
+        try {
+            const { data: ventas, error: errV } = await supabase.from('ventas_pos')
+                .select('total')
+                .eq('empresa_id', empresaActual)
+                .gte('creado_en', desde.toISOString())
+                .lt('creado_en', hasta.toISOString());
+            if (!errV && ventas) {
+                ventasPosCount = ventas.length;
+                ingresosPOS = ventas.reduce((s, v) => s + cf(v.total), 0);
+            }
+        } catch (e) { /* POS sin migrar */ }
+
+        // 4) Gastos operativos de hoy.
+        let gastosTotal = 0, listaGastos = [];
+        try {
+            const { data: gs, error: errG } = await supabase.from('gastos')
+                .select('categoria, descripcion, monto')
+                .eq('empresa_id', empresaActual)
+                .eq('fecha', fechaTxt);
+            if (!errG && gs) { listaGastos = gs; gastosTotal = gs.reduce((s, g) => s + cf(g.monto), 0); }
+        } catch (e) { /* sin migración 008 */ }
+
+        // 5) Compras externas de hoy (repuestos traídos de otros proveedores).
+        let comprasTotal = 0, listaCompras = [];
+        try {
+            const { data: cs, error: errC } = await supabase.from('compras_externas')
+                .select('proveedor, descripcion, costo, orden_id')
+                .eq('empresa_id', empresaActual)
+                .gte('creado_en', desde.toISOString())
+                .lt('creado_en', hasta.toISOString());
+            if (!errC && cs) { listaCompras = cs; comprasTotal = cs.reduce((s, c) => s + cf(c.costo), 0); }
+        } catch (e) { /* sin migración 007 */ }
+
+        // 6) Devoluciones en efectivo de hoy.
+        let devolucionesTotal = 0;
+        try {
+            const { data: dv, error: errD } = await supabase.from('devoluciones')
+                .select('monto')
+                .eq('empresa_id', empresaActual)
+                .eq('accion', 'reembolso_efectivo')
+                .gte('creado_en', desde.toISOString())
+                .lt('creado_en', hasta.toISOString());
+            if (!errD && dv) devolucionesTotal = dv.reduce((s, d) => s + cf(d.monto), 0);
+        } catch (e) { /* sin devoluciones */ }
+
+        const ingresosTaller = adelantos + saldosCobrados;
+        const neto = ingresosTaller + ingresosPOS - gastosTotal - comprasTotal - devolucionesTotal;
+
+        let cierreId = null;
+        if (params && params.registrar) {
+            if (rolActual !== 'dueno') throw new Error('Solo el dueño puede cerrar el día');
+            const { data: reg, error: errReg } = await supabase.from('cierres_dia').insert([{
+                empresa_id: empresaActual,
+                fecha: fechaTxt,
+                ingresos_taller: ingresosTaller,
+                ingresos_pos: ingresosPOS,
+                gastos: gastosTotal,
+                compras_externas: comprasTotal,
+                devoluciones: devolucionesTotal,
+                neto,
+                detalle_json: { adelantos, saldosCobrados, ventasPosCount, gastos: listaGastos, compras: listaCompras },
+                usuario: usuarioActual || null
+            }]).select('id').single();
+            if (errReg) throw new Error('No se pudo guardar el cierre (¿falta la migración 009?): ' + errReg.message);
+            cierreId = reg ? reg.id : null;
+        }
+
+        event.reply('cierre-dia-datos', {
+            success: true, fecha: fechaTxt,
+            ingresosTaller, adelantos, saldosCobrados,
+            ingresosPOS, ventasPosCount,
+            gastos: gastosTotal, listaGastos,
+            comprasExternas: comprasTotal, listaCompras,
+            devoluciones: devolucionesTotal,
+            neto, registrado: !!(params && params.registrar), cierre_id: cierreId
+        });
+    } catch (err) {
+        event.reply('cierre-dia-datos', { success: false, msg: err.message });
+    }
+});
+
 // === 7. GESTIÓN DE USUARIOS (SOLO DE MI EMPRESA) ===
 ipcMain.on('crear-usuario-nuevo', async (event, data) => {
     if (rolActual !== 'dueno') {
@@ -2610,6 +2728,18 @@ ipcMain.on('actualizar-estado-orden', async (event, data) => {
         .update({ estado: data.estado })
         .eq('id', data.id)
         .eq('empresa_id', empresaActual);
+
+    // FASE 6 (plan finanzas): sellar CUÁNDO se entregó, para que el Cierre del Día sepa qué día
+    // se cobró el saldo. Update separado y tolerante: si falta la migración 009 falla solo esto.
+    if (!error && data.estado === 'Entregado') {
+        try {
+            const { error: errFecha } = await supabase.from('ordenes')
+                .update({ fecha_entregado: new Date().toISOString() })
+                .eq('id', data.id)
+                .eq('empresa_id', empresaActual);
+            if (errFecha) console.warn('No se pudo sellar fecha_entregado (¿falta migración 009?):', errFecha.message);
+        } catch (e) { console.warn('fecha_entregado:', e.message); }
+    }
     event.reply('orden-actualizada', { success: !error });
 });
 
