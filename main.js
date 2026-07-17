@@ -1393,113 +1393,159 @@ ipcMain.on('obtener-datos-reporte', async (event, periodo) => {
     const cf = v => parseFloat(v) || 0;
 
     // Rango de fecha según el período pedido por la UI ('hoy'|'semana'|'mes'|'todo').
+    // desdePrev = inicio de la ventana ANTERIOR del mismo tamaño, para la comparativa ↗/↘.
     const ahora = new Date();
-    let desde = null;
-    if (periodo === 'hoy') desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-    else if (periodo === 'semana') desde = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
-    else if (periodo === 'mes') desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
-    // 'todo' o sin parámetro => sin filtro (histórico completo)
+    let desde = null, desdePrev = null;
+    if (periodo === 'hoy') {
+        desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+        desdePrev = new Date(desde.getTime() - 24 * 60 * 60 * 1000);
+    } else if (periodo === 'semana') {
+        desde = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+        desdePrev = new Date(ahora.getTime() - 14 * 24 * 60 * 60 * 1000);
+    } else if (periodo === 'mes') {
+        desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+        desdePrev = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1);
+    }
+    // 'todo' o sin parámetro => sin filtro (histórico completo, sin comparativa)
+    const enActual = ts => !desde || (ts && new Date(ts) >= desde);
 
     // 1) ÓRDENES — select('*') a propósito: tolera que costo_repuesto_real no exista todavía
     // (migración 008 sin aplicar) sin tumbar la consulta.
     let query = supabase.from('ordenes').select('*').eq('empresa_id', empresaActual);
     if (rolActual === 'tecnico') query = query.eq('tecnico_id', usuarioActual);
-    if (desde) query = query.gte('created_at', desde.toISOString());
+    if (desdePrev) query = query.gte('created_at', desdePrev.toISOString());
     const { data, error } = await query.order('created_at', { ascending: true });
     if (error) console.error('Error obteniendo datos de reporte:', error.message);
 
-    let ingresosOrdenes = 0, reparados = 0;
+    let ingresosOrdenes = 0, reparados = 0, totalOrdenes = 0;
     let costoRepuestos = 0, margenOrdenes = 0;
+    let ingresosOrdenesPrev = 0, margenOrdenesPrev = 0;
     const ingresosPorDia = {}; // { 'dd/mm/aaaa': monto }
+    const gastosPorDia = {};
 
     (data || []).forEach(o => {
         // Ingreso REAL cobrado: Entregado => costo total; si no, solo el adelanto.
         const ingreso = (o.estado === 'Entregado') ? cf(o.costo) : cf(o.adelanto);
-        ingresosOrdenes += ingreso;
+        const costoReal = cf(o.costo_repuesto_real);
+        const margen = (o.estado === 'Entregado')
+            ? (cf(o.precio_repuesto) - costoReal) + cf(o.precio_servicio) : 0;
 
-        if (o.estado === 'Entregado') {
-            // Costo REAL del repuesto (acumulado desde stock/compras externas), NO el precio cobrado.
-            const costoReal = cf(o.costo_repuesto_real);
-            costoRepuestos += costoReal;
-            margenOrdenes += (cf(o.precio_repuesto) - costoReal) + cf(o.precio_servicio);
+        if (enActual(o.created_at)) {
+            totalOrdenes++;
+            ingresosOrdenes += ingreso;
+            if (o.estado === 'Entregado') { costoRepuestos += costoReal; margenOrdenes += margen; }
+            if (o.estado === 'Completado' || o.estado === 'Entregado') reparados++;
+            const dia = o.created_at ? new Date(o.created_at).toLocaleDateString('es-PE') : 'Sin fecha';
+            ingresosPorDia[dia] = (ingresosPorDia[dia] || 0) + ingreso;
+        } else {
+            // Fila de la ventana ANTERIOR (solo para la comparativa)
+            ingresosOrdenesPrev += ingreso;
+            margenOrdenesPrev += margen;
         }
-        if (o.estado === 'Completado' || o.estado === 'Entregado') reparados++;
-
-        const dia = o.created_at ? new Date(o.created_at).toLocaleDateString('es-PE') : 'Sin fecha';
-        ingresosPorDia[dia] = (ingresosPorDia[dia] || 0) + ingreso;
     });
 
-    // 2) VENTAS POS (vendedora) del período: ingreso + costo real de los items de stock.
-    let ventasPOS = 0, costoPOS = 0;
+    // 2) VENTAS POS (vendedora): ingreso + costo real de los items de stock (ambas ventanas).
+    let ventasPOS = 0, costoPOS = 0, ventasPOSPrev = 0, costoPOSPrev = 0;
     try {
         let qv = supabase.from('ventas_pos').select('id, total, creado_en').eq('empresa_id', empresaActual);
-        if (desde) qv = qv.gte('creado_en', desde.toISOString());
+        if (desdePrev) qv = qv.gte('creado_en', desdePrev.toISOString());
         const { data: ventas, error: errV } = await qv;
         if (!errV && ventas) {
+            const idsActual = new Set();
             ventas.forEach(v => {
-                ventasPOS += cf(v.total);
-                const dia = v.creado_en ? new Date(v.creado_en).toLocaleDateString('es-PE') : 'Sin fecha';
-                ingresosPorDia[dia] = (ingresosPorDia[dia] || 0) + cf(v.total);
+                if (enActual(v.creado_en)) {
+                    ventasPOS += cf(v.total);
+                    idsActual.add(v.id);
+                    const dia = v.creado_en ? new Date(v.creado_en).toLocaleDateString('es-PE') : 'Sin fecha';
+                    ingresosPorDia[dia] = (ingresosPorDia[dia] || 0) + cf(v.total);
+                } else {
+                    ventasPOSPrev += cf(v.total);
+                }
             });
             const ids = ventas.map(v => v.id);
             if (ids.length) {
                 const { data: items } = await supabase.from('ventas_pos_items')
-                    .select('producto_id, cantidad, origen')
+                    .select('venta_id, producto_id, cantidad, origen')
                     .in('venta_id', ids).eq('origen', 'stock');
                 const pids = [...new Set((items || []).map(i => i.producto_id).filter(Boolean))];
                 if (pids.length) {
                     const { data: prods } = await supabase.from('productos').select('id, costo').in('id', pids);
                     const mapaCosto = {};
                     (prods || []).forEach(p => { mapaCosto[p.id] = cf(p.costo); });
-                    costoPOS = (items || []).reduce((s, i) => s + (mapaCosto[i.producto_id] || 0) * cf(i.cantidad), 0);
+                    (items || []).forEach(i => {
+                        const c = (mapaCosto[i.producto_id] || 0) * cf(i.cantidad);
+                        if (idsActual.has(i.venta_id)) costoPOS += c; else costoPOSPrev += c;
+                    });
                 }
             }
         }
     } catch (e) { /* POS sin migrar en esta empresa: se ignora */ }
 
-    // 3) GASTOS OPERATIVOS del período (tabla gastos, migración 008). Tolerante si aún no existe.
-    let gastosOperativos = 0;
+    // 3) GASTOS OPERATIVOS (ambas ventanas) + serie por día para la gráfica.
+    let gastosOperativos = 0, gastosOperativosPrev = 0;
     let listaGastos = [];
     try {
         let qg = supabase.from('gastos').select('*').eq('empresa_id', empresaActual);
-        if (desde) qg = qg.gte('fecha', desde.toISOString().slice(0, 10));
-        const { data: gastos, error: errG } = await qg.order('fecha', { ascending: false }).limit(100);
+        if (desdePrev) qg = qg.gte('fecha', desdePrev.toISOString().slice(0, 10));
+        const { data: gastos, error: errG } = await qg.order('fecha', { ascending: false }).limit(300);
         if (!errG && gastos) {
-            listaGastos = gastos;
-            gastosOperativos = gastos.reduce((s, g) => s + cf(g.monto), 0);
+            gastos.forEach(g => {
+                const fechaG = g.fecha ? new Date(g.fecha + 'T12:00:00') : null;
+                if (!desde || (fechaG && fechaG >= desde)) {
+                    listaGastos.push(g);
+                    gastosOperativos += cf(g.monto);
+                    const dia = fechaG ? fechaG.toLocaleDateString('es-PE') : 'Sin fecha';
+                    gastosPorDia[dia] = (gastosPorDia[dia] || 0) + cf(g.monto);
+                } else {
+                    gastosOperativosPrev += cf(g.monto);
+                }
+            });
         }
     } catch (e) { /* tabla gastos sin migrar: se ignora */ }
 
     // 4) DEVOLUCIONES en efectivo del período: dinero que salió de caja (accion reembolso_efectivo).
     //    Nota: devoluciones.empresa_id es text (migración 005); la comparación funciona igual.
-    let devolucionesMonto = 0;
+    let devolucionesMonto = 0, devolucionesPrev = 0;
     try {
         let qd = supabase.from('devoluciones')
             .select('monto, creado_en')
             .eq('empresa_id', empresaActual)
             .eq('accion', 'reembolso_efectivo');
-        if (desde) qd = qd.gte('creado_en', desde.toISOString());
+        if (desdePrev) qd = qd.gte('creado_en', desdePrev.toISOString());
         const { data: devs, error: errD } = await qd;
-        if (!errD && devs) devolucionesMonto = devs.reduce((s, d) => s + cf(d.monto), 0);
+        if (!errD && devs) devs.forEach(d => {
+            if (enActual(d.creado_en)) devolucionesMonto += cf(d.monto);
+            else devolucionesPrev += cf(d.monto);
+        });
     } catch (e) { /* tabla devoluciones sin migrar: se ignora */ }
 
     const margenPOS = ventasPOS - costoPOS;
     const gananciaNeta = margenOrdenes + margenPOS - gastosOperativos - devolucionesMonto;
 
+    // Comparativa vs la ventana anterior del mismo tamaño (null si el período es 'todo').
+    const anterior = desdePrev ? {
+        totalIngresos: ingresosOrdenesPrev + ventasPOSPrev - devolucionesPrev,
+        gastosOperativos: gastosOperativosPrev,
+        totalGanancias: margenOrdenesPrev + (ventasPOSPrev - costoPOSPrev) - gastosOperativosPrev - devolucionesPrev
+    } : null;
+
+    const labels = Object.keys(ingresosPorDia);
     event.reply('datos-reporte', {
         // Claves originales (compatibilidad): ahora con significado corregido.
         totalIngresos: ingresosOrdenes + ventasPOS - devolucionesMonto,
         totalGastos: costoRepuestos,           // KPI "Costo Repuestos": costo REAL, no precio cobrado
         totalGanancias: gananciaNeta,          // KPI "Ganancia Neta": margen real − gastos
-        totalOrdenes: data ? data.length : 0,
+        totalOrdenes,
         totalReparados: reparados,
         // Detalle nuevo (para las tarjetas ampliadas y el desglose)
         periodo: periodo || 'todo',
         ingresosOrdenes, ventasPOS, costoPOS, margenOrdenes, margenPOS,
         gastosOperativos, gastos: listaGastos, devolucionesMonto,
+        anterior,
         grafica: {
-            labels: Object.keys(ingresosPorDia),
-            values: Object.values(ingresosPorDia).map(v => Math.round(v * 100) / 100)
+            labels,
+            values: labels.map(l => Math.round((ingresosPorDia[l] || 0) * 100) / 100),
+            gastos: labels.map(l => Math.round((gastosPorDia[l] || 0) * 100) / 100)
         }
     });
 });
@@ -1535,6 +1581,95 @@ ipcMain.on('eliminar-gasto', async (event, data) => {
         event.reply('gasto-eliminado', { success: true });
     } catch (err) {
         event.reply('gasto-eliminado', { success: false, msg: err.message });
+    }
+});
+
+// === 6b-bis. DATOS PARA EXPORTAR EL REPORTE A EXCEL (formato de la plantilla del dueño) ===
+// Devuelve filas crudas del período: ventas del POS (una fila por producto), órdenes del taller
+// entregadas (con encargado y costo real), y gastos + compras externas juntos como GASTOS.
+ipcMain.on('obtener-datos-export', async (event, periodo) => {
+    const cf = v => parseFloat(v) || 0;
+    try {
+        const ahora = new Date();
+        let desde = null;
+        if (periodo === 'hoy') desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+        else if (periodo === 'semana') desde = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+        else if (periodo === 'mes') desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+
+        // 1) Ventas del POS: una fila por item (producto | importe | pago | quién atendió).
+        const ventasRows = [];
+        try {
+            let qv = supabase.from('ventas_pos')
+                .select('id, total, medio_pago, vendedor_usuario, creado_en')
+                .eq('empresa_id', empresaActual)
+                .order('creado_en', { ascending: true });
+            if (desde) qv = qv.gte('creado_en', desde.toISOString());
+            const { data: ventas } = await qv;
+            const ids = (ventas || []).map(v => v.id);
+            const itemsPorVenta = {};
+            if (ids.length) {
+                const { data: items } = await supabase.from('ventas_pos_items')
+                    .select('venta_id, nombre, cantidad, subtotal').in('venta_id', ids);
+                (items || []).forEach(i => {
+                    (itemsPorVenta[i.venta_id] = itemsPorVenta[i.venta_id] || []).push(i);
+                });
+            }
+            (ventas || []).forEach(v => {
+                const its = itemsPorVenta[v.id] || [{ nombre: 'Venta #' + v.id, cantidad: 1, subtotal: v.total }];
+                its.forEach(i => ventasRows.push({
+                    producto: i.nombre,
+                    cantidad: cf(i.cantidad),
+                    importe: cf(i.subtotal),
+                    pago: v.medio_pago || 'efectivo',
+                    atendio: v.vendedor_usuario || ''
+                }));
+            });
+        } catch (e) { /* POS sin migrar */ }
+
+        // 2) Órdenes del taller ENTREGADAS en el período (por fecha_entregado; si no existe, created_at).
+        const ordenesRows = [];
+        try {
+            const { data: ords } = await supabase.from('ordenes')
+                .select('*')
+                .eq('empresa_id', empresaActual)
+                .eq('estado', 'Entregado');
+            (ords || []).forEach(o => {
+                const fechaRef = o.fecha_entregado || o.created_at;
+                if (desde && (!fechaRef || new Date(fechaRef) < desde)) return;
+                ordenesRows.push({
+                    servicio: `${o.modelo || 'Equipo'} — ${o.falla || 'Servicio'}`.slice(0, 60),
+                    encargado: o.tecnico_id || '',
+                    costoRepuesto: cf(o.costo_repuesto_real),
+                    importe: cf(o.costo),
+                    pago: o.metodo_pago || 'efectivo'
+                });
+            });
+        } catch (e) { }
+
+        // 3) Gastos operativos + compras externas (van juntos al bloque GASTOS de la plantilla).
+        const gastosRows = [];
+        try {
+            let qg = supabase.from('gastos').select('categoria, descripcion, monto, fecha').eq('empresa_id', empresaActual);
+            if (desde) qg = qg.gte('fecha', desde.toISOString().slice(0, 10));
+            const { data: gs } = await qg;
+            (gs || []).forEach(g => gastosRows.push({
+                nombre: `${g.categoria}${g.descripcion ? ' — ' + g.descripcion : ''}`,
+                importe: cf(g.monto)
+            }));
+        } catch (e) { }
+        try {
+            let qc = supabase.from('compras_externas').select('proveedor, descripcion, costo, creado_en').eq('empresa_id', empresaActual);
+            if (desde) qc = qc.gte('creado_en', desde.toISOString());
+            const { data: cs } = await qc;
+            (cs || []).forEach(c => gastosRows.push({
+                nombre: `Repuesto ext. — ${c.proveedor}${c.descripcion ? ' (' + c.descripcion + ')' : ''}`,
+                importe: cf(c.costo)
+            }));
+        } catch (e) { }
+
+        event.reply('datos-export', { success: true, periodo: periodo || 'todo', ventasRows, ordenesRows, gastosRows });
+    } catch (err) {
+        event.reply('datos-export', { success: false, msg: err.message });
     }
 });
 
