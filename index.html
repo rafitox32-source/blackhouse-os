@@ -1532,7 +1532,7 @@
                 </select>
             </div>
 
-            <h1 class="login-logo" id="app-title-login">BlackHouse<span style="color:var(--bh-purple)">OS</span></h1>
+            <h1 class="login-logo" id="app-title-login">BlackHouse<span style="color:var(--bh-purple)">OS</span> <span style="font-size:0.42em; background:var(--bh-purple); color:white; padding:3px 10px; border-radius:9px; vertical-align:middle; font-weight:800; letter-spacing:1px;">V2</span></h1>
 
             <div id="login-section">
                 <div style="text-align:left; margin-bottom:20px;">
@@ -1682,7 +1682,7 @@
 
     <div id="app-content">
         <div class="sidebar">
-            <div class="logo-box" id="app-title-sidebar">BlackHouse<span style="color:var(--bh-purple)">OS</span></div>
+            <div class="logo-box" id="app-title-sidebar">BlackHouse<span style="color:var(--bh-purple)">OS</span> <span style="font-size:0.55em; background:var(--bh-purple); color:white; padding:2px 7px; border-radius:7px; vertical-align:middle; font-weight:800; letter-spacing:1px;">V2</span></div>
             <div class="nav-group">
                 <div id="nav-dash" class="nav-item active" onclick="showView('dashboard', this)"><i
                         class='bx bxs-dashboard'></i> Dashboard</div>
@@ -4375,9 +4375,11 @@
         }
 
         function aplicarPersonalizacion() {
+            // El título se arma con el nombre GUARDADO en localStorage + sufijo "OS"; el sello V2
+            // va fijo en la plantilla para que se vea siempre, sin tocar el nombre personalizado.
             const nombre = localStorage.getItem('appName') || 'BlackHouse';
             const logo = localStorage.getItem('appLogo');
-            const tituloHtml = `${nombre}<span style="color:var(--bh-purple)">OS</span>`;
+            const tituloHtml = `${nombre}<span style="color:var(--bh-purple)">OS</span> <span style="font-size:0.45em; background:var(--bh-purple); color:white; padding:2px 8px; border-radius:8px; vertical-align:middle; font-weight:800; letter-spacing:1px;">V2</span>`;
             document.getElementById('app-title-login').innerHTML = tituloHtml;
             document.getElementById('app-title-sidebar').innerHTML = tituloHtml;
             if (logo) { document.getElementById('watermark-bg').style.backgroundImage = `url('${logo}')`; }
