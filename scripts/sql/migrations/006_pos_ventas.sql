@@ -204,15 +204,16 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    v_emp    bigint;
-    v_result json;
+    v_emp bigint;
 BEGIN
-    SELECT empresa_id INTO v_emp FROM pos_sesiones WHERE token = p_token AND expira_en > now();
+    -- Asignación directa (no 'SELECT ... INTO var FROM tabla': ese patrón hace que algunas
+    -- instancias de Postgres traten la variable como una relación -> "relation ... does not exist").
+    v_emp := (SELECT empresa_id FROM pos_sesiones WHERE token = p_token AND expira_en > now());
     IF v_emp IS NULL THEN
         RETURN json_build_object('ok', false, 'msg', 'Sesión inválida o expirada');
     END IF;
 
-    SELECT json_build_object(
+    RETURN json_build_object(
         'ok', true,
         'stock', coalesce((
             SELECT json_agg(json_build_object(
@@ -230,9 +231,7 @@ BEGIN
               FROM productos_venta_libre l
              WHERE l.empresa_id = v_emp AND l.activo
         ), '[]'::json)
-    ) INTO v_result;
-
-    RETURN v_result;
+    );
 END;
 $$;
 
@@ -262,10 +261,11 @@ DECLARE
     v_pid      bigint;
     v_libre_id bigint;
 BEGIN
-    SELECT empresa_id, usuario_id, usuario
-      INTO v_emp, v_uid, v_usuario
-      FROM pos_sesiones WHERE token = p_token AND expira_en > now();
-    IF NOT FOUND THEN
+    -- Asignación directa (ver nota en pos_productos sobre 'SELECT ... INTO ... FROM').
+    v_emp     := (SELECT empresa_id FROM pos_sesiones WHERE token = p_token AND expira_en > now());
+    v_uid     := (SELECT usuario_id FROM pos_sesiones WHERE token = p_token AND expira_en > now());
+    v_usuario := (SELECT usuario    FROM pos_sesiones WHERE token = p_token AND expira_en > now());
+    IF v_emp IS NULL THEN
         RETURN json_build_object('ok', false, 'msg', 'Sesión inválida o expirada');
     END IF;
 
@@ -354,10 +354,10 @@ DECLARE
     v_detalle  json;
     v_cierre_id bigint;
 BEGIN
-    SELECT empresa_id, usuario
-      INTO v_emp, v_usuario
-      FROM pos_sesiones WHERE token = p_token AND expira_en > now();
-    IF NOT FOUND THEN
+    -- Asignación directa (ver nota en pos_productos sobre 'SELECT ... INTO ... FROM').
+    v_emp     := (SELECT empresa_id FROM pos_sesiones WHERE token = p_token AND expira_en > now());
+    v_usuario := (SELECT usuario    FROM pos_sesiones WHERE token = p_token AND expira_en > now());
+    IF v_emp IS NULL THEN
         RETURN json_build_object('ok', false, 'msg', 'Sesión inválida o expirada');
     END IF;
 
@@ -365,26 +365,29 @@ BEGIN
     v_desde := v_fecha::timestamptz;
     v_hasta := (v_fecha + 1)::timestamptz;
 
-    SELECT coalesce(sum(total), 0),
-           count(*),
-           coalesce(sum(total) FILTER (WHERE medio_pago = 'efectivo'), 0),
-           coalesce(sum(total) FILTER (WHERE medio_pago <> 'efectivo'), 0)
-      INTO v_total, v_cant, v_efectivo, v_otros
-      FROM ventas_pos
-     WHERE empresa_id = v_emp
-       AND creado_en >= v_desde AND creado_en < v_hasta;
+    v_total    := (SELECT coalesce(sum(total), 0) FROM ventas_pos
+                    WHERE empresa_id = v_emp AND creado_en >= v_desde AND creado_en < v_hasta);
+    v_cant     := (SELECT count(*) FROM ventas_pos
+                    WHERE empresa_id = v_emp AND creado_en >= v_desde AND creado_en < v_hasta);
+    v_efectivo := (SELECT coalesce(sum(total), 0) FROM ventas_pos
+                    WHERE empresa_id = v_emp AND creado_en >= v_desde AND creado_en < v_hasta
+                      AND medio_pago = 'efectivo');
+    v_otros    := (SELECT coalesce(sum(total), 0) FROM ventas_pos
+                    WHERE empresa_id = v_emp AND creado_en >= v_desde AND creado_en < v_hasta
+                      AND medio_pago <> 'efectivo');
 
-    SELECT coalesce(json_agg(x ORDER BY x.subtotal DESC), '[]'::json) INTO v_detalle
-      FROM (
-            SELECT i.nombre, i.origen,
-                   sum(i.cantidad) AS cantidad,
-                   sum(i.subtotal) AS subtotal
-              FROM ventas_pos_items i
-              JOIN ventas_pos v ON v.id = i.venta_id
-             WHERE v.empresa_id = v_emp
-               AND v.creado_en >= v_desde AND v.creado_en < v_hasta
-             GROUP BY i.nombre, i.origen
-      ) x;
+    v_detalle := (
+        SELECT coalesce(json_agg(x ORDER BY x.subtotal DESC), '[]'::json)
+          FROM (
+                SELECT i.nombre, i.origen,
+                       sum(i.cantidad) AS cantidad,
+                       sum(i.subtotal) AS subtotal
+                  FROM ventas_pos_items i
+                  JOIN ventas_pos v ON v.id = i.venta_id
+                 WHERE v.empresa_id = v_emp
+                   AND v.creado_en >= v_desde AND v.creado_en < v_hasta
+                 GROUP BY i.nombre, i.origen
+          ) x);
 
     IF p_registrar THEN
         INSERT INTO cierres_caja(empresa_id, vendedor_usuario, fecha, desde, hasta,
