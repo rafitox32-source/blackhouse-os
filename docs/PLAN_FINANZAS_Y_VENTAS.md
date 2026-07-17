@@ -189,3 +189,29 @@ Campos de la orden: `precio_repuesto`, `precio_servicio`, `costo` (=repuesto+ser
 
 **Próximo paso recomendado:** empezar por **FASE 1 + FASE 2** (costo real + ganancia correcta),
 que es lo que más plata está costando hoy y no rompe lo existente.
+
+---
+
+## 8. Mejoras de flujo al crear la orden (pedido 2026-07-17)
+
+Dos dolores del dueño. En AMBOS **la base ya existe; falta conectarla al formulario de orden.**
+
+### 8.1 Reconocer al cliente ya registrado (hoy se reescriben datos)
+- Existe tabla `clientes` + handlers `guardar-cliente` / `obtener-clientes` (main.js ~507-527).
+- El campo "Cliente" del formulario (`index.html` `#cli`, ~línea 2007) NO tiene búsqueda: es texto
+  plano. Por eso no reconoce clientes existentes.
+- **Tarea:** agregar autocompletado en `#cli` (y/o por teléfono `#tel`) contra `clientes`; al
+  elegir uno, autocompletar nombre + teléfono (y opcional: mostrar su historial de órdenes).
+  Handler nuevo tipo `buscar-clientes` (ILIKE por nombre/teléfono, filtrado por `empresa_id`).
+
+### 8.2 Recomendar el stock según el modelo del equipo (hoy busca a mano)
+- Los productos (Pantallas/Micas) ya tienen `modelo_compatible` + `grupos_compatibilidad`, y existe
+  `normalizarModeloCompat()` en main.js para emparejar modelos.
+- No hay nada que, al ingresar el modelo del equipo en la orden, muestre el stock compatible.
+- **Tarea:** al escribir/elegir el modelo (`#mod`), consultar `productos` de la empresa cuyas
+  `modelo_compatible` (normalizadas) coincidan con el modelo, y mostrar debajo un aviso tipo
+  "✅ En stock: Pantalla [modelo] — N unid., S/ precio", con opción de usarla directo en la orden.
+  Handler nuevo tipo `sugerir-stock-modelo`. Reusar `normalizarModeloCompat` y el matching por grupo.
+
+**Esfuerzo:** medio, bajo riesgo (solo agrega; no cambia la lógica de dinero). Buen candidato para
+hacer junto o después de la Fase 1.
