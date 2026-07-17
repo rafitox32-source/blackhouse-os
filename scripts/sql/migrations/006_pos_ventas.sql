@@ -131,15 +131,26 @@ SECURITY DEFINER
 SET search_path = public, extensions
 AS $$
 DECLARE
-    u       record;
-    v_hash  text;
-    v_ok    boolean := false;
-    v_token text;
-    v_venc  text;
+    -- Variables escalares con tipo (NO usar 'record' + campos dentro de SQL: el validador de
+    -- PL/pgSQL puede interpretar la variable como una tabla -> "relation ... does not exist").
+    v_id         text;
+    v_empresa_id bigint;
+    v_rol        text;
+    v_hash       text;
+    v_nombre     text;
+    v_usuario    text;
+    v_venc       timestamptz;
+    v_ok         boolean := false;
+    v_token      text;
 BEGIN
-    SELECT * INTO u
-      FROM usuarios
-     WHERE usuario = p_usuario AND estado = 'activo'
+    -- Un solo SELECT (con JOIN a empresas) hacia variables escalares.
+    SELECT u.id::text, u.empresa_id, u.rol, u.password,
+           coalesce(u.nombre_completo, u.nickname, u.usuario), u.usuario,
+           e.fecha_de_vencimiento::timestamptz
+      INTO v_id, v_empresa_id, v_rol, v_hash, v_nombre, v_usuario, v_venc
+      FROM usuarios u
+      LEFT JOIN empresas e ON e.id = u.empresa_id
+     WHERE u.usuario = p_usuario AND u.estado = 'activo'
      LIMIT 1;
 
     IF NOT FOUND THEN
@@ -147,11 +158,10 @@ BEGIN
     END IF;
 
     -- Solo roles con acceso al POS de ventas.
-    IF coalesce(u.rol, '') NOT IN ('vendedor', 'vendedora', 'dueno', 'admin', 'administrador') THEN
+    IF coalesce(v_rol, '') NOT IN ('vendedor', 'vendedora', 'dueno', 'admin', 'administrador') THEN
         RETURN json_build_object('ok', false, 'msg', 'Este usuario no tiene acceso al POS de ventas');
     END IF;
 
-    v_hash := u.password;
     IF v_hash IS NULL THEN
         v_ok := false;
     ELSIF v_hash LIKE '$2%' THEN
@@ -167,23 +177,21 @@ BEGIN
     END IF;
 
     -- Vencimiento de licencia de la empresa (mismo criterio que el escritorio).
-    SELECT fecha_de_vencimiento::text INTO v_venc FROM empresas WHERE id = u.empresa_id;
-    IF u.empresa_id <> 1 AND v_venc IS NOT NULL AND now() > v_venc::timestamptz THEN
+    IF v_empresa_id <> 1 AND v_venc IS NOT NULL AND now() > v_venc THEN
         RETURN json_build_object('ok', false, 'msg', 'Licencia vencida. Contacta al administrador.');
     END IF;
 
     v_token := encode(gen_random_bytes(24), 'hex');
     INSERT INTO pos_sesiones(token, usuario_id, empresa_id, rol, usuario, nombre, expira_en)
-    VALUES (v_token, u.id::text, u.empresa_id, u.rol, u.usuario,
-            coalesce(u.nombre_completo, u.nickname, u.usuario), now() + interval '12 hours');
+    VALUES (v_token, v_id, v_empresa_id, v_rol, v_usuario, v_nombre, now() + interval '12 hours');
 
     RETURN json_build_object(
         'ok', true,
         'token', v_token,
-        'empresa_id', u.empresa_id,
-        'rol', u.rol,
-        'usuario', u.usuario,
-        'nombre', coalesce(u.nombre_completo, u.nickname, u.usuario)
+        'empresa_id', v_empresa_id,
+        'rol', v_rol,
+        'usuario', v_usuario,
+        'nombre', v_nombre
     );
 END;
 $$;
@@ -240,7 +248,9 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    v_sesion   record;
+    v_emp      bigint;
+    v_uid      text;
+    v_usuario  text;
     v_item     jsonb;
     v_venta_id bigint;
     v_total    numeric := 0;
@@ -252,7 +262,9 @@ DECLARE
     v_pid      bigint;
     v_libre_id bigint;
 BEGIN
-    SELECT * INTO v_sesion FROM pos_sesiones WHERE token = p_token AND expira_en > now();
+    SELECT empresa_id, usuario_id, usuario
+      INTO v_emp, v_uid, v_usuario
+      FROM pos_sesiones WHERE token = p_token AND expira_en > now();
     IF NOT FOUND THEN
         RETURN json_build_object('ok', false, 'msg', 'Sesión inválida o expirada');
     END IF;
@@ -262,7 +274,7 @@ BEGIN
     END IF;
 
     INSERT INTO ventas_pos(empresa_id, vendedor_id, vendedor_usuario, medio_pago, total)
-    VALUES (v_sesion.empresa_id, v_sesion.usuario_id, v_sesion.usuario,
+    VALUES (v_emp, v_uid, v_usuario,
             coalesce(nullif(trim(p_medio_pago), ''), 'efectivo'), 0)
     RETURNING id INTO v_venta_id;
 
@@ -282,14 +294,14 @@ BEGIN
             -- Descuenta stock SOLO si el producto es de esta empresa (blindaje multi-empresa).
             UPDATE productos
                SET stock = coalesce(stock, 0) - v_cant
-             WHERE id = v_pid AND empresa_id = v_sesion.empresa_id;
+             WHERE id = v_pid AND empresa_id = v_emp;
 
             -- Registro de movimiento de stock (best-effort: nunca rompe la venta).
             BEGIN
                 INSERT INTO movimientos_stock(empresa_id, sku, cantidad, nota)
-                SELECT v_sesion.empresa_id::text, p.sku, (-v_cant)::int, 'Venta POS #' || v_venta_id
+                SELECT v_emp::text, p.sku, (-v_cant)::int, 'Venta POS #' || v_venta_id
                   FROM productos p
-                 WHERE p.id = v_pid AND p.empresa_id = v_sesion.empresa_id AND p.sku IS NOT NULL;
+                 WHERE p.id = v_pid AND p.empresa_id = v_emp AND p.sku IS NOT NULL;
             EXCEPTION WHEN others THEN
                 NULL;
             END;
@@ -300,7 +312,7 @@ BEGIN
             -- Venta libre: recuerda el producto SIN tocar inventario. Actualiza el precio al último
             -- usado y suma una venta al contador. El ON CONFLICT usa uq_venta_libre_empresa_nombre.
             INSERT INTO productos_venta_libre(empresa_id, nombre, precio, veces_vendido)
-            VALUES (v_sesion.empresa_id, v_nombre, v_precio, 1)
+            VALUES (v_emp, v_nombre, v_precio, 1)
             ON CONFLICT (empresa_id, lower(nombre))
             DO UPDATE SET precio         = EXCLUDED.precio,
                           veces_vendido  = productos_venta_libre.veces_vendido + 1,
@@ -330,7 +342,8 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-    v_sesion   record;
+    v_emp      bigint;
+    v_usuario  text;
     v_fecha    date;
     v_desde    timestamptz;
     v_hasta    timestamptz;
@@ -341,7 +354,9 @@ DECLARE
     v_detalle  json;
     v_cierre_id bigint;
 BEGIN
-    SELECT * INTO v_sesion FROM pos_sesiones WHERE token = p_token AND expira_en > now();
+    SELECT empresa_id, usuario
+      INTO v_emp, v_usuario
+      FROM pos_sesiones WHERE token = p_token AND expira_en > now();
     IF NOT FOUND THEN
         RETURN json_build_object('ok', false, 'msg', 'Sesión inválida o expirada');
     END IF;
@@ -356,7 +371,7 @@ BEGIN
            coalesce(sum(total) FILTER (WHERE medio_pago <> 'efectivo'), 0)
       INTO v_total, v_cant, v_efectivo, v_otros
       FROM ventas_pos
-     WHERE empresa_id = v_sesion.empresa_id
+     WHERE empresa_id = v_emp
        AND creado_en >= v_desde AND creado_en < v_hasta;
 
     SELECT coalesce(json_agg(x ORDER BY x.subtotal DESC), '[]'::json) INTO v_detalle
@@ -366,7 +381,7 @@ BEGIN
                    sum(i.subtotal) AS subtotal
               FROM ventas_pos_items i
               JOIN ventas_pos v ON v.id = i.venta_id
-             WHERE v.empresa_id = v_sesion.empresa_id
+             WHERE v.empresa_id = v_emp
                AND v.creado_en >= v_desde AND v.creado_en < v_hasta
              GROUP BY i.nombre, i.origen
       ) x;
@@ -374,12 +389,12 @@ BEGIN
     IF p_registrar THEN
         INSERT INTO cierres_caja(empresa_id, vendedor_usuario, fecha, desde, hasta,
                                  total_ventas, cantidad_ventas, total_efectivo, total_otros, detalle_json)
-        VALUES (v_sesion.empresa_id, v_sesion.usuario, v_fecha, v_desde, v_hasta,
+        VALUES (v_emp, v_usuario, v_fecha, v_desde, v_hasta,
                 v_total, v_cant, v_efectivo, v_otros, v_detalle)
         RETURNING id INTO v_cierre_id;
 
         UPDATE ventas_pos SET cierre_id = v_cierre_id
-         WHERE empresa_id = v_sesion.empresa_id
+         WHERE empresa_id = v_emp
            AND creado_en >= v_desde AND creado_en < v_hasta
            AND cierre_id IS NULL;
     END IF;
