@@ -186,6 +186,24 @@ Campos de la orden: `precio_repuesto`, `precio_servicio`, `costo` (=repuesto+ser
   dueño lo haga o reintentar.
 - Empresa de prueba principal en datos reales: `empresa_id = 6` (pantallas).
 
+## 6b. POS REAL de la vendedora (descubierto 2026-07-17) — INTEGRADO
+
+La vendedora YA vendía desde una APK que abre
+`https://blackhouse-os-web.vercel.app/panel-vendedor.html` ("BlackHouse OS | Ventas") — un POS
+web aparte (proyecto Vercel separado, no está en este repo) que llama al RPC
+`registrar_venta_movil`. Ese RPC solo descontaba stock + movimientos_stock: las ventas no
+registraban importe y eran invisibles para el módulo financiero.
+
+**Solución aplicada (migración 010, YA en producción y probada):** se reemplazó el RPC
+manteniendo firma y lógica intactas, agregando el insert en `ventas_pos`/`ventas_pos_items`
+(precio = productos.precio, vendedor parseado de la nota, medio 'efectivo'). Sin tocar la APK ni
+la web. Desde ahora sus ventas alimentan Métricas, Cierre del Día y el Excel.
+
+- Limitación: su POS no envía medio de pago → todo entra como 'efectivo'. Mejora futura: agregar
+  selector de pago en panel-vendedor.html (vive en el proyecto Vercel, no en este repo).
+- La carpeta `web-vendedora/` de este repo queda como alternativa/upgrade opcional (tiene venta
+  libre y cierre de caja propios) — YA NO es necesario publicarla para que ella venda.
+
 ## 7. Estado de lo YA hecho esta sesión (contexto)
 
 - ✅ POS de la vendedora (web `web-vendedora/` + migración 006 `pos_ventas`) — aplicado.
