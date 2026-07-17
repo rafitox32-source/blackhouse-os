@@ -1947,11 +1947,20 @@
                                 <div id="stock-resultados-tec"
                                     style="margin-top:15px; max-height:180px; overflow-y:auto;">
                                 </div>
+                                <button class="bh-btn-white" style="width:100%; margin-top:12px; padding:10px; text-align:left; border:1px dashed var(--bh-purple); color:var(--bh-purple);"
+                                    onclick="abrirRepuestoExterno()">
+                                    <i class='bx bx-transfer-alt'></i> Repuesto externo (otro proveedor)
+                                </button>
                             </div>
 
                             <div class="bh-card" style="margin-bottom:0; padding:20px;">
                                 <h3 style="margin-top:0; font-size:14px; text-transform:uppercase; color:#aaa;"><i
                                         class='bx bx-wrench'></i> Utilidades</h3>
+                                <button class="bh-btn-white"
+                                    style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
+                                    onclick="abrirReporteComprasDia()">
+                                    <i class='bx bx-receipt'></i> Compras del día (proveedores)
+                                </button>
                                 <button class="bh-btn-white"
                                     style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
                                     onclick="ipcRenderer.send('abrir-carpeta', 'dump')"><i class='bx bx-chip'></i>
@@ -2004,11 +2013,6 @@
                                 <div style="display:flex; gap:8px;">
                                     <input type="text" id="mod" class="bh-input" placeholder="Ej: iPhone 13 Pro"
                                         style="flex:1;">
-                                    <button type="button" class="bh-btn-purple" onclick="abrirSelectorModelos('mod')"
-                                        style="padding: 0 15px; display:flex; align-items:center; justify-content:center;"
-                                        title="Seleccionar de catálogo">
-                                        <i class='bx bx-mobile-alt' style="font-size: 18px;"></i>
-                                    </button>
                                 </div>
                             </div>
                             <div class="input-group">
@@ -2051,10 +2055,8 @@
                                     <option value="tarjeta">💳 Tarjeta</option>
                                     <option value="transferencia">🏦 Transferencia</option>
                                 </select></div>
-                            <div class="input-group"><label>👨‍🔧 Técnico Asignado</label><select id="rec-tecnico"
-                                    class="bh-input" style="background:#222;">
-                                    <option value="">Sin asignar</option>
-                                </select></div>
+                            <!-- El técnico ya no se elige a mano: la orden se asigna automáticamente
+                                 al usuario que está logueado (ver tecnico_id en guardarOrden). -->
                         </div>
 
                         <div class="bh-card" style="margin-top:20px; border:1px dashed var(--bh-purple);">
@@ -3671,8 +3673,25 @@
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
                 <button class="bh-btn-white"
                     onclick="document.getElementById('modal-facturacion').style.display='none'">Cancelar</button>
-                <button class="bh-btn-purple" style="background: var(--info);" onclick="emitirFactura()">Generar y
-                    Descargar</button>
+                <button class="bh-btn-purple" style="background: var(--info);" onclick="emitirFactura()">Generar
+                    Comprobante</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: elegir formato del comprobante ya emitido (PDF o Ticket) -->
+    <div id="modal-comprobante-listo" class="modal-overlay">
+        <div class="modal-content" style="width: 380px; text-align:center;">
+            <h2 style="margin-top:0; color: var(--success);">✅ Comprobante generado</h2>
+            <p id="comp-listo-num" style="color:#aaa; font-size:13px; margin-bottom:20px;"></p>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button class="bh-btn-purple" style="background: var(--info);" onclick="descargarComprobantePDF()">
+                    <i class='bx bxs-file-pdf'></i> Descargar PDF
+                </button>
+                <button class="bh-btn-purple" onclick="imprimirComprobanteTicket()">
+                    <i class='bx bx-receipt'></i> Imprimir Ticket (tickera)
+                </button>
+                <button class="bh-btn-white" onclick="document.getElementById('modal-comprobante-listo').style.display='none'">Cerrar</button>
             </div>
         </div>
     </div>
@@ -3740,6 +3759,51 @@
                 <button class="bh-btn-white" onclick="limpiarOhm()">Limpiar</button>
                 <button class="bh-btn-purple"
                     onclick="document.getElementById('modal-ohm').style.display='none'">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Repuesto externo (traído de otro proveedor) -->
+    <div id="modal-repuesto-externo" class="modal-overlay">
+        <div class="modal-content" style="width: 420px;">
+            <h2 style="margin-top:0; color: var(--bh-purple);"><i class='bx bx-transfer-alt'></i> Repuesto externo</h2>
+            <p style="color:#aaa; font-size:13px; margin-bottom:18px;">Repuesto que trajiste de otro proveedor porque no había en stock. <b>No toca tu inventario.</b> Queda anotado en la orden y en las compras del día.</p>
+            <div class="grid-inputs" style="grid-template-columns: 1fr;">
+                <div class="input-group">
+                    <label>Orden #</label>
+                    <input type="text" id="rext-orden" class="bh-input" placeholder="Ej: 98">
+                </div>
+                <div class="input-group">
+                    <label>Proveedor (a quién le compraste)</label>
+                    <input type="text" id="rext-proveedor" class="bh-input" list="rext-proveedores-list" placeholder="Ej: Punto Mundo Cell">
+                    <datalist id="rext-proveedores-list"></datalist>
+                </div>
+                <div class="input-group">
+                    <label>Repuesto (opcional)</label>
+                    <input type="text" id="rext-desc" class="bh-input" placeholder="Ej: Pantalla A15 INCELL">
+                </div>
+                <div class="input-group">
+                    <label>¿Cuánto pagaste?</label>
+                    <input type="number" id="rext-costo" class="bh-input" min="0" step="any" placeholder="0.00">
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:20px;">
+                <button class="bh-btn-white" onclick="document.getElementById('modal-repuesto-externo').style.display='none'">Cancelar</button>
+                <button class="bh-btn-purple" onclick="registrarRepuestoExterno()"><i class='bx bx-save'></i> Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Compras externas del día (cierre por proveedor) -->
+    <div id="modal-compras-dia" class="modal-overlay">
+        <div class="modal-content" style="width: 480px;">
+            <h2 style="margin-top:0; color: var(--info);"><i class='bx bx-receipt'></i> Compras del día</h2>
+            <p style="color:#aaa; font-size:13px; margin-bottom:12px;">Repuestos traídos de otros proveedores hoy. Cuánto le debes a cada uno.</p>
+            <div id="compras-dia-cuerpo" style="max-height:340px; overflow-y:auto;">
+                <p style="color:#aaa; text-align:center; padding:20px;">Cargando…</p>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+                <button class="bh-btn-purple" onclick="document.getElementById('modal-compras-dia').style.display='none'">Cerrar</button>
             </div>
         </div>
     </div>
@@ -4662,7 +4726,9 @@
                 adelanto: document.getElementById('pay-advance').value || '0',
                 saldo: document.getElementById('pay-balance').value || '0',
                 metodo_pago: document.getElementById('pay-method').value,
-                tecnico_id: (document.getElementById('rec-tecnico') && document.getElementById('rec-tecnico').value) || null,
+                // El técnico se toma automáticamente del usuario logueado (su 'usuario' de login),
+                // que es el mismo valor con el que se identifican los técnicos en el resto del sistema.
+                tecnico_id: localStorage.getItem('usuarioLogin') || null,
                 firma: firmaData, evidencia: evidenciaData, estado: 'Recibido'
             };
             document.getElementById('modal-confirm-custom').style.display = 'flex';
@@ -5977,28 +6043,121 @@
                 });
             }
 
-            // CREAR Y DESCARGAR
-            showToast("Generando documento profesional...", "info");
-            setTimeout(() => {
-                if (typeof window.html2canvas !== 'undefined') {
-                    window.html2canvas(document.getElementById('invoice-content'), { backgroundColor: "#ffffff", scale: 2 }).then(canvas => {
-                        const enlaceDescarga = document.createElement('a');
-                        enlaceDescarga.download = `${tipo}_${res.numero}.png`;
-                        enlaceDescarga.href = canvas.toDataURL('image/png');
-                        enlaceDescarga.click();
-                        showToast(`¡${tipo} generada con éxito! 📂`, 'success');
-                    }).catch(e => {
-                        console.error('Error html2canvas:', e);
-                        showToast('Error al generar PDF/Imagen', 'error');
-                    });
-                } else {
-                    showToast('Librería de exportación no disponible.', 'error');
-                }
-            }, 800);
+            // Guardamos los datos del comprobante ya emitido para poder exportarlo como PDF real
+            // o imprimirlo como ticket (el usuario elige). El invoice-content ya quedó pintado.
+            window.comprobanteActual = {
+                appName, currency, tipo,
+                tipoLabel: document.getElementById('inv-tipo-doc').innerText,
+                docLabel: (tipo === 'Factura' ? 'RUC' : (tipo === 'Boleta' ? 'DNI/RUC' : 'Doc')),
+                doc, nom, dir, desc,
+                numero: res.numero,
+                fecha: document.getElementById('inv-fecha').innerText,
+                subtotal, igv, total: montoFinal,
+                letras: document.getElementById('inv-letras').innerText
+            };
+            document.getElementById('comp-listo-num').innerText = `${tipo} N° ${res.numero} · ${currency} ${montoFinal.toFixed(2)}`;
+            document.getElementById('modal-comprobante-listo').style.display = 'flex';
           } catch (err) {
             console.error('Error al renderizar el comprobante:', err);
             showToast('Error al generar el comprobante: ' + err.message, 'danger');
           }
+        });
+
+        // === EXPORTAR / IMPRIMIR COMPROBANTE (PDF real o Ticket 80mm) ===
+        function _escComp(s) {
+            return String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        }
+
+        // Serializa el documento A4 (invoice-content) para el PDF, convirtiendo cualquier <canvas>
+        // (ej. el QR) en <img> para que sobreviva al pasarlo a la ventana de impresión.
+        function _serializarInvoicePDF() {
+            const orig = document.getElementById('invoice-content');
+            const clone = orig.cloneNode(true);
+            const cOrig = orig.querySelectorAll('canvas');
+            const cClone = clone.querySelectorAll('canvas');
+            cClone.forEach((cv, i) => {
+                try {
+                    const img = document.createElement('img');
+                    img.src = cOrig[i].toDataURL('image/png');
+                    img.style.cssText = cv.style.cssText;
+                    cv.parentNode.replaceChild(img, cv);
+                } catch (e) {}
+            });
+            return `<!DOCTYPE html><html><head><meta charset="utf-8">
+                <style>html,body{margin:0;background:#fff;} #invoice-content{margin:0 auto;}</style>
+                </head><body>${clone.outerHTML}</body></html>`;
+        }
+
+        function descargarComprobantePDF() {
+            const c = window.comprobanteActual || {};
+            ipcRenderer.send('imprimir-documento', {
+                modo: 'pdf',
+                html: _serializarInvoicePDF(),
+                filename: `${c.tipo || 'Comprobante'}_${c.numero || ''}.pdf`
+            });
+            showToast('Preparando PDF…', 'info');
+        }
+
+        // Arma el ticket de 80mm a partir de los datos del comprobante emitido.
+        function _htmlTicket() {
+            const c = window.comprobanteActual || {};
+            const sym = c.currency || 'S/';
+            const fmt = n => (parseFloat(n) || 0).toFixed(2);
+            const bloqueIgv = (c.tipo === 'Factura')
+                ? `<div class="row"><span>Subtotal</span><span>${sym} ${fmt(c.subtotal)}</span></div>
+                   <div class="row"><span>IGV (18%)</span><span>${sym} ${fmt(c.igv)}</span></div>`
+                : '';
+            return `<!DOCTYPE html><html><head><meta charset="utf-8">
+            <style>
+              @page { size: 80mm auto; margin: 0; }
+              * { box-sizing: border-box; }
+              body { width: 80mm; margin: 0; padding: 4mm 3mm; color:#000;
+                     font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.35; }
+              .c { text-align:center; } .b{ font-weight:bold; } .big{ font-size:15px; }
+              .row{ display:flex; justify-content:space-between; gap:6px; }
+              hr{ border:none; border-top:1px dashed #000; margin:5px 0; }
+              .tot{ font-size:16px; font-weight:bold; margin-top:2px; }
+              .small{ font-size:10px; }
+            </style></head><body>
+              <div class="c b big">${_escComp(c.appName)}</div>
+              <div class="c">${_escComp(c.tipoLabel || c.tipo)}</div>
+              <div class="c b">N° ${_escComp(c.numero)}</div>
+              <hr>
+              <div class="row"><span>Fecha:</span><span>${_escComp(c.fecha)}</span></div>
+              <div class="row"><span>Cliente:</span><span>${_escComp(c.nom)}</span></div>
+              <div class="row"><span>${_escComp(c.docLabel || 'Doc')}:</span><span>${_escComp(c.doc || '-')}</span></div>
+              <hr>
+              <div class="b">Detalle</div>
+              <div>${_escComp(c.desc)}</div>
+              <hr>
+              ${bloqueIgv}
+              <div class="row tot"><span>TOTAL</span><span>${sym} ${fmt(c.total)}</span></div>
+              <hr>
+              <div class="small">SON: ${_escComp(c.letras)}</div>
+              <hr>
+              <div class="c">¡Gracias por su preferencia!</div>
+            </body></html>`;
+        }
+
+        function imprimirComprobanteTicket() {
+            const c = window.comprobanteActual || {};
+            ipcRenderer.send('imprimir-documento', {
+                modo: 'ticket',
+                html: _htmlTicket(),
+                filename: `${c.tipo || 'Ticket'}_${c.numero || ''}.pdf`
+            });
+            showToast('Abriendo impresión de ticket…', 'info');
+        }
+
+        ipcRenderer.on('documento-impreso', (e, res) => {
+            if (res && res.success) {
+                showToast(res.modo === 'pdf' ? 'PDF guardado ✅' : 'Ticket enviado a la impresora 🧾', 'success');
+                document.getElementById('modal-comprobante-listo').style.display = 'none';
+            } else if (res && res.cancelado) {
+                // El usuario canceló el guardado/impresión: no mostramos error.
+            } else {
+                showToast('No se pudo imprimir: ' + ((res && res.msg) || 'error'), 'danger');
+            }
         });
         // Lógica del cronómetro del técnico
         let timerInterval;
@@ -6103,16 +6262,107 @@
 
         ipcRenderer.on('repuesto-usado-lab', (e, res) => {
             if (res.success) {
-                showToast(`Repuesto usado correctamente`, "success");
-                // Actualizar bitácora local
+                showToast(`Repuesto descontado del stock`, "success");
+                // Actualizar bitácora local (sin precio: el precio de la orden lo maneja el dueño a mano)
                 let bitacoraElement = document.getElementById('lab-bitacora');
-                bitacoraElement.value = bitacoraElement.value + (bitacoraElement.value ? '\n' : '') + `✅ Repuesto utilizado: ${res.nombre} (S/ ${res.precio})`;
-                
+                bitacoraElement.value = bitacoraElement.value + (bitacoraElement.value ? '\n' : '') + `✅ Repuesto utilizado (de stock): ${res.nombre}`;
+
                 // Refrescar lista de stock en UI
                 filtrarStockTecnico();
             } else {
                 showToast(res.msg || "Error al usar repuesto", "danger");
             }
+        });
+
+        // === REPUESTO EXTERNO (traído de otro proveedor) ===
+        function abrirRepuestoExterno() {
+            // Prefill del # de orden con el que esté cargado en el laboratorio (si hay).
+            const ordenLab = (document.getElementById('lab-orden-id')?.value || '').trim().replace('#', '').replace(/^0+/, '');
+            document.getElementById('rext-orden').value = ordenLab || '';
+            document.getElementById('rext-proveedor').value = '';
+            document.getElementById('rext-desc').value = '';
+            document.getElementById('rext-costo').value = '';
+            // Sugerir proveedores conocidos en el datalist.
+            try {
+                const dl = document.getElementById('rext-proveedores-list');
+                if (dl && typeof proveedores !== 'undefined' && Array.isArray(proveedores)) {
+                    dl.innerHTML = proveedores.map(p => `<option value="${(p.nombre || '').replace(/"/g, '&quot;')}"></option>`).join('');
+                }
+            } catch (e) {}
+            document.getElementById('modal-repuesto-externo').style.display = 'flex';
+            setTimeout(() => document.getElementById('rext-proveedor').focus(), 100);
+        }
+
+        function registrarRepuestoExterno() {
+            const proveedor = document.getElementById('rext-proveedor').value.trim();
+            const costo = parseFloat(document.getElementById('rext-costo').value);
+            if (!proveedor) return showToast("Escribe el proveedor", "warning");
+            if (isNaN(costo) || costo < 0) return showToast("Escribe cuánto pagaste", "warning");
+            ipcRenderer.send('registrar-repuesto-externo', {
+                ordenId: document.getElementById('rext-orden').value.trim().replace('#', '').replace(/^0+/, '') || null,
+                proveedor,
+                descripcion: document.getElementById('rext-desc').value.trim(),
+                costo
+            });
+        }
+
+        ipcRenderer.on('repuesto-externo-registrado', (e, res) => {
+            if (res.success) {
+                showToast(`Repuesto externo guardado (${res.proveedor}: S/ ${res.costo})`, "success");
+                document.getElementById('modal-repuesto-externo').style.display = 'none';
+            } else {
+                showToast(res.msg || "Error al guardar repuesto externo", "danger");
+            }
+        });
+
+        function abrirReporteComprasDia() {
+            document.getElementById('compras-dia-cuerpo').innerHTML = '<p style="color:#aaa; text-align:center; padding:20px;">Cargando…</p>';
+            document.getElementById('modal-compras-dia').style.display = 'flex';
+            ipcRenderer.send('obtener-compras-externas-dia', {});
+        }
+
+        ipcRenderer.on('compras-externas-dia', (e, res) => {
+            const cont = document.getElementById('compras-dia-cuerpo');
+            if (!res.success) {
+                cont.innerHTML = `<p style="color:var(--danger); text-align:center; padding:20px;">${res.msg || 'Error'}</p>`;
+                return;
+            }
+            const items = res.items || [];
+            if (items.length === 0) {
+                cont.innerHTML = '<p style="color:#aaa; text-align:center; padding:20px;">No hay compras externas registradas hoy.</p>';
+                return;
+            }
+            // Agrupar por proveedor
+            const porProv = {};
+            let totalGeneral = 0;
+            items.forEach(it => {
+                const prov = it.proveedor || 'Sin proveedor';
+                const c = parseFloat(it.costo) || 0;
+                totalGeneral += c;
+                if (!porProv[prov]) porProv[prov] = { total: 0, detalle: [] };
+                porProv[prov].total += c;
+                porProv[prov].detalle.push(it);
+            });
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            let html = `<div style="text-align:center; margin-bottom:14px;">
+                <div style="font-size:28px; font-weight:800; color:var(--bh-purple);">S/ ${totalGeneral.toFixed(2)}</div>
+                <div style="font-size:12px; color:#aaa;">Total gastado hoy en repuestos externos · ${esc(res.fecha)}</div></div>`;
+            Object.keys(porProv).sort((a, b) => porProv[b].total - porProv[a].total).forEach(prov => {
+                const g = porProv[prov];
+                html += `<div style="border:1px solid #333; border-radius:8px; padding:12px; margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <strong style="color:white;">${esc(prov)}</strong>
+                        <strong style="color:var(--success);">S/ ${g.total.toFixed(2)}</strong>
+                    </div>`;
+                g.detalle.forEach(it => {
+                    const ord = it.orden_id ? ` · Orden #${esc(it.orden_id)}` : '';
+                    html += `<div style="font-size:12px; color:#aaa; display:flex; justify-content:space-between; padding:3px 0;">
+                        <span>${esc(it.descripcion || 'Repuesto')}${ord}</span>
+                        <span>S/ ${(parseFloat(it.costo) || 0).toFixed(2)}</span></div>`;
+                });
+                html += `</div>`;
+            });
+            cont.innerHTML = html;
         });
 
         // 3. Buscar Orden en el Laboratorio

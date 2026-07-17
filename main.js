@@ -2052,16 +2052,14 @@ ipcMain.on('usar-repuesto-lab', async (event, params) => {
             .single();
 
         if (!errOrden && ordenData) {
-            const nuevaBitacora = (ordenData.bitacora || '') + (ordenData.bitacora ? '\n' : '') + `✅ Repuesto utilizado: ${nombre} (S/ ${precio})`;
-            const nuevoPrecioRepuesto = (parseFloat(ordenData.precio_repuesto) || 0) + parseFloat(precio);
-            const nuevoCosto = (parseFloat(ordenData.costo) || 0) + parseFloat(precio);
-            const nuevoSaldo = (parseFloat(ordenData.saldo) || 0) + parseFloat(precio);
-            
+            // Usar un repuesto del stock SOLO descuenta inventario y lo anota en la bitácora.
+            // NO se suma el precio a la orden: el precio del repuesto lo define el dueño/técnico a
+            // mano al crear la orden (a veces cobra un poco menos). Antes se sumaba precio_repuesto,
+            // costo y saldo, lo que inflaba el total por encima de lo ya cargado.
+            const nuevaBitacora = (ordenData.bitacora || '') + (ordenData.bitacora ? '\n' : '') + `✅ Repuesto utilizado (de stock): ${nombre}`;
+
             await supabase.from('ordenes').update({
-                bitacora: nuevaBitacora,
-                precio_repuesto: nuevoPrecioRepuesto,
-                costo: nuevoCosto,
-                saldo: nuevoSaldo
+                bitacora: nuevaBitacora
             }).eq('id', ordenId);
         }
 
@@ -2069,6 +2067,124 @@ ipcMain.on('usar-repuesto-lab', async (event, params) => {
 
     } catch (err) {
         event.reply('repuesto-usado-lab', { success: false, msg: err.message });
+    }
+});
+
+// === REPUESTO EXTERNO (traído de otro proveedor porque no había en stock) ===
+// Registra la compra externa (proveedor + costo) para el cierre del día y la anota en la orden.
+// NO toca el inventario: nunca fue un producto propio.
+ipcMain.on('registrar-repuesto-externo', async (event, params) => {
+    try {
+        const { ordenId, proveedor, descripcion, costo } = params || {};
+        const prov = String(proveedor || '').trim();
+        const desc = String(descripcion || '').trim();
+        const cst = parseFloat(costo);
+        if (!prov) throw new Error('Falta el nombre del proveedor');
+        if (isNaN(cst) || cst < 0) throw new Error('El costo no es válido');
+
+        const { error } = await supabase.from('compras_externas').insert([{
+            empresa_id: empresaActual,
+            orden_id: ordenId ? String(ordenId) : null,
+            proveedor: prov,
+            descripcion: desc || null,
+            costo: cst,
+            usuario: usuarioActual || null
+        }]);
+        if (error) throw error;
+
+        // Anotar en la bitácora de la orden (si se indicó una orden válida de esta empresa).
+        if (ordenId) {
+            const { data: ord } = await supabase.from('ordenes')
+                .select('bitacora')
+                .eq('id', ordenId)
+                .eq('empresa_id', empresaActual)
+                .single();
+            if (ord) {
+                const nota = `🔻 Repuesto externo (${prov})${desc ? ' - ' + desc : ''} - pagado S/ ${cst}`;
+                const nuevaBitacora = (ord.bitacora || '') + (ord.bitacora ? '\n' : '') + nota;
+                await supabase.from('ordenes').update({ bitacora: nuevaBitacora }).eq('id', ordenId);
+            }
+        }
+
+        event.reply('repuesto-externo-registrado', { success: true, proveedor: prov, costo: cst });
+    } catch (err) {
+        event.reply('repuesto-externo-registrado', { success: false, msg: err.message });
+    }
+});
+
+// Reporte de compras externas de un día (por defecto hoy), para el cierre.
+ipcMain.on('obtener-compras-externas-dia', async (event, params) => {
+    try {
+        // Bordes del día en hora LOCAL de la máquina (creado_en es timestamptz en UTC).
+        const base = (params && params.fecha) ? new Date(params.fecha + 'T12:00:00') : new Date();
+        const desde = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, 0, 0, 0);
+        const hasta = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 23, 59, 59, 999);
+
+        const { data, error } = await supabase.from('compras_externas')
+            .select('*')
+            .eq('empresa_id', empresaActual)
+            .gte('creado_en', desde.toISOString())
+            .lte('creado_en', hasta.toISOString())
+            .order('creado_en', { ascending: true });
+        if (error) throw error;
+
+        const fechaTxt = `${desde.getFullYear()}-${String(desde.getMonth() + 1).padStart(2, '0')}-${String(desde.getDate()).padStart(2, '0')}`;
+        event.reply('compras-externas-dia', { success: true, fecha: fechaTxt, items: data || [] });
+    } catch (err) {
+        event.reply('compras-externas-dia', { success: false, msg: err.message });
+    }
+});
+
+// === IMPRESIÓN DE COMPROBANTES ===
+// El renderer arma el HTML (documento A4 para PDF, o ticket 80mm) y lo manda acá. Se carga en una
+// ventana oculta y se usa printToPDF (PDF real) o print con diálogo (para elegir la tickera).
+// No usa librerías extra: todo con las APIs nativas de Electron.
+ipcMain.on('imprimir-documento', async (event, params) => {
+    let win = null;
+    let tmpPath = null;
+    const modo = (params && params.modo) || 'pdf';
+    try {
+        const { html, filename } = params || {};
+        if (!html) throw new Error('No hay contenido para imprimir');
+
+        tmpPath = path.join(app.getPath('temp'), `bh_doc_${Date.now()}.html`);
+        fs.writeFileSync(tmpPath, html, 'utf8');
+
+        win = new BrowserWindow({ show: false, webPreferences: {} });
+        await win.loadFile(tmpPath);
+        // Damos un momento para que rendericen imágenes/QR antes de imprimir.
+        await new Promise(r => setTimeout(r, 450));
+
+        if (modo === 'pdf') {
+            const pdf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'A4' });
+            const destino = dialog.showSaveDialogSync({
+                title: 'Guardar comprobante en PDF',
+                defaultPath: path.join(app.getPath('downloads'), filename || 'comprobante.pdf'),
+                filters: [{ name: 'PDF', extensions: ['pdf'] }]
+            });
+            if (destino) {
+                fs.writeFileSync(destino, pdf);
+                shell.openPath(destino);
+                event.reply('documento-impreso', { success: true, modo: 'pdf' });
+            } else {
+                event.reply('documento-impreso', { success: false, modo: 'pdf', cancelado: true });
+            }
+            try { win.close(); } catch (e) {}
+            win = null;
+            if (tmpPath) fs.unlink(tmpPath, () => {});
+        } else {
+            // Ticket: abre el diálogo de impresión de Windows para elegir la tickera.
+            win.webContents.print({ silent: false, printBackground: true }, (ok, reason) => {
+                event.reply('documento-impreso', { success: ok, modo: 'ticket', cancelado: !ok, msg: ok ? null : (reason || 'cancelado') });
+                try { if (win) { win.close(); win = null; } } catch (e) {}
+                if (tmpPath) fs.unlink(tmpPath, () => {});
+            });
+        }
+    } catch (err) {
+        console.error('Error al imprimir documento:', err.message);
+        event.reply('documento-impreso', { success: false, modo, msg: err.message });
+        try { if (win) win.close(); } catch (e) {}
+        if (tmpPath) { try { fs.unlink(tmpPath, () => {}); } catch (e) {} }
     }
 });
 
