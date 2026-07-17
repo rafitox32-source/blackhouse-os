@@ -5342,74 +5342,15 @@
         // === EXPORTAR REPORTE A EXCEL (layout basado en la plantilla "reporte de venta" del dueño:
         //     bloque de ventas | bloque de servicio técnico | gastos | totales por pago | yapes) ===
         function exportarReporteExcel() {
-            showToast('Preparando Excel…', 'info');
-            ipcRenderer.send('obtener-datos-export', periodoReporte);
+            showToast('Generando Excel con formato…', 'info');
+            // El Excel se construye en main.js con exceljs (colores/bordes/fórmulas de la
+            // plantilla del dueño); SheetJS gratuito no soporta estilos.
+            ipcRenderer.send('exportar-reporte-excel', periodoReporte);
         }
 
-        ipcRenderer.on('datos-export', (e, res) => {
-            if (!res.success) return showToast(res.msg || 'Error al exportar', 'danger');
-            try {
-                const f = n => Math.round((parseFloat(n) || 0) * 100) / 100;
-                const V = res.ventasRows || [], O = res.ordenesRows || [], G = res.gastosRows || [];
-                const totV = f(V.reduce((s, r) => s + f(r.importe), 0));
-                const totO = f(O.reduce((s, r) => s + f(r.importe), 0));
-                const totG = f(G.reduce((s, r) => s + f(r.importe), 0));
-                const porPago = rows => rows.reduce((m, r) => {
-                    const k = (r.pago || 'efectivo').toLowerCase();
-                    m[k] = (m[k] || 0) + f(r.importe); return m;
-                }, {});
-                const pv = porPago(V), po = porPago(O);
-                // Yapes por persona (quién cobró por Yape: vendedora y técnicos)
-                const yapes = {};
-                V.forEach(r => { if ((r.pago || '').toLowerCase() === 'yape') yapes[r.atendio || 'Vendedora'] = (yapes[r.atendio || 'Vendedora'] || 0) + f(r.importe); });
-                O.forEach(r => { if ((r.pago || '').toLowerCase() === 'yape') yapes[r.encargado || 'Técnico'] = (yapes[r.encargado || 'Técnico'] || 0) + f(r.importe); });
-
-                const per = { hoy: 'HOY', semana: 'ÚLTIMOS 7 DÍAS', mes: 'MES ACTUAL', todo: 'HISTÓRICO' }[res.periodo] || res.periodo;
-                const aoa = [];
-                aoa.push(['REPORTE DE VENTA', '', per, '', 'TOTAL DEL PERIODO', f(totV + totO), '', 'Total S.Tec', totO, '', 'Total Ventas', totV]);
-                aoa.push(['Generado', new Date().toLocaleDateString('es-PE')]);
-                aoa.push([]);
-                // Bloques lado a lado: A-E ventas | G-K servicio técnico (mismo orden que la plantilla)
-                aoa.push(['#', 'PRODUCTO/SERVICIO', 'ATENDIÓ', 'IMPORTE', 'PAGO', '', 'SERVICIO TÉCNICO', 'ENCARGADO', 'COSTO REP.', 'IMPORTE', 'PAGO']);
-                const maxFilas = Math.max(V.length, O.length, 1);
-                for (let i = 0; i < maxFilas; i++) {
-                    const v = V[i], o = O[i];
-                    aoa.push([
-                        v ? i + 1 : '', v ? v.producto : '', v ? v.atendio : '', v ? f(v.importe) : '', v ? String(v.pago || '').toUpperCase() : '',
-                        '',
-                        o ? o.servicio : '', o ? o.encargado : '', o ? f(o.costoRepuesto) : '', o ? f(o.importe) : '', o ? String(o.pago || '').toUpperCase() : ''
-                    ]);
-                }
-                aoa.push(['', 'TOTAL VENTAS', '', totV, '', '', 'TOTAL SERVICIO', '', '', totO]);
-                aoa.push([]);
-                aoa.push(['GASTOS', 'IMPORTE', '', '', '', '', 'TOTALES POR PAGO', 'VENTAS', 'SERVICIO']);
-                const medios = ['efectivo', 'yape', 'plin', 'transferencia', 'tarjeta', 'otro'];
-                const maxFilas2 = Math.max(G.length, medios.length, 1);
-                for (let i = 0; i < maxFilas2; i++) {
-                    const g = G[i], m = medios[i];
-                    aoa.push([
-                        g ? g.nombre : '', g ? f(g.importe) : '', '', '', '', '',
-                        m ? m.toUpperCase() : '', m !== undefined ? f(pv[m] || 0) : '', m !== undefined ? f(po[m] || 0) : ''
-                    ]);
-                }
-                aoa.push(['TOTAL GASTOS', totG]);
-                aoa.push([]);
-                aoa.push(['YAPES Y RETIROS', 'IMPORTE']);
-                const nomYapes = Object.keys(yapes);
-                if (nomYapes.length) nomYapes.forEach(k => aoa.push([k, f(yapes[k])]));
-                else aoa.push(['(sin cobros por Yape en el período)', '']);
-                aoa.push([]);
-                aoa.push(['NETO (ventas + servicio − gastos)', f(totV + totO - totG)]);
-
-                const ws = XLSX.utils.aoa_to_sheet(aoa);
-                ws['!cols'] = [{ wch: 4 }, { wch: 36 }, { wch: 14 }, { wch: 10 }, { wch: 13 }, { wch: 2 }, { wch: 38 }, { wch: 14 }, { wch: 11 }, { wch: 10 }, { wch: 13 }];
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, 'VENTAS');
-                XLSX.writeFile(wb, `Reporte_Venta_${res.periodo}_${new Date().toISOString().slice(0, 10)}.xlsx`);
-                showToast('Excel generado 📥 (revisa Descargas)', 'success');
-            } catch (err) {
-                showToast('Error generando Excel: ' + err.message, 'danger');
-            }
+        ipcRenderer.on('reporte-excel-generado', (e, res) => {
+            if (res.success) showToast('Excel generado y abierto 📥', 'success');
+            else if (!res.cancelado) showToast(res.msg || 'Error al exportar', 'danger');
         });
 
         // === CIERRE DEL DÍA UNIFICADO (Fase 6: taller + POS − gastos − compras − devoluciones) ===

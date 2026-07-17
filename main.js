@@ -1587,9 +1587,9 @@ ipcMain.on('eliminar-gasto', async (event, data) => {
 // === 6b-bis. DATOS PARA EXPORTAR EL REPORTE A EXCEL (formato de la plantilla del dueño) ===
 // Devuelve filas crudas del período: ventas del POS (una fila por producto), órdenes del taller
 // entregadas (con encargado y costo real), y gastos + compras externas juntos como GASTOS.
-ipcMain.on('obtener-datos-export', async (event, periodo) => {
+async function recolectarDatosExport(periodo) {
     const cf = v => parseFloat(v) || 0;
-    try {
+    {
         const ahora = new Date();
         let desde = null;
         if (periodo === 'hoy') desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
@@ -1667,11 +1667,159 @@ ipcMain.on('obtener-datos-export', async (event, periodo) => {
             }));
         } catch (e) { }
 
-        event.reply('datos-export', { success: true, periodo: periodo || 'todo', ventasRows, ordenesRows, gastosRows });
+        return { periodo: periodo || 'todo', ventasRows, ordenesRows, gastosRows };
+    }
+}
+
+ipcMain.on('obtener-datos-export', async (event, periodo) => {
+    try {
+        event.reply('datos-export', { success: true, ...(await recolectarDatosExport(periodo)) });
     } catch (err) {
         event.reply('datos-export', { success: false, msg: err.message });
     }
 });
+
+// Exporta el reporte a un .xlsx CON FORMATO (mismos colores/bloques que la plantilla
+// "reporte de venta" del dueño: encabezados verde 30ED03, totales naranja FFC000, bordes,
+// fórmulas de suma). SheetJS gratuito no soporta estilos, por eso se usa exceljs acá en main.
+ipcMain.on('exportar-reporte-excel', async (event, periodo) => {
+    try {
+        const d = await recolectarDatosExport(periodo);
+        const buffer = await construirExcelReporte(d);
+        const destino = dialog.showSaveDialogSync({
+            title: 'Guardar reporte de venta',
+            defaultPath: path.join(app.getPath('downloads'), `Reporte_Venta_${d.periodo}_${new Date().toISOString().slice(0, 10)}.xlsx`),
+            filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+        });
+        if (!destino) return event.reply('reporte-excel-generado', { success: false, cancelado: true });
+        fs.writeFileSync(destino, Buffer.from(buffer));
+        shell.openPath(destino);
+        event.reply('reporte-excel-generado', { success: true });
+    } catch (err) {
+        console.error('Error exportando Excel:', err);
+        event.reply('reporte-excel-generado', { success: false, msg: err.message });
+    }
+});
+
+async function construirExcelReporte({ periodo, ventasRows, ordenesRows, gastosRows }) {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('VENTAS');
+    const V = ventasRows || [], O = ordenesRows || [], G = gastosRows || [];
+
+    const VERDE = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF30ED03' } };
+    const NARANJA = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC000' } };
+    const BORDE = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    const fH = { name: 'Constantia', bold: true, size: 11 };
+    const fB = { name: 'Calibri', bold: true, size: 11 };
+    const setc = (addr, val, fill, font, num) => {
+        const c = ws.getCell(addr);
+        if (val !== undefined && val !== null) c.value = val;
+        if (fill) c.fill = fill;
+        if (font) c.font = font;
+        c.border = BORDE;
+        if (num) c.numFmt = num;
+        return c;
+    };
+
+    const etiqueta = { hoy: 'HOY', semana: 'ULT. 7 DIAS', mes: 'MES ACTUAL', todo: 'HISTORICO' }[periodo] || periodo;
+    setc('B2', `${new Date().toLocaleDateString('es-PE')} (${etiqueta})`, VERDE, fB);
+    setc('G1', 'TOTAL DE DIA', VERDE, fH);
+    setc('K1', 'Total S.Tec', VERDE, fB);
+    setc('N1', 'Total Ventas', VERDE, fB);
+    setc('G4', 'TOTAL EFECTIVO', VERDE, fH);
+
+    // Bloque VENTAS (A4:E...) — igual que la plantilla, con columna IMEI.
+    ['#', 'PRODUCTO/SERVICIO', 'IMEI', 'IMPORTE', 'PAGO'].forEach((t, i) =>
+        setc(String.fromCharCode(65 + i) + '4', t, VERDE, fH));
+    const filaV = 5, nV = Math.max(V.length, 16);
+    for (let i = 0; i < nV; i++) {
+        const v = V[i];
+        setc(`A${filaV + i}`, v ? i + 1 : null);
+        setc(`B${filaV + i}`, v ? v.producto : null);
+        setc(`C${filaV + i}`, null);
+        setc(`D${filaV + i}`, v ? v.importe : null, null, null, '0.00');
+        setc(`E${filaV + i}`, v ? String(v.pago || '').toUpperCase() : null);
+    }
+    const finV = filaV + nV - 1;
+
+    // Bloque GASTOS (G7)
+    setc('G7', 'GASTOS', VERDE, fB); setc('H7', 'IMPORTE', VERDE, fB);
+    const filaG = 8, nG = Math.max(G.length, 12);
+    for (let i = 0; i < nG; i++) {
+        const g = G[i];
+        setc(`G${filaG + i}`, g ? g.nombre : null);
+        setc(`H${filaG + i}`, g ? g.importe : null, null, null, '0.00');
+    }
+    const finG = filaG + nG - 1;
+
+    // Bloque SERVICIO TECNICO (debajo de gastos)
+    const hS = finG + 2;
+    ['SERVICIO TECNICO', 'ENCARGADO', 'COSTO REP.', 'IMPORTE', 'PAGO'].forEach((t, i) =>
+        setc(String.fromCharCode(71 + i) + hS, t, VERDE, fB));
+    const filaS = hS + 1, nS = Math.max(O.length, 8);
+    for (let i = 0; i < nS; i++) {
+        const o = O[i];
+        setc(`G${filaS + i}`, o ? o.servicio : null);
+        setc(`H${filaS + i}`, o ? o.encargado : null);
+        setc(`I${filaS + i}`, o ? o.costoRepuesto : null, null, null, '0.00');
+        setc(`J${filaS + i}`, o ? o.importe : null, null, null, '0.00');
+        setc(`K${filaS + i}`, o ? String(o.pago || '').toUpperCase() : null);
+    }
+    const finS = filaS + nS - 1;
+
+    // Totales con FÓRMULAS (como la fila 38 de la plantilla: se recalculan si el dueño edita)
+    const tot = finS + 1;
+    setc(`D${tot}`, { formula: `SUM(D${filaV}:D${finV})` }, NARANJA, fB, '0.00');
+    setc(`H${tot}`, { formula: `SUM(H${filaG}:H${finG})` }, NARANJA, fB, '0.00');
+    setc(`I${tot}`, { formula: `SUM(I${filaS}:I${finS})` }, NARANJA, fB, '0.00');
+    setc(`J${tot}`, { formula: `SUM(J${filaS}:J${finS})` }, NARANJA, fB, '0.00');
+    setc('G2', { formula: `D${tot}+J${tot}` }, NARANJA, fB, '0.00');
+    setc('K2', { formula: `J${tot}` }, NARANJA, fB, '0.00');
+    setc('N2', { formula: `D${tot}` }, NARANJA, fB, '0.00');
+
+    // Resumen por método de pago (columna M-N): ventas y servicio por separado.
+    const medios = ['EFECTIVO', 'YAPE', 'PLIN', 'TRANSFERENCIA', 'TARJETA', 'OTRO'];
+    const porPago = rows => rows.reduce((m, r) => {
+        const k = String(r.pago || 'efectivo').toUpperCase();
+        m[k] = (m[k] || 0) + (parseFloat(r.importe) || 0); return m;
+    }, {});
+    const bloqueMetodo = (fila, titulo, rows) => {
+        setc(`M${fila}`, titulo, VERDE, fB); setc(`N${fila}`, 'IMPORTE', VERDE, fB);
+        const t = porPago(rows);
+        medios.forEach((m, i) => {
+            setc(`M${fila + 1 + i}`, 'Total en ' + m.charAt(0) + m.slice(1).toLowerCase(), VERDE, fB);
+            setc(`N${fila + 1 + i}`, Math.round((t[m] || 0) * 100) / 100, NARANJA, fB, '0.00');
+        });
+        return fila + medios.length + 2;
+    };
+    const f2 = bloqueMetodo(1, 'ACCESORIOS/VENTAS', V);
+    const f3 = bloqueMetodo(f2, 'SERVICIO TECNICO', O);
+
+    // TOTAL EFECTIVO global (G5)
+    const efec = (porPago(V)['EFECTIVO'] || 0) + (porPago(O)['EFECTIVO'] || 0);
+    setc('G5', Math.round(efec * 100) / 100, NARANJA, fB, '0.00');
+
+    // YAPES Y RETIROS: quién cobró por Yape (vendedora y técnicos)
+    setc(`M${f3}`, 'YAPES Y RETIROS', VERDE, fB); setc(`N${f3}`, 'IMPORTE', VERDE, fB);
+    const yapes = {};
+    V.forEach(r => { if (String(r.pago).toLowerCase() === 'yape') yapes[r.atendio || 'Vendedora'] = (yapes[r.atendio || 'Vendedora'] || 0) + (parseFloat(r.importe) || 0); });
+    O.forEach(r => { if (String(r.pago).toLowerCase() === 'yape') yapes[r.encargado || 'Técnico'] = (yapes[r.encargado || 'Técnico'] || 0) + (parseFloat(r.importe) || 0); });
+    const nombresY = Object.keys(yapes);
+    if (nombresY.length) {
+        nombresY.forEach((k, i) => {
+            setc(`M${f3 + 1 + i}`, k);
+            setc(`N${f3 + 1 + i}`, Math.round(yapes[k] * 100) / 100, null, null, '0.00');
+        });
+    } else {
+        setc(`M${f3 + 1}`, '(sin cobros por Yape)');
+    }
+
+    const widths = { A: 4, B: 42, C: 10, D: 10.3, E: 13, F: 2, G: 46, H: 13, I: 10.6, J: 10.6, K: 13, L: 2.7, M: 22, N: 12 };
+    Object.keys(widths).forEach(k => { ws.getColumn(k).width = widths[k]; });
+
+    return await wb.xlsx.writeBuffer();
+}
 
 // === 6c. CIERRE DEL DÍA UNIFICADO (FASE 6 del plan finanzas — el "libro de caja") ===
 // Junta en una sola foto lo que ENTRÓ hoy (adelantos de órdenes creadas hoy + saldos de órdenes
