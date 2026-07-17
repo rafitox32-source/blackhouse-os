@@ -4990,7 +4990,7 @@
                 `;
                 document.getElementById('rec-firma-img').src = ordenTemporal.firma;
 
-                const appName = localStorage.getItem('appName') || 'BlackHouse OS';
+                const appName = localStorage.getItem('appName') || 'BlackHouse OS V2';
                 const recEmpresa = document.getElementById('rec-empresa-name');
                 if (recEmpresa) recEmpresa.innerText = appName;
 
@@ -5822,7 +5822,7 @@
             let pasos = [];
             pasos.push({
                 element: '#nav-dash',
-                intro: '👋 <b>¡Bienvenido a BlackHouse OS!</b><br><br>Aquí en el Dashboard verás un resumen de las órdenes del día y tu rendimiento.'
+                intro: '👋 <b>¡Bienvenido a BlackHouse OS V2!</b><br><br>Aquí en el Dashboard verás un resumen de las órdenes del día y tu rendimiento.'
             });
 
             if (rol === 'dueno' || rol === 'tecnico') {
@@ -6347,7 +6347,7 @@
           try {
             document.getElementById('modal-facturacion').style.display = 'none';
 
-            const appName = localStorage.getItem('appName') || 'BlackHouse OS';
+            const appName = localStorage.getItem('appName') || 'BlackHouse OS V2';
             const currency = typeof globalCurrency !== 'undefined' ? globalCurrency : 'S/';
             const tipo = document.getElementById('fact-tipo').value;
             const doc = document.getElementById('fact-doc').value || 'S/N';
@@ -9653,7 +9653,7 @@
 
             <div style="margin-top:15px; text-align:center; font-size:9px; 
                     color:#444; border-top:1px dashed #555; padding-top:10px;">
-                ¡Gracias por su preferencia! • BlackHouse OS
+                ¡Gracias por su preferencia! • BlackHouse OS V2
             </div>
         </div>
     </div>
@@ -9824,7 +9824,7 @@
             const versionEl = document.getElementById('app-version');
             if(versionEl) versionEl.innerText = `Versión ${version}`;
             const versionFooter = document.getElementById('app-version-footer');
-            if(versionFooter) versionFooter.innerText = `BlackHouse OS - v${version}`;
+            if(versionFooter) versionFooter.innerText = `BlackHouse OS V2 - v${version}`;
         });
 
         function irADescargarActualizacion() {
