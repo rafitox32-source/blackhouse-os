@@ -6457,10 +6457,22 @@
 
                 // Refrescar lista de stock en UI
                 filtrarStockTecnico();
+                avisarMargenNegativo(res.avisoMargen);
             } else {
                 showToast(res.msg || "Error al usar repuesto", "danger");
             }
         });
+
+        // FASE 5 (plan finanzas): si el precio cobrado por el repuesto quedó por debajo de su
+        // costo real, avisa en pantalla y deja constancia en el feed gerencial (AUDITORÍA).
+        function avisarMargenNegativo(aviso) {
+            if (!aviso) return;
+            showToast('⚠️ ' + aviso, 'warning');
+            try {
+                const quien = localStorage.getItem('userNickname') || localStorage.getItem('usuarioLogin') || 'Sistema';
+                enviarAlertaGerencial(quien, 'MARGEN', aviso);
+            } catch (e) { }
+        }
 
         // === REPUESTO EXTERNO (traído de otro proveedor) ===
         function abrirRepuestoExterno() {
@@ -6498,6 +6510,7 @@
             if (res.success) {
                 showToast(`Repuesto externo guardado (${res.proveedor}: S/ ${res.costo})`, "success");
                 document.getElementById('modal-repuesto-externo').style.display = 'none';
+                avisarMargenNegativo(res.avisoMargen);
             } else {
                 showToast(res.msg || "Error al guardar repuesto externo", "danger");
             }

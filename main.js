@@ -2191,6 +2191,7 @@ ipcMain.on('usar-repuesto-lab', async (event, params) => {
         if (errMov) console.error('No se pudo registrar el movimiento de stock:', errMov.message);
 
         // 3. Actualizar la Orden
+        let avisoMargen = null; // FASE 5: se llena si el precio cobrado queda bajo el costo real
         const { data: ordenData, error: errOrden } = await supabase
             .from('ordenes')
             .select('*')
@@ -2220,10 +2221,18 @@ ipcMain.on('usar-repuesto-lab', async (event, params) => {
                     .update({ costo_repuesto_real: nuevoCostoReal })
                     .eq('id', ordenId);
                 if (errCosto) console.warn('No se pudo acumular costo_repuesto_real (¿falta migración 008?):', errCosto.message);
+
+                // FASE 5 (plan finanzas): control de margen. Si lo que la orden cobra por repuesto
+                // quedó por DEBAJO del costo real acumulado, se avisa (no se bloquea la reparación:
+                // el repuesto ya se usó; el dueño decide si corrige el precio).
+                const precioRep = parseFloat(ordenData.precio_repuesto) || 0;
+                if (nuevoCostoReal > 0 && precioRep < nuevoCostoReal) {
+                    avisoMargen = `La orden #${ordenId} cobra el repuesto a S/ ${precioRep.toFixed(2)} pero su costo real ya va en S/ ${nuevoCostoReal.toFixed(2)} (margen negativo). Revisar precio.`;
+                }
             } catch (e) { console.warn('costo_repuesto_real:', e.message); }
         }
 
-        event.reply('repuesto-usado-lab', { success: true, nombre, precio });
+        event.reply('repuesto-usado-lab', { success: true, nombre, precio, avisoMargen });
 
     } catch (err) {
         event.reply('repuesto-usado-lab', { success: false, msg: err.message });
@@ -2253,6 +2262,7 @@ ipcMain.on('registrar-repuesto-externo', async (event, params) => {
         if (error) throw error;
 
         // Anotar en la bitácora de la orden (si se indicó una orden válida de esta empresa).
+        let avisoMargen = null; // FASE 5: se llena si el precio cobrado queda bajo el costo real
         if (ordenId) {
             const { data: ord } = await supabase.from('ordenes')
                 .select('*')
@@ -2272,11 +2282,17 @@ ipcMain.on('registrar-repuesto-externo', async (event, params) => {
                         .update({ costo_repuesto_real: nuevoCostoReal })
                         .eq('id', ordenId);
                     if (errCosto) console.warn('No se pudo acumular costo_repuesto_real (¿falta migración 008?):', errCosto.message);
+
+                    // FASE 5: control de margen (mismo criterio que usar-repuesto-lab).
+                    const precioRep = parseFloat(ord.precio_repuesto) || 0;
+                    if (nuevoCostoReal > 0 && precioRep < nuevoCostoReal) {
+                        avisoMargen = `La orden #${ordenId} cobra el repuesto a S/ ${precioRep.toFixed(2)} pero su costo real ya va en S/ ${nuevoCostoReal.toFixed(2)} (margen negativo). Revisar precio.`;
+                    }
                 } catch (e) { console.warn('costo_repuesto_real:', e.message); }
             }
         }
 
-        event.reply('repuesto-externo-registrado', { success: true, proveedor: prov, costo: cst });
+        event.reply('repuesto-externo-registrado', { success: true, proveedor: prov, costo: cst, avisoMargen });
     } catch (err) {
         event.reply('repuesto-externo-registrado', { success: false, msg: err.message });
     }

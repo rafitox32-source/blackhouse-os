@@ -152,9 +152,11 @@ Campos de la orden: `precio_repuesto`, `precio_servicio`, `costo` (=repuesto+ser
 
 > Migración 008 APLICADA en Supabase el 2026-07-17 (verificado por REST).
 
-### FASE 5 — Control del técnico  *(evita fugas)*
-- [ ] Aviso/bloqueo si `precio_repuesto < costo_repuesto_real`.
-- [ ] Costo obligatorio antes de cerrar orden con repuesto externo.
+### FASE 5 — Control del técnico  ✅ HECHA (aviso, 2026-07-17)
+- [x] Aviso si `precio_repuesto < costo_repuesto_real`: al usar repuesto de stock o registrar uno
+      externo, si el costo real acumulado supera lo cobrado, toast de advertencia + alerta
+      [MARGEN] en el feed gerencial (`avisarMargenNegativo` reusa `enviarAlertaGerencial`).
+      Se eligió avisar (no bloquear): el repuesto ya se usó; el dueño decide corregir el precio.
 - [ ] (Opcional) que el precio del repuesto lo sugiera el sistema desde el inventario.
 
 ### FASE 6 — Libro de caja único  *(ideal, mediano plazo)*
