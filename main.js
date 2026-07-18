@@ -130,6 +130,11 @@ app.whenReady().then(() => {
         if (mainWindow) mainWindow.webContents.send('actualizacion-lista', { version: info.version });
     });
 
+    // Ya está en la última versión: avisar al renderer para que oculte el banner (defensivo).
+    autoUpdater.on('update-not-available', () => {
+        if (mainWindow) mainWindow.webContents.send('actualizacion-no-disponible', {});
+    });
+
     autoUpdater.on('error', (err) => {
         console.warn('Error al buscar actualizaciones:', err.message);
     });

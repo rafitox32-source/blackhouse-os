@@ -1674,7 +1674,10 @@
         </div>
     </div>
 
-    <div id="banner-actualizacion" style="display:none; position:fixed; top:0; left:0; right:0; z-index:99999; background:linear-gradient(90deg, #7c3aed, #4c1d95); color:white; padding:10px 20px; display:flex; align-items:center; justify-content:center; gap:15px; font-size:13px; box-shadow:0 2px 10px rgba(0,0,0,0.4);">
+    <!-- OJO: no repetir "display" en este style. Antes tenía display:none Y display:flex en el
+         mismo atributo; gana el último, así que el banner nacía SIEMPRE visible aunque la app
+         estuviera actualizada. Nace oculto y solo lo muestran los eventos reales del updater. -->
+    <div id="banner-actualizacion" style="display:none; position:fixed; top:0; left:0; right:0; z-index:99999; background:linear-gradient(90deg, #7c3aed, #4c1d95); color:white; padding:10px 20px; align-items:center; justify-content:center; gap:15px; font-size:13px; box-shadow:0 2px 10px rgba(0,0,0,0.4);">
         <span id="banner-actualizacion-msg">🎉 Hay una nueva versión disponible.</span>
         <button id="banner-actualizacion-btn" onclick="irADescargarActualizacion()" style="background:white; color:#4c1d95; border:none; padding:6px 14px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">Descargar manualmente</button>
         <button onclick="document.getElementById('banner-actualizacion').style.display='none'" style="background:transparent; border:none; color:white; font-size:16px; cursor:pointer; opacity:0.8;">&times;</button>
@@ -10058,6 +10061,11 @@
             btn.textContent = 'Reiniciar e instalar';
             btn.onclick = instalarActualizacionAhora;
             document.getElementById('banner-actualizacion').style.display = 'flex';
+        });
+
+        // La app ya está en la última versión: asegurar que el banner quede oculto.
+        ipcRenderer.on('actualizacion-no-disponible', () => {
+            document.getElementById('banner-actualizacion').style.display = 'none';
         });
     </script>
 </body>
