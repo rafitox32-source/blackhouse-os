@@ -7501,7 +7501,11 @@
             if (res && res.success) {
                 showToast("Ambición abierto ✅", "success");
             } else {
-                showToast((res && res.msg) || "No se pudo abrir Ambición", "danger");
+                const msg = (res && res.msg) || "No se pudo abrir Ambición";
+                showToast("No se pudo abrir Ambición", "danger");
+                // El diagnóstico se muestra en una alerta para que se pueda leer/capturar completo
+                // (un toast desaparece y el mensaje de error puede ser largo).
+                setTimeout(() => { try { alert("⚠️ Ambición no se abrió:\n\n" + msg); } catch (e) {} }, 100);
             }
         });
 
