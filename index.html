@@ -3857,6 +3857,39 @@
         </div>
     </div>
 
+    <!-- Modal: Detalle de orden (datos de Recepción: foto de evidencia y firma del cliente) -->
+    <div id="modal-detalle-orden" class="modal-overlay">
+        <div class="modal-content" style="width: 720px; max-height: 88vh; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h2 id="det-orden-titulo" style="margin:0; color: var(--bh-purple);">Orden</h2>
+                <button class="bh-btn-white" style="padding:6px 12px;" onclick="document.getElementById('modal-detalle-orden').style.display='none'">✕</button>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div>
+                    <h3 style="margin:0 0 8px; font-size:12px; text-transform:uppercase; color:#aaa;">📋 Datos de la recepción</h3>
+                    <div id="det-orden-datos"></div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:14px;">
+                    <div>
+                        <h3 style="margin:0 0 8px; font-size:12px; text-transform:uppercase; color:#aaa;">📷 Evidencia fotográfica</h3>
+                        <img id="det-orden-foto" src="" style="display:none; width:100%; max-height:230px; object-fit:contain; background:#000; border-radius:10px; border:1px solid #333; cursor:zoom-in;"
+                             onclick="window.open(this.src, '_blank')" title="Clic para ampliar">
+                        <p id="det-orden-sin-foto" style="color:#666; font-size:12px; background:rgba(255,255,255,0.03); border:1px dashed #333; border-radius:10px; padding:18px; text-align:center;">No se capturó foto en la recepción.</p>
+                    </div>
+                    <div>
+                        <h3 style="margin:0 0 8px; font-size:12px; text-transform:uppercase; color:#aaa;">✍️ Firma del cliente</h3>
+                        <img id="det-orden-firma" src="" style="display:none; width:100%; max-height:140px; object-fit:contain; background:#fff; border-radius:10px; border:1px solid #333;">
+                        <p id="det-orden-sin-firma" style="color:#666; font-size:12px; background:rgba(255,255,255,0.03); border:1px dashed #333; border-radius:10px; padding:18px; text-align:center;">No se capturó firma en la recepción.</p>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:16px;">
+                <h3 style="margin:0 0 8px; font-size:12px; text-transform:uppercase; color:#aaa;">🗒 Bitácora del técnico</h3>
+                <pre id="det-orden-bitacora" style="white-space:pre-wrap; background:rgba(255,255,255,0.03); border:1px solid #333; border-radius:10px; padding:12px; font-size:12px; color:#ccc; max-height:160px; overflow-y:auto; font-family:inherit; margin:0;"></pre>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Cierre del Día unificado (taller + POS − gastos − compras − devoluciones) -->
     <div id="modal-cierre-dia" class="modal-overlay">
         <div class="modal-content" style="width: 480px;">
@@ -5138,9 +5171,13 @@
                                 <option value="Entregado" ${r.estado === 'Entregado' ? 'selected' : ''}>📦 Entregado</option>
                             </select>
                             
-                            <button class="bh-btn-white" style="border-color: var(--info); color: var(--info); padding: 4px 8px; font-size: 11px;" 
+                            <button class="bh-btn-white" style="border-color: var(--info); color: var(--info); padding: 4px 8px; font-size: 11px;"
                                     onclick="abrirModalFacturacion(${r.id}, '${r.cliente}', ${r.costo})">
                                 🧾 Facturar
+                            </button>
+                            <button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px;" title="Ver datos de recepción (foto y firma)"
+                                    onclick="verDetalleOrden(${r.id})">
+                                👁 Detalle
                             </button>
                         </div>
                     </td>
@@ -5153,6 +5190,59 @@
                 if (document.getElementById('dash-proceso')) document.getElementById('dash-proceso').innerText = enProceso;
                 if (document.getElementById('dash-listos')) document.getElementById('dash-listos').innerText = listos;
             }
+        }
+
+        // === DETALLE DE ORDEN: datos captados en Recepción (incluye foto y firma) ===
+        function verDetalleOrden(id) {
+            const r = (ordenesActuales || []).find(o => o.id === id);
+            if (!r) return showToast('No se encontró la orden', 'warning');
+            const esDuenoDet = (localStorage.getItem('userRol') || '') === 'dueno';
+            const esc = s => String(s == null || s === '' ? '-' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            const fecha = r.created_at ? new Date(r.created_at).toLocaleString('es-PE') : '-';
+            const entregado = r.fecha_entregado ? new Date(r.fecha_entregado).toLocaleString('es-PE') : null;
+
+            document.getElementById('det-orden-titulo').innerText = `Orden #${String(r.id).padStart(4, '0')} — ${r.estado || ''}`;
+
+            const fila = (l, v) => `<div style="display:flex; justify-content:space-between; gap:10px; padding:6px 2px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;"><span style="color:#888;">${l}</span><span style="color:#eee; text-align:right;">${v}</span></div>`;
+            let html = '';
+            html += fila('👤 Cliente', esc(r.cliente));
+            html += fila('📞 Teléfono', esc(r.telefono));
+            html += fila('📱 Equipo', esc(r.modelo));
+            html += fila('IMEI / Serie', esc(r.imei));
+            html += fila('⚠️ Falla reportada', esc(r.falla));
+            html += fila('📅 Recibido', esc(fecha));
+            if (entregado) html += fila('📦 Entregado', esc(entregado));
+            html += fila('👨‍🔧 Técnico', esc(nombreTecnico(r.tecnico_id)));
+            html += fila('💳 Método de pago', esc(r.metodo_pago));
+            html += fila('Repuesto', 'S/ ' + (parseFloat(r.precio_repuesto) || 0).toFixed(2));
+            html += fila('Mano de obra', 'S/ ' + (parseFloat(r.precio_servicio) || 0).toFixed(2));
+            html += fila('Adelanto', 'S/ ' + (parseFloat(r.adelanto) || 0).toFixed(2));
+            html += fila('<b>Total / Saldo</b>', `<b>S/ ${(parseFloat(r.costo) || 0).toFixed(2)}</b> / S/ ${(parseFloat(r.saldo) || 0).toFixed(2)}`);
+            if (esDuenoDet) {
+                const margenDet = (parseFloat(r.precio_repuesto) || 0) - (parseFloat(r.costo_repuesto_real) || 0) + (parseFloat(r.precio_servicio) || 0);
+                html += fila('Costo real repuesto (solo dueño)', 'S/ ' + (parseFloat(r.costo_repuesto_real) || 0).toFixed(2));
+                html += fila('Margen (solo dueño)', `<span style="color:${margenDet >= 0 ? 'var(--success)' : 'var(--danger)'};">S/ ${margenDet.toFixed(2)}</span>`);
+            }
+            document.getElementById('det-orden-datos').innerHTML = html;
+
+            // Foto de evidencia y firma capturadas en Recepción (guardadas en la orden).
+            const foto = document.getElementById('det-orden-foto');
+            const sinFoto = document.getElementById('det-orden-sin-foto');
+            if (r.evidencia && String(r.evidencia).startsWith('data:image')) {
+                foto.src = r.evidencia; foto.style.display = 'block'; sinFoto.style.display = 'none';
+            } else {
+                foto.style.display = 'none'; sinFoto.style.display = 'block';
+            }
+            const firma = document.getElementById('det-orden-firma');
+            const sinFirma = document.getElementById('det-orden-sin-firma');
+            if (r.firma && String(r.firma).startsWith('data:image')) {
+                firma.src = r.firma; firma.style.display = 'block'; sinFirma.style.display = 'none';
+            } else {
+                firma.style.display = 'none'; sinFirma.style.display = 'block';
+            }
+
+            document.getElementById('det-orden-bitacora').innerText = r.bitacora || 'Sin anotaciones en bitácora.';
+            document.getElementById('modal-detalle-orden').style.display = 'flex';
         }
 
         // (Re)asignar el técnico de una orden desde la tabla de Control de Taller.
