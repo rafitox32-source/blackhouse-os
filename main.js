@@ -2712,23 +2712,38 @@ ipcMain.on('buscar-stock-tecnico', async (event, valor) => {
     }
 });
 
-ipcMain.on('abrir-ambicion', (event) => {
+ipcMain.on('abrir-ambicion', async (event) => {
     try {
-        // En la app INSTALADA, __dirname apunta adentro de app.asar y Windows no puede
-        // ejecutar un .exe desde ahí (ENOENT). El software vive como extraResource en
-        // resources/software (ver package.json), así que la base correcta es:
+        // El software vive como extraResource en resources/software (ver package.json), NO dentro
+        // de app.asar (Windows no puede ejecutar un .exe desde el asar). Probamos ambas rutas:
         //   instalado  -> process.resourcesPath (C:\...\BlackHouse OS V2\resources)
         //   desarrollo -> __dirname (la carpeta del proyecto)
-        const base = app.isPackaged ? process.resourcesPath : __dirname;
-        const ambicionPath = path.join(base, 'software', 'ambicion', 'ambicion.exe');
-        if (fs.existsSync(ambicionPath)) {
-            const { spawn } = require('child_process');
-            spawn(ambicionPath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(ambicionPath) }).unref();
+        const candidatos = [
+            path.join(process.resourcesPath || '', 'software', 'ambicion', 'ambicion.exe'),
+            path.join(__dirname, 'software', 'ambicion', 'ambicion.exe')
+        ];
+        const ambicionPath = candidatos.find(p => { try { return p && fs.existsSync(p); } catch (e) { return false; } });
+
+        if (!ambicionPath) {
+            console.error('No se encontró Ambición. Rutas probadas:', candidatos);
+            event.reply('ambicion-resultado', { success: false, msg: 'No se encontró Ambición en esta instalación. Descarga/reinstala la última versión desde la página.' });
+            return;
+        }
+
+        // shell.openPath abre el .exe como si hicieras doble clic (ideal para una app de ventana)
+        // y NUNCA tumba la app: devuelve '' si abrió, o el motivo del error si no pudo (p. ej.
+        // bloqueo de antivirus/SmartScreen). Antes se usaba spawn sin manejar el evento 'error',
+        // por eso un fallo asíncrono podía cerrar toda la app o quedarse sin avisar.
+        const err = await shell.openPath(ambicionPath);
+        if (err) {
+            console.error('shell.openPath no pudo abrir Ambición:', err);
+            event.reply('ambicion-resultado', { success: false, msg: 'Windows no pudo abrir Ambición: ' + err });
         } else {
-            console.error("No se encontró el ejecutable de Ambicion en:", ambicionPath);
+            event.reply('ambicion-resultado', { success: true });
         }
     } catch (err) {
         console.error("Error abriendo Ambicion:", err);
+        event.reply('ambicion-resultado', { success: false, msg: err.message });
     }
 });
 

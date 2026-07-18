@@ -7425,9 +7425,17 @@
         }
 
         function abrirSoftwareAmbicion() {
-            showToast("Abriendo sesión de software...", "info");
+            showToast("Abriendo Ambición...", "info");
             ipcRenderer.send('abrir-ambicion');
         }
+
+        ipcRenderer.on('ambicion-resultado', (e, res) => {
+            if (res && res.success) {
+                showToast("Ambición abierto ✅", "success");
+            } else {
+                showToast((res && res.msg) || "No se pudo abrir Ambición", "danger");
+            }
+        });
 
         // Escuchar confirmación de guardado
         ipcRenderer.on('bitacora-actualizada', (e, res) => {
