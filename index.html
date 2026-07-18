@@ -2635,6 +2635,7 @@
                                     <th>Documento (DNI/RUC)</th>
                                     <th>Orden Ref.</th>
                                     <th style="text-align: right;">Total</th>
+                                    <th style="text-align: center;">Acción</th>
                                 </tr>
                             </thead>
                             <tbody id="tabla-facturas">
@@ -4488,19 +4489,26 @@
         ipcRenderer.on('lista-de-facturas', (e, rows) => {
             const tbody = document.getElementById('tabla-facturas');
             if (!tbody) return;
+            // Cache para poder reabrir cualquier comprobante desde "Ver" (verFacturaHistorial).
+            window.ultimasFacturas = rows || [];
 
             if (!rows || rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No hay facturas emitidas en este taller.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">No hay facturas emitidas en este taller.</td></tr>';
             } else {
                 tbody.innerHTML = rows.map(f => {
                     const fecha = new Date(f.created_at).toLocaleDateString();
+                    const cliente = f.cliente_nombre ? `<div style="font-size:11px; color:#aaa;">${f.cliente_nombre}</div>` : '';
                     return `
-                    <tr>
+                    <tr onclick="verFacturaHistorial(${f.id})" style="cursor:pointer;" title="Clic para ver el comprobante"
+                        onmouseover="this.style.background='rgba(124,58,237,0.07)'" onmouseout="this.style.background=''">
                         <td>${fecha}</td>
-                        <td style="color:var(--info); font-weight:bold;">${f.numero_comprobante} <span style="font-size:10px; color:#aaa; font-weight:normal;">(${f.tipo})</span></td>
-                        <td>${f.cliente_documento}</td>
-                        <td>#${String(f.orden_id).padStart(4, '0')}</td>
+                        <td style="color:var(--info); font-weight:bold;">${f.numero_comprobante} <span style="font-size:10px; color:#aaa; font-weight:normal;">(${f.tipo})</span>${cliente}</td>
+                        <td>${f.cliente_documento || '-'}</td>
+                        <td>${f.orden_id ? '#' + String(f.orden_id).padStart(4, '0') : '-'}</td>
                         <td style="color:var(--success); font-weight:bold; text-align: right;">S/ ${parseFloat(f.monto_total).toFixed(2)}</td>
+                        <td style="text-align:center;">
+                            <button class="bh-btn-white" style="padding:4px 12px; font-size:12px;" onclick="event.stopPropagation(); verFacturaHistorial(${f.id})">👁 Ver</button>
+                        </td>
                     </tr>`;
                 }).join('');
             }
@@ -6406,18 +6414,17 @@
             showToast('No se pudo generar el comprobante: ' + ((res && res.msg) || 'error'), 'danger');
         });
 
-        ipcRenderer.on('factura-emitida-exito', (e, res) => {
-          try {
-            document.getElementById('modal-facturacion').style.display = 'none';
-
+        // Pinta el documento A4 (invoice-content) y abre el selector PDF/Ticket.
+        // Lo usan la emisión nueva (factura-emitida-exito) y el botón "Ver" del historial.
+        function renderComprobanteDoc(d) {
             const appName = localStorage.getItem('appName') || 'BlackHouse OS V2';
             const currency = typeof globalCurrency !== 'undefined' ? globalCurrency : 'S/';
-            const tipo = document.getElementById('fact-tipo').value;
-            const doc = document.getElementById('fact-doc').value || 'S/N';
-            const nom = document.getElementById('fact-nom').value;
-            const dir = document.getElementById('fact-dir').value || '-';
-            const desc = document.getElementById('fact-desc').value;
-            const montoFinal = parseFloat(document.getElementById('fact-monto').value) || 0;
+            const tipo = d.tipo || 'Nota';
+            const doc = d.doc || 'S/N';
+            const nom = d.nom || 'Cliente';
+            const dir = d.dir || '-';
+            const desc = d.desc || 'Venta / Servicio';
+            const montoFinal = parseFloat(d.monto) || 0;
 
             document.getElementById('inv-empresa').innerText = appName;
             document.getElementById('inv-cliente').innerText = nom;
@@ -6487,8 +6494,8 @@
                 legalText.style.display = 'none';
             }
 
-            document.getElementById('inv-numero').innerText = `N° ${res.numero}`;
-            document.getElementById('inv-fecha').innerText = new Date().toLocaleDateString();
+            document.getElementById('inv-numero').innerText = `N° ${d.numero}`;
+            document.getElementById('inv-fecha').innerText = d.fecha || new Date().toLocaleDateString();
             document.getElementById('inv-letras').innerText = numeroALetras(montoFinal, currency);
 
             document.getElementById('inv-precio-unit').innerText = subtotal.toFixed(2);
@@ -6500,29 +6507,70 @@
             document.getElementById('inv-qrcode').innerHTML = "";
             if (typeof window.QRCode !== 'undefined') {
                 new window.QRCode(document.getElementById('inv-qrcode'), {
-                    text: `${appName}|${res.numero}|${doc}|${currency}${montoFinal.toFixed(2)}`, width: 80, height: 80
+                    text: `${appName}|${d.numero}|${doc}|${currency}${montoFinal.toFixed(2)}`, width: 80, height: 80
                 });
             }
 
-            // Guardamos los datos del comprobante ya emitido para poder exportarlo como PDF real
+            // Guardamos los datos del comprobante para poder exportarlo como PDF real
             // o imprimirlo como ticket (el usuario elige). El invoice-content ya quedó pintado.
             window.comprobanteActual = {
                 appName, currency, tipo,
                 tipoLabel: document.getElementById('inv-tipo-doc').innerText,
                 docLabel: (tipo === 'Factura' ? 'RUC' : (tipo === 'Boleta' ? 'DNI/RUC' : 'Doc')),
                 doc, nom, dir, desc,
-                numero: res.numero,
+                numero: d.numero,
                 fecha: document.getElementById('inv-fecha').innerText,
                 subtotal, igv, total: montoFinal,
                 letras: document.getElementById('inv-letras').innerText
             };
-            document.getElementById('comp-listo-num').innerText = `${tipo} N° ${res.numero} · ${currency} ${montoFinal.toFixed(2)}`;
+            document.getElementById('comp-listo-num').innerText = `${tipo} N° ${d.numero} · ${currency} ${montoFinal.toFixed(2)}`;
             document.getElementById('modal-comprobante-listo').style.display = 'flex';
+        }
+
+        ipcRenderer.on('factura-emitida-exito', (e, res) => {
+          try {
+            document.getElementById('modal-facturacion').style.display = 'none';
+            renderComprobanteDoc({
+                tipo: document.getElementById('fact-tipo').value,
+                doc: document.getElementById('fact-doc').value || 'S/N',
+                nom: document.getElementById('fact-nom').value,
+                dir: document.getElementById('fact-dir').value || '-',
+                desc: document.getElementById('fact-desc').value,
+                monto: document.getElementById('fact-monto').value,
+                numero: res.numero,
+                fecha: new Date().toLocaleDateString()
+            });
           } catch (err) {
             console.error('Error al renderizar el comprobante:', err);
             showToast('Error al generar el comprobante: ' + err.message, 'danger');
           }
         });
+
+        // === HISTORIAL: ver de nuevo un comprobante ya emitido (y re-descargar/imprimir) ===
+        function verFacturaHistorial(id) {
+            const f = (window.ultimasFacturas || []).find(x => x.id === id);
+            if (!f) return showToast('No se encontró el comprobante', 'warning');
+            let desc = '';
+            try {
+                const items = typeof f.items_json === 'string' ? JSON.parse(f.items_json) : f.items_json;
+                if (Array.isArray(items) && items.length) desc = items.map(i => `${i.cantidad || 1}x ${i.nombre}`).join(', ');
+            } catch (e) { }
+            if (!desc) desc = f.orden_id ? `Servicio Técnico - Reparación de Orden #${String(f.orden_id).padStart(4, '0')}` : 'Venta';
+            try {
+                renderComprobanteDoc({
+                    tipo: f.tipo,
+                    doc: f.cliente_documento || 'S/N',
+                    nom: f.cliente_nombre || 'Cliente',
+                    dir: '-',
+                    desc,
+                    monto: f.monto_total,
+                    numero: f.numero_comprobante,
+                    fecha: new Date(f.created_at).toLocaleDateString()
+                });
+            } catch (err) {
+                showToast('Error al abrir el comprobante: ' + err.message, 'danger');
+            }
+        }
 
         // === EXPORTAR / IMPRIMIR COMPROBANTE (PDF real o Ticket 80mm) ===
         function _escComp(s) {
