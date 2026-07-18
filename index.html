@@ -2098,6 +2098,10 @@
                                     onclick="abrirRepuestoExterno()">
                                     <i class='bx bx-transfer-alt'></i> Repuesto externo (otro proveedor)
                                 </button>
+                                <button class="bh-btn-white" style="width:100%; margin-top:10px; padding:10px; text-align:left; border:1px dashed var(--success); color:var(--success);"
+                                    onclick="abrirCobroAdicional()">
+                                    <i class='bx bx-plus-circle'></i> Cobro adicional (otra falla / trabajo extra)
+                                </button>
                             </div>
 
                             <div class="bh-card" style="margin-bottom:0; padding:20px;">
@@ -3973,6 +3977,39 @@
                 <button class="bh-btn-white" onclick="limpiarOhm()">Limpiar</button>
                 <button class="bh-btn-purple"
                     onclick="document.getElementById('modal-ohm').style.display='none'">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Cobro adicional (otra falla / trabajo extra encontrado en la reparación) -->
+    <div id="modal-cobro-adicional" class="modal-overlay">
+        <div class="modal-content" style="width: 420px;">
+            <h2 style="margin-top:0; color: var(--success);"><i class='bx bx-plus-circle'></i> Cobro adicional</h2>
+            <p style="color:#aaa; font-size:13px; margin-bottom:18px;">Se encontró otra falla o trabajo extra. Se <b>suma al total de la orden y al saldo</b> que debe el cliente, y queda anotado en la bitácora.</p>
+            <div class="grid-inputs" style="grid-template-columns: 1fr;">
+                <div class="input-group">
+                    <label>Orden #</label>
+                    <input type="text" id="cadic-orden" class="bh-input" placeholder="Ej: 98">
+                </div>
+                <div class="input-group">
+                    <label>Tipo de cobro</label>
+                    <select id="cadic-tipo" class="bh-input" style="background:#222;">
+                        <option value="servicio">🔧 Mano de obra</option>
+                        <option value="repuesto">📦 Repuesto</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Detalle</label>
+                    <input type="text" id="cadic-detalle" class="bh-input" placeholder="Ej: Se encontró falla de micrófono, se cambió flex">
+                </div>
+                <div class="input-group">
+                    <label>Monto adicional (S/)</label>
+                    <input type="number" id="cadic-monto" class="bh-input" min="0" step="any" placeholder="0.00">
+                </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:20px;">
+                <button class="bh-btn-white" onclick="document.getElementById('modal-cobro-adicional').style.display='none'">Cancelar</button>
+                <button class="bh-btn-purple" style="background:var(--success);" onclick="guardarCobroAdicional()"><i class='bx bx-save'></i> Agregar cobro</button>
             </div>
         </div>
     </div>
@@ -7300,6 +7337,37 @@
                 avisarMargenNegativo(res.avisoMargen);
             } else {
                 showToast(res.msg || "Error al guardar repuesto externo", "danger");
+            }
+        });
+
+        // === COBRO ADICIONAL (otra falla / trabajo extra hallado en la reparación) ===
+        function abrirCobroAdicional() {
+            const ordenLab = (document.getElementById('lab-orden-id')?.value || '').trim().replace('#', '').replace(/^0+/, '');
+            document.getElementById('cadic-orden').value = ordenLab || '';
+            document.getElementById('cadic-tipo').value = 'servicio';
+            document.getElementById('cadic-detalle').value = '';
+            document.getElementById('cadic-monto').value = '';
+            document.getElementById('modal-cobro-adicional').style.display = 'flex';
+            setTimeout(() => document.getElementById('cadic-detalle').focus(), 100);
+        }
+
+        function guardarCobroAdicional() {
+            const ordenId = document.getElementById('cadic-orden').value.trim().replace('#', '').replace(/^0+/, '');
+            const tipo = document.getElementById('cadic-tipo').value;
+            const detalle = document.getElementById('cadic-detalle').value.trim();
+            const monto = parseFloat(document.getElementById('cadic-monto').value);
+            if (!ordenId) return showToast("Escribe el número de la orden", "warning");
+            if (isNaN(monto) || monto <= 0) return showToast("El monto debe ser mayor a 0", "warning");
+            ipcRenderer.send('agregar-cobro-adicional', { ordenId, tipo, detalle, monto });
+        }
+
+        ipcRenderer.on('cobro-adicional-agregado', (e, res) => {
+            if (res && res.success) {
+                showToast(`Cobro adicional agregado (S/ ${parseFloat(res.monto).toFixed(2)}). Nuevo total: S/ ${parseFloat(res.nuevoCosto).toFixed(2)}`, "success");
+                document.getElementById('modal-cobro-adicional').style.display = 'none';
+                ipcRenderer.send('obtener-ordenes'); // refrescar la tabla del taller
+            } else {
+                showToast((res && res.msg) || "No se pudo agregar el cobro adicional", "danger");
             }
         });
 

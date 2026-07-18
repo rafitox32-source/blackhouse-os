@@ -2877,6 +2877,53 @@ ipcMain.on('registrar-repuesto-externo', async (event, params) => {
     }
 });
 
+// === COBRO ADICIONAL: otra falla / trabajo extra hallado durante la reparación ===
+// Suma el monto al total de la orden y al saldo del cliente (a repuesto o mano de obra según el
+// tipo) y lo anota en la bitácora. Es lo que faltaba para cobrar una falla nueva sin crear otra
+// orden. No toca stock (para eso está "Usar" repuesto) ni compras externas.
+ipcMain.on('agregar-cobro-adicional', async (event, params) => {
+    try {
+        const { ordenId, tipo, detalle, monto } = params || {};
+        const m = parseFloat(monto);
+        if (!ordenId) throw new Error('Falta el número de orden.');
+        if (!['repuesto', 'servicio'].includes(tipo)) throw new Error('Tipo de cobro inválido.');
+        if (isNaN(m) || m <= 0) throw new Error('El monto debe ser mayor a 0.');
+
+        // La orden debe existir y pertenecer a esta empresa.
+        const { data: ord, error } = await supabase.from('ordenes')
+            .select('*')
+            .eq('id', ordenId)
+            .eq('empresa_id', empresaActual)
+            .maybeSingle();
+        if (error) throw error;
+        if (!ord) throw new Error('La orden indicada no pertenece a esta empresa.');
+
+        const nuevoRepuesto = (parseFloat(ord.precio_repuesto) || 0) + (tipo === 'repuesto' ? m : 0);
+        const nuevoServicio = (parseFloat(ord.precio_servicio) || 0) + (tipo === 'servicio' ? m : 0);
+        const nuevoCosto = (parseFloat(ord.costo) || 0) + m;
+        const nuevoSaldo = (parseFloat(ord.saldo) || 0) + m;
+
+        const etiqueta = (tipo === 'repuesto') ? 'Repuesto adicional' : 'Mano de obra adicional';
+        const desc = String(detalle || '').trim();
+        const nota = `➕ ${etiqueta}${desc ? ' - ' + desc : ''} - S/ ${m.toFixed(2)}`;
+        const nuevaBitacora = (ord.bitacora || '') + (ord.bitacora ? '\n' : '') + nota;
+
+        const { error: errUpd } = await supabase.from('ordenes').update({
+            precio_repuesto: nuevoRepuesto,
+            precio_servicio: nuevoServicio,
+            costo: nuevoCosto,
+            saldo: nuevoSaldo,
+            bitacora: nuevaBitacora
+        }).eq('id', ordenId).eq('empresa_id', empresaActual);
+        if (errUpd) throw errUpd;
+
+        event.reply('cobro-adicional-agregado', { success: true, ordenId, tipo, monto: m, nuevoCosto, nuevoSaldo });
+    } catch (err) {
+        console.error('Error en cobro adicional:', err.message);
+        event.reply('cobro-adicional-agregado', { success: false, msg: err.message });
+    }
+});
+
 // Reporte de compras externas de un día (por defecto hoy), para el cierre.
 ipcMain.on('obtener-compras-externas-dia', async (event, params) => {
     try {
