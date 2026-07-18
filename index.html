@@ -3884,7 +3884,11 @@
                 <h2 style="margin:0; color:#fbbf24;">🏆 Lo Más Vendido</h2>
                 <button class="bh-btn-white" style="padding:6px 12px;" onclick="document.getElementById('modal-top-ventas').style.display='none'">✕</button>
             </div>
-            <p id="top-ventas-periodo" style="color:#aaa; font-size:13px; margin:0 0 12px;"></p>
+            <p id="top-ventas-periodo" style="color:#aaa; font-size:13px; margin:0 0 10px;"></p>
+            <div style="display:flex; gap:6px; margin-bottom:12px;">
+                <button id="tab-tv-productos" class="chart-tipo-btn activo" onclick="setTopVentasTab('productos')">🛍 Productos</button>
+                <button id="tab-tv-servicios" class="chart-tipo-btn" onclick="setTopVentasTab('servicios')">🔧 Servicios</button>
+            </div>
             <div id="top-ventas-cuerpo" style="overflow-y:auto; flex:1;">
                 <p style="color:#aaa; text-align:center; padding:20px;">Cargando…</p>
             </div>
@@ -5628,27 +5632,53 @@
             ipcRenderer.send('obtener-top-ventas', periodoReporte);
         }
 
+        let topVentasCache = null;
+        let topVentasTab = 'productos';
+
+        function setTopVentasTab(t) {
+            topVentasTab = t;
+            document.getElementById('tab-tv-productos').classList.toggle('activo', t === 'productos');
+            document.getElementById('tab-tv-servicios').classList.toggle('activo', t === 'servicios');
+            renderTopVentas();
+        }
+
+        function renderTopVentas() {
+            const cuerpo = document.getElementById('top-ventas-cuerpo');
+            if (!cuerpo || !topVentasCache) return;
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            const cats = topVentasCache.categorias || [];
+            // Los servicios del taller van en su propia pestaña; productos por categoría en la otra.
+            const esServicio = c => (c.categoria || '').includes('Servicios del taller');
+            const lista = topVentasTab === 'servicios' ? cats.filter(esServicio) : cats.filter(c => !esServicio(c));
+
+            if (!lista.length) {
+                cuerpo.innerHTML = `<p style="color:#aaa; text-align:center; padding:24px;">${topVentasTab === 'servicios'
+                    ? 'Sin servicios entregados en este período.'
+                    : 'Sin ventas de productos en este período.<br><span style="font-size:11px; color:#666;">(Las ventas de la vendedora aparecen aquí a medida que vende)</span>'}</p>`;
+                return;
+            }
+            cuerpo.innerHTML = lista.map(c => `
+                <div style="margin-bottom:12px; background:rgba(255,255,255,0.03); border:1px solid #333; border-radius:12px; overflow:hidden;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(251,191,36,0.10); border-bottom:1px solid rgba(251,191,36,0.25); padding:8px 12px;">
+                        <span style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#fbbf24;">${esc(c.categoria)} <span style="color:#8a7a3a; font-weight:600;">· ${(c.items || []).length} ítems</span></span>
+                        <span style="font-size:13px; font-weight:800; color:#fbbf24;">S/ ${(parseFloat(c.totalCat) || 0).toFixed(2)}</span>
+                    </div>
+                    <div style="padding:6px 12px 10px;">
+                    ${(c.items || []).map((it, i) => `
+                        <div style="display:flex; justify-content:space-between; gap:10px; padding:5px 0; font-size:13px; ${i > 0 ? 'border-top:1px solid rgba(255,255,255,0.04);' : ''}">
+                            <span style="color:#ddd;">${i < 3 ? ['🥇', '🥈', '🥉'][i] : '<span style="color:#555;">' + (i + 1) + '.</span>'} ${esc(it.nombre)}</span>
+                            <span style="color:#888; white-space:nowrap;">x${parseFloat(it.cantidad) || 0} · <b style="color:var(--success);">S/ ${(parseFloat(it.total) || 0).toFixed(2)}</b></span>
+                        </div>`).join('')}
+                    </div>
+                </div>`).join('');
+        }
+
         ipcRenderer.on('top-ventas-data', (e, res) => {
             const cuerpo = document.getElementById('top-ventas-cuerpo');
             if (!cuerpo) return;
             if (!res.success) { cuerpo.innerHTML = `<p style="color:var(--danger); text-align:center; padding:20px;">${res.msg || 'Error'}</p>`; return; }
-            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-            const cats = res.categorias || [];
-            if (!cats.length) {
-                cuerpo.innerHTML = '<p style="color:#aaa; text-align:center; padding:24px;">Sin ventas registradas en este período.</p>';
-                return;
-            }
-            cuerpo.innerHTML = cats.map(c => `
-                <div style="margin-bottom:14px;">
-                    <div style="display:flex; justify-content:space-between; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#fbbf24; border-bottom:1px solid rgba(251,191,36,0.25); padding-bottom:4px; margin-bottom:6px;">
-                        <span>${esc(c.categoria)}</span><span>S/ ${(parseFloat(c.totalCat) || 0).toFixed(2)}</span>
-                    </div>
-                    ${(c.items || []).map((it, i) => `
-                        <div style="display:flex; justify-content:space-between; gap:10px; padding:4px 2px; font-size:13px;">
-                            <span style="color:#ddd;">${i < 3 ? ['🥇', '🥈', '🥉'][i] : '·'} ${esc(it.nombre)}</span>
-                            <span style="color:#888; white-space:nowrap;">x${parseFloat(it.cantidad) || 0} · <b style="color:var(--success);">S/ ${(parseFloat(it.total) || 0).toFixed(2)}</b></span>
-                        </div>`).join('')}
-                </div>`).join('');
+            topVentasCache = res;
+            renderTopVentas();
         });
 
         if (document.getElementById('reg-costo')) {
