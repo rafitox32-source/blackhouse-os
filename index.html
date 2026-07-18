@@ -4034,8 +4034,15 @@
                     <input type="text" id="rext-desc" class="bh-input" placeholder="Ej: Pantalla A15 INCELL">
                 </div>
                 <div class="input-group">
-                    <label>¿Cuánto pagaste?</label>
-                    <input type="number" id="rext-costo" class="bh-input" min="0" step="any" placeholder="0.00">
+                    <label>¿Cuánto pagaste? (tu costo)</label>
+                    <input type="number" id="rext-costo" class="bh-input" min="0" step="any" placeholder="0.00"
+                        oninput="if(document.getElementById('rext-precio')){document.getElementById('rext-precio').dataset.auto = (document.getElementById('rext-precio').value==='' || document.getElementById('rext-precio').dataset.auto==='1')?'1':'0'; if(document.getElementById('rext-precio').dataset.auto==='1') document.getElementById('rext-precio').value=this.value;}">
+                </div>
+                <div class="input-group">
+                    <label style="color:var(--success);">¿Cuánto le cobras al cliente?</label>
+                    <input type="number" id="rext-precio" class="bh-input" min="0" step="any" placeholder="0.00"
+                        oninput="this.dataset.auto='0'">
+                    <div style="font-size:11px; color:#888; margin-top:4px;">Se suma al total de la orden y al saldo del cliente. Déjalo igual al costo si no cobras ganancia.</div>
                 </div>
             </div>
             <div style="display:flex; justify-content:space-between; margin-top:20px;">
@@ -7306,6 +7313,7 @@
             document.getElementById('rext-proveedor').value = '';
             document.getElementById('rext-desc').value = '';
             document.getElementById('rext-costo').value = '';
+            if (document.getElementById('rext-precio')) { document.getElementById('rext-precio').value = ''; document.getElementById('rext-precio').dataset.auto = '1'; }
             // Sugerir proveedores conocidos en el datalist.
             try {
                 const dl = document.getElementById('rext-proveedores-list');
@@ -7320,13 +7328,18 @@
         function registrarRepuestoExterno() {
             const proveedor = document.getElementById('rext-proveedor').value.trim();
             const costo = parseFloat(document.getElementById('rext-costo').value);
+            const precioInput = document.getElementById('rext-precio');
+            const precio = precioInput ? parseFloat(precioInput.value) : NaN;
             if (!proveedor) return showToast("Escribe el proveedor", "warning");
             if (isNaN(costo) || costo < 0) return showToast("Escribe cuánto pagaste", "warning");
             ipcRenderer.send('registrar-repuesto-externo', {
                 ordenId: document.getElementById('rext-orden').value.trim().replace('#', '').replace(/^0+/, '') || null,
                 proveedor,
                 descripcion: document.getElementById('rext-desc').value.trim(),
-                costo
+                costo,
+                // Precio a cobrar al cliente (se suma al total de la orden). Si no se indica, no
+                // suma nada (solo queda el costo para el margen, como antes).
+                precio: (!isNaN(precio) && precio > 0) ? precio : 0
             });
         }
 
