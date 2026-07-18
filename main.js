@@ -2874,10 +2874,14 @@ ipcMain.on('usar-repuesto-lab', async (event, params) => {
 // NO toca el inventario: nunca fue un producto propio.
 ipcMain.on('registrar-repuesto-externo', async (event, params) => {
     try {
-        const { ordenId, proveedor, descripcion, costo } = params || {};
+        const { ordenId, proveedor, descripcion, costo, precio } = params || {};
         const prov = String(proveedor || '').trim();
         const desc = String(descripcion || '').trim();
         const cst = parseFloat(costo);
+        // Precio a cobrar al cliente por este repuesto externo (opcional): si viene > 0, se SUMA al
+        // total de la orden y al saldo. Si no viene, solo se registra el costo (comportamiento previo).
+        const prc = parseFloat(precio);
+        const precioCliente = (!isNaN(prc) && prc > 0) ? prc : 0;
         if (!prov) throw new Error('Falta el nombre del proveedor');
         if (isNaN(cst) || cst < 0) throw new Error('El costo no es válido');
 
@@ -2900,9 +2904,20 @@ ipcMain.on('registrar-repuesto-externo', async (event, params) => {
                 .eq('empresa_id', empresaActual)
                 .single();
             if (ord) {
-                const nota = `🔻 Repuesto externo (${prov})${desc ? ' - ' + desc : ''} - pagado S/ ${cst}`;
+                const notaCobro = precioCliente > 0 ? ` - cobrado al cliente S/ ${precioCliente.toFixed(2)}` : '';
+                const nota = `🔻 Repuesto externo (${prov})${desc ? ' - ' + desc : ''} - pagado S/ ${cst}${notaCobro}`;
                 const nuevaBitacora = (ord.bitacora || '') + (ord.bitacora ? '\n' : '') + nota;
-                await supabase.from('ordenes').update({ bitacora: nuevaBitacora }).eq('id', ordenId);
+
+                // Si se indicó un precio al cliente, se SUMA al total de la orden y al saldo
+                // (a repuesto). Esto es lo que faltaba: antes el repuesto externo no aumentaba el
+                // total a cobrar. El costo pagado sigue yendo a costo_repuesto_real (margen).
+                const updateOrden = { bitacora: nuevaBitacora };
+                if (precioCliente > 0) {
+                    updateOrden.precio_repuesto = (parseFloat(ord.precio_repuesto) || 0) + precioCliente;
+                    updateOrden.costo = (parseFloat(ord.costo) || 0) + precioCliente;
+                    updateOrden.saldo = (parseFloat(ord.saldo) || 0) + precioCliente;
+                }
+                await supabase.from('ordenes').update(updateOrden).eq('id', ordenId);
 
                 // FASE 1 (plan finanzas): el costo pagado al proveedor externo también acumula en
                 // costo_repuesto_real de la orden. Tolerante a que falte la migración 008.
@@ -2914,7 +2929,8 @@ ipcMain.on('registrar-repuesto-externo', async (event, params) => {
                     if (errCosto) console.warn('No se pudo acumular costo_repuesto_real (¿falta migración 008?):', errCosto.message);
 
                     // FASE 5: control de margen (mismo criterio que usar-repuesto-lab).
-                    const precioRep = parseFloat(ord.precio_repuesto) || 0;
+                    // Considera el precio ya sumado al cliente por este repuesto externo.
+                    const precioRep = (parseFloat(ord.precio_repuesto) || 0) + precioCliente;
                     if (nuevoCostoReal > 0 && precioRep < nuevoCostoReal) {
                         avisoMargen = `La orden #${ordenId} cobra el repuesto a S/ ${precioRep.toFixed(2)} pero su costo real ya va en S/ ${nuevoCostoReal.toFixed(2)} (margen negativo). Revisar precio.`;
                     }
