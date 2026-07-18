@@ -2111,9 +2111,21 @@
                 </div>
 
                 <div id="taller" class="view">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:12px; flex-wrap:wrap;">
                         <h1 style="margin:0;">Control de Taller</h1>
-                        <div style="display:flex; gap:10px;"><button class="bh-btn-white">Filtrar</button></div>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <input type="text" id="taller-search" class="bh-input" style="margin:0; width:220px;"
+                                placeholder="Buscar cliente, equipo, IMEI..." oninput="aplicarFiltroTaller()">
+                            <select id="taller-filtro-estado" class="bh-input" style="margin:0; background:#222; width:170px;"
+                                onchange="aplicarFiltroTaller()">
+                                <option value="todos">Todos los estados</option>
+                                <option value="recibido">📥 Recibido</option>
+                                <option value="en proceso">🔧 En Proceso</option>
+                                <option value="completado">✅ Completado</option>
+                                <option value="entregado">📦 Entregado</option>
+                            </select>
+                            <button class="bh-btn-white" onclick="limpiarFiltroTaller()" title="Limpiar filtros">✖</button>
+                        </div>
                     </div>
                     <div class="bh-card" style="padding:0; overflow:hidden;">
                         <table style="width:100%;">
@@ -4868,8 +4880,10 @@
                         tecCell = `<span style="font-size:12px; color:${asignado ? 'var(--info)' : '#666'};">${asignado ? nombreTecnico(asignado) : 'Sin asignar'}</span>`;
                     }
 
+                    // Texto para búsqueda (cliente, modelo, imei, teléfono, técnico) y estado para filtrar.
+                    const buscar = `${r.cliente || ''} ${r.modelo || ''} ${r.imei || ''} ${r.telefono || ''} ${nombreTecnico(asignado)} #${String(r.id).padStart(4, '0')}`.toLowerCase();
                     return `
-                    <tr>
+                    <tr data-estado="${(r.estado || '').toLowerCase()}" data-buscar="${buscar.replace(/"/g, '')}">
                         <td style="color:var(--bh-purple); font-weight:bold;">#${String(r.id).padStart(4, '0')}</td>
                         <td>${fechaOrden}</td>
                         <td>
@@ -4911,6 +4925,8 @@
                 if (document.getElementById('dash-asignar')) document.getElementById('dash-asignar').innerText = porAsignar;
                 if (document.getElementById('dash-proceso')) document.getElementById('dash-proceso').innerText = enProceso;
                 if (document.getElementById('dash-listos')) document.getElementById('dash-listos').innerText = listos;
+                // Mantener el filtro activo si el usuario ya estaba filtrando cuando se refrescó la tabla.
+                if (typeof aplicarFiltroTaller === 'function') aplicarFiltroTaller();
             }
         }
 
@@ -8999,27 +9015,37 @@
 
     <script>
         // ========= TALLER SEARCH & FILTER =========
-        function filtrarTablaTaller() {
-            const term = document.getElementById('taller-search').value.toLowerCase();
+        // Filtro combinado: texto (data-buscar) + estado (data-estado). Antes el botón "Filtrar"
+        // no tenía acción y el filtro por estado fallaba porque el estado es un <select> cuyo
+        // texto contiene TODOS los estados; ahora se usa data-estado por fila.
+        function aplicarFiltroTaller() {
+            const inp = document.getElementById('taller-search');
+            const sel = document.getElementById('taller-filtro-estado');
+            const term = (inp ? inp.value : '').trim().toLowerCase();
+            const estado = sel ? sel.value : 'todos';
             const rows = document.querySelectorAll('#tabla-servicios tr');
             rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(term) ? '' : 'none';
+                if (!row.hasAttribute('data-buscar')) return; // ignora filas sin datos (ej. "cargando")
+                const buscar = row.getAttribute('data-buscar') || '';
+                const estRow = row.getAttribute('data-estado') || '';
+                const coincideTexto = !term || buscar.includes(term);
+                const coincideEstado = (estado === 'todos') || (estRow === estado);
+                row.style.display = (coincideTexto && coincideEstado) ? '' : 'none';
             });
         }
 
-        let tallerFilterEstado = 'todos';
+        function limpiarFiltroTaller() {
+            const inp = document.getElementById('taller-search'); if (inp) inp.value = '';
+            const sel = document.getElementById('taller-filtro-estado'); if (sel) sel.value = 'todos';
+            aplicarFiltroTaller();
+        }
+
+        // Compatibilidad con llamadas antiguas
+        function filtrarTablaTaller() { aplicarFiltroTaller(); }
         function filtrarTallerPorEstado(estado) {
-            tallerFilterEstado = estado;
-            const rows = document.querySelectorAll('#tabla-servicios tr');
-            rows.forEach(row => {
-                if (estado === 'todos') {
-                    row.style.display = '';
-                } else {
-                    const rowText = row.textContent.toLowerCase();
-                    row.style.display = rowText.includes(estado.toLowerCase()) ? '' : 'none';
-                }
-            });
+            const sel = document.getElementById('taller-filtro-estado');
+            if (sel) sel.value = (estado === 'todos') ? 'todos' : String(estado).toLowerCase();
+            aplicarFiltroTaller();
         }
 
         function actualizarKPIsTaller() {
