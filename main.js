@@ -1826,6 +1826,62 @@ async function construirExcelReporte({ periodo, ventasRows, ordenesRows, gastosR
     return await wb.xlsx.writeBuffer();
 }
 
+// === 6b-ter. MÁS VENDIDOS por categoría (ventas del POS del período elegido) ===
+ipcMain.on('obtener-top-ventas', async (event, periodo) => {
+    const cf = v => parseFloat(v) || 0;
+    try {
+        const ahora = new Date();
+        let desde = null;
+        if (periodo === 'hoy') desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+        else if (periodo === 'semana') desde = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+        else if (periodo === 'mes') desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+
+        let qv = supabase.from('ventas_pos').select('id').eq('empresa_id', empresaActual);
+        if (desde) qv = qv.gte('creado_en', desde.toISOString());
+        const { data: ventas } = await qv;
+        const ids = (ventas || []).map(v => v.id);
+
+        let items = [];
+        if (ids.length) {
+            const { data } = await supabase.from('ventas_pos_items')
+                .select('producto_id, nombre, cantidad, subtotal, origen')
+                .in('venta_id', ids);
+            items = data || [];
+        }
+
+        // Categoría de cada producto vendido (los "libres" van a su propia categoría).
+        const pids = [...new Set(items.map(i => i.producto_id).filter(Boolean))];
+        const mapaCat = {};
+        if (pids.length) {
+            const { data: prods } = await supabase.from('productos').select('id, categoria').in('id', pids);
+            (prods || []).forEach(p => { mapaCat[p.id] = p.categoria || 'Sin categoría'; });
+        }
+
+        const agg = {}; // categoria -> nombre -> { cantidad, total }
+        items.forEach(i => {
+            const cat = i.origen === 'libre' ? 'Venta libre (sin stock)' : (mapaCat[i.producto_id] || 'Sin categoría');
+            const key = (i.nombre || 'Producto').trim();
+            agg[cat] = agg[cat] || {};
+            agg[cat][key] = agg[cat][key] || { nombre: key, cantidad: 0, total: 0 };
+            agg[cat][key].cantidad += cf(i.cantidad);
+            agg[cat][key].total += cf(i.subtotal);
+        });
+
+        const categorias = Object.keys(agg).map(cat => {
+            const lista = Object.values(agg[cat]).sort((a, b) => b.cantidad - a.cantidad);
+            return {
+                categoria: cat,
+                items: lista.slice(0, 10),
+                totalCat: lista.reduce((s, x) => s + x.total, 0)
+            };
+        }).sort((a, b) => b.totalCat - a.totalCat);
+
+        event.reply('top-ventas-data', { success: true, periodo: periodo || 'todo', categorias });
+    } catch (err) {
+        event.reply('top-ventas-data', { success: false, msg: err.message });
+    }
+});
+
 // === 6c. CIERRE DEL DÍA UNIFICADO (FASE 6 del plan finanzas — el "libro de caja") ===
 // Junta en una sola foto lo que ENTRÓ hoy (adelantos de órdenes creadas hoy + saldos de órdenes
 // entregadas hoy + ventas POS) y lo que SALIÓ (gastos + compras externas + devoluciones en

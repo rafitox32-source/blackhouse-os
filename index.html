@@ -484,6 +484,8 @@
         .kpi-badge.down { background:rgba(239,68,68,.13); color:#f87171; }
         .kpi-badge.neutro { background:rgba(255,255,255,.06); color:#888; }
         .rep-per { border-radius:7px; transition: background .2s, color .2s; }
+        .rep-accion { background:rgba(255,255,255,0.04); border:1px solid #333; color:#ccc; border-radius:9px; padding:8px 14px; font-size:13px; cursor:pointer; transition:.2s; display:inline-flex; align-items:center; gap:6px; }
+        .rep-accion:hover { border-color: var(--bh-purple); color:white; background:rgba(124,58,237,0.12); }
         .chart-tipo-btn { background:transparent; border:1px solid #333; color:#aaa; border-radius:7px; padding:5px 12px; font-size:12px; cursor:pointer; transition:.2s; }
         .chart-tipo-btn.activo { background:var(--bh-purple); border-color:var(--bh-purple); color:white; }
 
@@ -2293,18 +2295,22 @@
                                 class='bx bx-mobile'></i> Celulares</button>
                     </div>
 
-                    <div style="margin-bottom: 15px; position: relative; max-width: 400px; display: flex; gap: 10px;">
+                    <div style="margin-bottom: 15px; position: relative; max-width: 620px; display: flex; gap: 10px;">
                         <div style="position: relative; flex: 1;">
                             <i class='bx bx-search' style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 18px;"></i>
-                            <input type="text" id="inv-buscador-texto" class="bh-input" placeholder="Buscar por nombre o SKU..." 
-                                style="padding-left: 40px; padding-right: 40px; width: 100%; box-sizing: border-box; background: #1a1a1a;" 
+                            <input type="text" id="inv-buscador-texto" class="bh-input" placeholder="Buscar por nombre o SKU..."
+                                style="padding-left: 40px; padding-right: 40px; width: 100%; box-sizing: border-box; background: #1a1a1a;"
                                 oninput="renderizarProductosFiltrados()">
-                            <button onclick="document.getElementById('inv-buscador-texto').value=''; renderizarProductosFiltrados()" 
-                                style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px;" 
+                            <button onclick="document.getElementById('inv-buscador-texto').value=''; renderizarProductosFiltrados()"
+                                style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px;"
                                 title="Limpiar búsqueda">✕</button>
                         </div>
                         <select id="filtro-subcategoria" class="bh-input" style="display:none; max-width: 200px; background: #1a1a1a; color: white;" onchange="renderizarProductosFiltrados()">
                         </select>
+                        <button class="bh-btn-purple" style="background:#f59e0b; white-space:nowrap; font-size:13px;"
+                            onclick="abrirReponerStock()" title="Qué se agotó o está por agotarse, por categoría">
+                            🛒 Reponer Stock
+                        </button>
                     </div>
 
                     <div class="bh-card">
@@ -2530,26 +2536,22 @@
 
                 <div id="reportes" class="view">
 
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                        <h1 style="margin:0;">Métricas</h1>
-                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            <button class="bh-btn-purple"
-                                style="background: linear-gradient(135deg, #10b981 0%, #047857 100%); font-size: 13px;"
-                                onclick="generarResumenIA()">
-                                🧠 Analizar con IA
-                            </button>
-                            <button class="bh-btn-purple" style="background:#ef4444; font-size:13px;"
-                                onclick="abrirModalGasto()">− Registrar Gasto</button>
-                            <button class="bh-btn-purple" style="background:#0ea5e9; font-size:13px;"
-                                onclick="abrirCierreDia()">🧾 Cierre del Día</button>
-                            <button class="bh-btn-purple" style="background:#16a34a; font-size:13px;"
-                                onclick="exportarReporteExcel()">📥 Exportar Excel</button>
+                    <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:22px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                            <h1 style="margin:0;">Métricas</h1>
                             <div style="display:flex; gap:4px; background:#1a1a1a; border:1px solid #333; border-radius:8px; padding:3px;" id="rep-periodos">
-                                <button class="bh-btn-white rep-per" data-per="hoy" onclick="cambiarPeriodoReporte('hoy')" style="border:none; padding:6px 12px;">Hoy</button>
-                                <button class="bh-btn-white rep-per" data-per="semana" onclick="cambiarPeriodoReporte('semana')" style="border:none; padding:6px 12px;">7 días</button>
-                                <button class="bh-btn-white rep-per" data-per="mes" onclick="cambiarPeriodoReporte('mes')" style="border:none; padding:6px 12px;">Mes</button>
-                                <button class="bh-btn-white rep-per" data-per="todo" onclick="cambiarPeriodoReporte('todo')" style="border:none; padding:6px 12px;">Todo</button>
+                                <button class="bh-btn-white rep-per" data-per="hoy" onclick="cambiarPeriodoReporte('hoy')" style="border:none; padding:6px 14px;">Hoy</button>
+                                <button class="bh-btn-white rep-per" data-per="semana" onclick="cambiarPeriodoReporte('semana')" style="border:none; padding:6px 14px;">7 días</button>
+                                <button class="bh-btn-white rep-per" data-per="mes" onclick="cambiarPeriodoReporte('mes')" style="border:none; padding:6px 14px;">Mes</button>
+                                <button class="bh-btn-white rep-per" data-per="todo" onclick="cambiarPeriodoReporte('todo')" style="border:none; padding:6px 14px;">Todo</button>
                             </div>
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="rep-accion" onclick="abrirCierreDia()"><span style="color:#38bdf8;">🧾</span> Cierre del Día</button>
+                            <button class="rep-accion" onclick="abrirModalGasto()"><span style="color:#f87171;">💸</span> Registrar Gasto</button>
+                            <button class="rep-accion" onclick="abrirTopVentas()"><span style="color:#fbbf24;">🏆</span> Más Vendidos</button>
+                            <button class="rep-accion" onclick="exportarReporteExcel()"><span style="color:#34d399;">📥</span> Exportar Excel</button>
+                            <button class="rep-accion" onclick="generarResumenIA()"><span style="color:#a78bfa;">🧠</span> Análisis IA</button>
                         </div>
                     </div>
 
@@ -3856,6 +3858,35 @@
             <div style="display:flex; justify-content:space-between; margin-top:20px;">
                 <button class="bh-btn-white" onclick="document.getElementById('modal-repuesto-externo').style.display='none'">Cancelar</button>
                 <button class="bh-btn-purple" onclick="registrarRepuestoExterno()"><i class='bx bx-save'></i> Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Reponer stock (agotados y por agotarse, agrupados por categoría) -->
+    <div id="modal-reponer-stock" class="modal-overlay">
+        <div class="modal-content" style="width: 560px; max-height: 85vh; display:flex; flex-direction:column;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <h2 style="margin:0; color:#f59e0b;">🛒 Lista de Reposición</h2>
+                <button class="bh-btn-white" style="padding:6px 12px;" onclick="document.getElementById('modal-reponer-stock').style.display='none'">✕</button>
+            </div>
+            <p id="reponer-resumen" style="color:#aaa; font-size:13px; margin:0 0 12px;"></p>
+            <div id="reponer-cuerpo" style="overflow-y:auto; flex:1;"></div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:14px; border-top:1px solid #333; padding-top:12px;">
+                <button class="bh-btn-white" onclick="copiarListaReposicion()">📋 Copiar lista (para el proveedor)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Más vendidos por categoría (según el período elegido en Métricas) -->
+    <div id="modal-top-ventas" class="modal-overlay">
+        <div class="modal-content" style="width: 560px; max-height: 85vh; display:flex; flex-direction:column;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <h2 style="margin:0; color:#fbbf24;">🏆 Lo Más Vendido</h2>
+                <button class="bh-btn-white" style="padding:6px 12px;" onclick="document.getElementById('modal-top-ventas').style.display='none'">✕</button>
+            </div>
+            <p id="top-ventas-periodo" style="color:#aaa; font-size:13px; margin:0 0 12px;"></p>
+            <div id="top-ventas-cuerpo" style="overflow-y:auto; flex:1;">
+                <p style="color:#aaa; text-align:center; padding:20px;">Cargando…</p>
             </div>
         </div>
     </div>
@@ -5540,6 +5571,85 @@
                 showToast('Resumen copiado 📋', 'success');
             } catch (e) { showToast('No se pudo copiar', 'danger'); }
         }
+
+        // === REPONER STOCK: agotados y por agotarse, por categoría (usa el inventario ya cargado) ===
+        const UMBRAL_STOCK_BAJO = 2;
+        let listaReposicionTexto = '';
+
+        function abrirReponerStock() {
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            const faltantes = (todosLosProductos || []).filter(p => (parseFloat(p.stock) || 0) <= UMBRAL_STOCK_BAJO);
+            const porCat = {};
+            faltantes.forEach(p => {
+                const cat = p.categoria || 'Sin categoría';
+                (porCat[cat] = porCat[cat] || []).push(p);
+            });
+            const agotados = faltantes.filter(p => (parseFloat(p.stock) || 0) <= 0).length;
+            document.getElementById('reponer-resumen').innerText =
+                `${agotados} agotados · ${faltantes.length - agotados} por agotarse (stock ≤ ${UMBRAL_STOCK_BAJO})`;
+
+            const cuerpo = document.getElementById('reponer-cuerpo');
+            const cats = Object.keys(porCat).sort();
+            listaReposicionTexto = 'LISTA DE REPOSICIÓN — ' + new Date().toLocaleDateString('es-PE') + '\n';
+            if (!cats.length) {
+                cuerpo.innerHTML = '<p style="color:var(--success); text-align:center; padding:24px;">✅ Nada por reponer: todo el inventario tiene stock.</p>';
+            } else {
+                cuerpo.innerHTML = cats.map(cat => {
+                    const items = porCat[cat].sort((a, b) => (parseFloat(a.stock) || 0) - (parseFloat(b.stock) || 0));
+                    listaReposicionTexto += `\n${cat.toUpperCase()}:\n` + items.map(p => `  · ${p.nombre}${p.sku ? ' (' + p.sku + ')' : ''} — quedan ${parseFloat(p.stock) || 0}`).join('\n') + '\n';
+                    return `<div style="margin-bottom:14px;">
+                        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#f59e0b; border-bottom:1px solid rgba(245,158,11,0.25); padding-bottom:4px; margin-bottom:6px;">${esc(cat)} <span style="color:#666;">(${items.length})</span></div>
+                        ${items.map(p => {
+                            const st = parseFloat(p.stock) || 0;
+                            return `<div style="display:flex; justify-content:space-between; gap:10px; padding:4px 2px; font-size:13px;">
+                                <span style="color:#ddd;">${esc(p.nombre)}${p.sku ? ` <span style='color:#555; font-size:11px;'>${esc(p.sku)}</span>` : ''}</span>
+                                <span style="font-weight:700; white-space:nowrap; color:${st <= 0 ? 'var(--danger)' : '#f59e0b'};">${st <= 0 ? 'AGOTADO' : 'quedan ' + st}</span>
+                            </div>`;
+                        }).join('')}
+                    </div>`;
+                }).join('');
+            }
+            document.getElementById('modal-reponer-stock').style.display = 'flex';
+        }
+
+        function copiarListaReposicion() {
+            try {
+                navigator.clipboard.writeText(listaReposicionTexto);
+                showToast('Lista copiada 📋 — pégala en WhatsApp del proveedor', 'success');
+            } catch (e) { showToast('No se pudo copiar', 'danger'); }
+        }
+
+        // === MÁS VENDIDOS por categoría (según el período activo de Métricas) ===
+        function abrirTopVentas() {
+            document.getElementById('top-ventas-cuerpo').innerHTML = '<p style="color:#aaa; text-align:center; padding:20px;">Cargando…</p>';
+            const lbl = { hoy: 'Hoy', semana: 'Últimos 7 días', mes: 'Mes actual', todo: 'Histórico completo' }[periodoReporte] || periodoReporte;
+            document.getElementById('top-ventas-periodo').innerText = `Período: ${lbl} · productos vendidos por el POS, agrupados por categoría`;
+            document.getElementById('modal-top-ventas').style.display = 'flex';
+            ipcRenderer.send('obtener-top-ventas', periodoReporte);
+        }
+
+        ipcRenderer.on('top-ventas-data', (e, res) => {
+            const cuerpo = document.getElementById('top-ventas-cuerpo');
+            if (!cuerpo) return;
+            if (!res.success) { cuerpo.innerHTML = `<p style="color:var(--danger); text-align:center; padding:20px;">${res.msg || 'Error'}</p>`; return; }
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            const cats = res.categorias || [];
+            if (!cats.length) {
+                cuerpo.innerHTML = '<p style="color:#aaa; text-align:center; padding:24px;">Sin ventas registradas en este período.</p>';
+                return;
+            }
+            cuerpo.innerHTML = cats.map(c => `
+                <div style="margin-bottom:14px;">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#fbbf24; border-bottom:1px solid rgba(251,191,36,0.25); padding-bottom:4px; margin-bottom:6px;">
+                        <span>${esc(c.categoria)}</span><span>S/ ${(parseFloat(c.totalCat) || 0).toFixed(2)}</span>
+                    </div>
+                    ${(c.items || []).map((it, i) => `
+                        <div style="display:flex; justify-content:space-between; gap:10px; padding:4px 2px; font-size:13px;">
+                            <span style="color:#ddd;">${i < 3 ? ['🥇', '🥈', '🥉'][i] : '·'} ${esc(it.nombre)}</span>
+                            <span style="color:#888; white-space:nowrap;">x${parseFloat(it.cantidad) || 0} · <b style="color:var(--success);">S/ ${(parseFloat(it.total) || 0).toFixed(2)}</b></span>
+                        </div>`).join('')}
+                </div>`).join('');
+        });
 
         if (document.getElementById('reg-costo')) {
             document.getElementById('reg-costo').addEventListener('input', function () {
