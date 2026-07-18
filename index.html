@@ -365,6 +365,29 @@
             gap: 8px;
         }
 
+        /* Botón secundario que acompaña al bh-btn-purple: misma altura, radio y
+           tipografía que el morado, pero en versión "fantasma" para no competir. */
+        .bh-btn-ghost {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            border: 1px solid var(--bh-border);
+            padding: 12px 18px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            transition: 0.2s;
+        }
+
+        .bh-btn-ghost:hover {
+            border-color: var(--bh-purple);
+            background: rgba(124, 58, 237, 0.12);
+        }
+
         .bh-btn-white {
             background: rgba(255, 255, 255, 0.05);
             color: white;
@@ -2245,10 +2268,10 @@
                     <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
                         <h1>Inventario</h1>
                         <div style="display:flex; gap:10px;">
-                            <button class="bh-btn-white" onclick="showView('compatibilidades-view', null)" title="Ver y gestionar qué modelos comparten la misma mica/pantalla">
+                            <button class="bh-btn-ghost" onclick="showView('compatibilidades-view', null)" title="Ver y gestionar qué modelos comparten la misma mica/pantalla">
                                 <i class='bx bx-git-compare'></i> Compatibilidades
                             </button>
-                            <button class="bh-btn-white" onclick="showView('devoluciones-view', null)" title="Registrar y consultar devoluciones de clientes">
+                            <button class="bh-btn-ghost" onclick="showView('devoluciones-view', null)" title="Registrar y consultar devoluciones de clientes">
                                 <i class='bx bx-undo'></i> Devoluciones
                             </button>
                             <div style="position:relative;">
