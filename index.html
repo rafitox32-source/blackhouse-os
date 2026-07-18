@@ -1964,6 +1964,7 @@
                                         id="lab-falla">Cargando...</div>
                                     <div style="font-size: 11px; color: #aaa; margin-top: 4px;" id="lab-cliente">
                                         Cargando...</div>
+                                    <div style="font-size: 12px; color: var(--info); margin-top: 6px; font-weight:bold;" id="lab-clave"></div>
                                 </div>
 
                                 <div class="grid-inputs">
@@ -2176,6 +2177,11 @@
                                         <i class='bx bx-barcode-reader' style="font-size: 18px;"></i>
                                     </button>
                                 </div>
+                            </div>
+                            <div class="input-group" style="grid-column:span 2">
+                                <label>🔒 Patrón / Contraseña del equipo</label>
+                                <input type="text" id="clave-equipo" class="bh-input"
+                                    placeholder="Ej: L invertida, PIN 1234, Contraseña abc123, Sin clave...">
                             </div>
                             <div class="input-group" style="grid-column:span 2">
                                 <label>Diagnóstico / Falla Reportada</label>
@@ -5101,6 +5107,7 @@
                 cliente: nombre, telefono: document.getElementById('tel').value,
                 modelo: modelo, imei: document.getElementById('imei').value,
                 falla: document.getElementById('fal').value,
+                clave_equipo: (document.getElementById('clave-equipo') && document.getElementById('clave-equipo').value) || null,
                 precio_repuesto: document.getElementById('cost-part').value || '0',
                 precio_servicio: document.getElementById('cost-service').value || '0',
                 costo: document.getElementById('cost-total').value || '0',
@@ -5128,6 +5135,7 @@
                 document.getElementById('cli').value = ''; document.getElementById('tel').value = '';
                 document.getElementById('mod').value = ''; document.getElementById('imei').value = '';
                 document.getElementById('fal').value = ''; document.getElementById('cost-part').value = '';
+                if (document.getElementById('clave-equipo')) document.getElementById('clave-equipo').value = '';
                 document.getElementById('cost-service').value = ''; document.getElementById('cost-total').value = '0.00';
                 document.getElementById('pay-advance').value = ''; document.getElementById('pay-balance').value = '0.00';
                 limpiarFirma();
@@ -5471,6 +5479,7 @@
             html += fila('📞 Teléfono', esc(r.telefono));
             html += fila('📱 Equipo', esc(r.modelo));
             html += fila('IMEI / Serie', esc(r.imei));
+            html += fila('🔒 Patrón / Contraseña', esc(r.clave_equipo) || '<span style="color:#666;">— No registrada —</span>');
             html += fila('⚠️ Falla reportada', esc(r.falla));
             html += fila('📅 Recibido', esc(fecha));
             if (entregado) html += fila('📦 Entregado', esc(entregado));
@@ -7369,6 +7378,8 @@
                 document.getElementById('lab-modelo').innerText = `📱 Equipo: ${orden.modelo || 'No especificado'}`;
                 document.getElementById('lab-falla').innerText = `⚠️ Falla reportada: ${orden.falla || 'No especificada'}`;
                 document.getElementById('lab-cliente').innerText = `👤 Cliente: ${orden.cliente || 'Desconocido'}`;
+                const labClave = document.getElementById('lab-clave');
+                if (labClave) labClave.innerText = orden.clave_equipo ? `🔒 Patrón / Contraseña: ${orden.clave_equipo}` : '';
 
                 // Si la orden ya tenía notas previas, las cargamos en la bitácora
                 document.getElementById('lab-bitacora').value = orden.bitacora || '';
