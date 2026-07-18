@@ -2731,17 +2731,29 @@ ipcMain.on('abrir-ambicion', async (event) => {
         }
 
         // Antes se usaba shell.openPath: reportaba "abierto" aunque Ambición se cerrara sola al
-        // arrancar (no aparecía nada). Ahora se lanza con spawn usando la carpeta del .exe como
-        // directorio de trabajo (una app .NET self-contained puede buscar sus DLLs/config/base de
-        // datos relativos a ahí) y se DIAGNOSTICA: si el proceso muere en los primeros segundos,
-        // devolvemos el código de salida y el detalle del error para saber POR QUÉ no abre.
+        // arrancar (no aparecía nada). El diagnóstico reveló el motivo real:
+        //   System.UnauthorizedAccessException: Access to the path '...\ambicion\startlog' is denied
+        // Ambición escribe un archivo ("startlog", y probablemente más) RELATIVO a su directorio de
+        // trabajo. Si el cwd es la carpeta del .exe —que queda en C:\Program Files\, de SOLO
+        // LECTURA para usuarios normales— Windows niega la escritura y Ambición se cae.
+        // Solución: darle como cwd una carpeta ESCRIBIBLE (los datos del usuario), donde sí puede
+        // crear sus archivos. Las DLLs del .NET self-contained se cargan por la ubicación del exe,
+        // no por el cwd, así que cambiar el cwd no afecta su arranque.
+        let cwdEscribible;
+        try {
+            cwdEscribible = path.join(app.getPath('userData'), 'ambicion');
+            if (!fs.existsSync(cwdEscribible)) fs.mkdirSync(cwdEscribible, { recursive: true });
+        } catch (e) {
+            try { cwdEscribible = require('os').tmpdir(); } catch (e2) { cwdEscribible = undefined; }
+        }
+
         const { spawn } = require('child_process');
         let salida = '';
         let respondido = false;
         const responder = (r) => { if (!respondido) { respondido = true; event.reply('ambicion-resultado', r); } };
 
         const child = spawn(ambicionPath, [], {
-            cwd: path.dirname(ambicionPath),
+            cwd: cwdEscribible,
             detached: true,
             stdio: ['ignore', 'pipe', 'pipe'],
             windowsHide: false
