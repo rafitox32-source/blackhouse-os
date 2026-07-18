@@ -506,6 +506,49 @@
         .kpi-badge.up { background:rgba(16,185,129,.13); color:#34d399; }
         .kpi-badge.down { background:rgba(239,68,68,.13); color:#f87171; }
         .kpi-badge.neutro { background:rgba(255,255,255,.06); color:#888; }
+
+        /* === DASHBOARD BENTO (Panel de Control) === */
+        .dash-hero { position:relative; overflow:hidden; border-radius:18px; padding:32px 38px; margin-bottom:22px; background:linear-gradient(135deg, rgba(124,58,237,0.16) 0%, rgba(17,17,22,0.92) 45%, rgba(14,165,233,0.07) 100%); border:1px solid rgba(124,58,237,0.28); display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap; }
+        .dash-orb { position:absolute; border-radius:50%; filter:blur(90px); pointer-events:none; opacity:.35; animation:orbFloat 14s ease-in-out infinite; }
+        .dash-orb.o1 { width:260px; height:260px; top:-110px; left:-60px; background:#7c3aed; }
+        .dash-orb.o2 { width:220px; height:220px; bottom:-130px; right:6%; background:#0ea5e9; opacity:.22; animation-delay:-5s; }
+        .dash-orb.o3 { width:160px; height:160px; top:-70px; right:32%; background:#10b981; opacity:.18; animation-delay:-9s; }
+        @keyframes orbFloat { 0%,100%{ transform:translate(0,0) scale(1);} 50%{ transform:translate(26px,16px) scale(1.12);} }
+        .dash-titulo { margin:0; font-size:30px; font-weight:800; letter-spacing:-.02em; background:linear-gradient(90deg,#ffffff 25%, #c4b5fd 65%, #a78bfa); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+        .dash-reloj { position:relative; font-family:Consolas, monospace; font-size:36px; font-weight:700; color:#fff; text-align:right; line-height:1; font-variant-numeric:tabular-nums; }
+        .dash-reloj small { display:block; font-size:12px; color:#9aa0ab; font-weight:500; margin-top:7px; text-transform:capitalize; font-family:inherit; letter-spacing:.02em; }
+
+        .dash-bento { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
+        .bento-tile { background:rgba(255,255,255,0.028); border:1px solid var(--bh-border); border-radius:16px; padding:20px 22px; position:relative; overflow:hidden; transition:transform .25s ease, border-color .25s ease, box-shadow .25s ease; animation:tileIn .55s cubic-bezier(.2,.7,.3,1) backwards; }
+        .bento-tile:hover { transform:translateY(-3px); border-color:rgba(124,58,237,.45); box-shadow:0 16px 34px rgba(0,0,0,.45); }
+        .bento-2 { grid-column:span 2; }
+        @keyframes tileIn { from { opacity:0; transform:translateY(16px);} to { opacity:1; transform:translateY(0);} }
+        .bento-titulo { color:#9aa0ab; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; display:flex; align-items:center; gap:6px; }
+
+        .pipe-col { text-align:center; padding:14px 8px 12px; border-radius:12px; background:rgba(255,255,255,0.025); border:1px solid transparent; cursor:pointer; transition:.2s; }
+        .pipe-col:hover { border-color:rgba(124,58,237,.4); background:rgba(124,58,237,.07); }
+        .pipe-num { font-size:44px; font-weight:800; color:#fff; line-height:1.05; font-variant-numeric:tabular-nums; }
+        .pipe-tag { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; margin-top:6px; }
+        .pipe-barra { display:flex; height:9px; border-radius:999px; overflow:hidden; margin-top:18px; background:rgba(255,255,255,0.05); }
+        .pipe-barra > div { transition:width .8s cubic-bezier(.2,.7,.3,1); }
+
+        .hoy-fila { display:flex; justify-content:space-between; align-items:center; padding:11px 2px; border-bottom:1px solid rgba(255,255,255,0.05); }
+        .hoy-fila:last-child { border-bottom:none; }
+        .hoy-fila .v { font-size:22px; font-weight:800; color:#fff; font-variant-numeric:tabular-nums; }
+        .hoy-fila .l { font-size:12px; color:#9aa0ab; display:flex; align-items:center; gap:7px; }
+
+        .dash-accion { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; padding:14px 6px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid var(--bh-border); color:#ddd; font-size:12px; font-weight:600; cursor:pointer; transition:.2s; }
+        .dash-accion i { font-size:21px; color:var(--bh-purple); }
+        .dash-accion:hover { border-color:rgba(124,58,237,.5); background:rgba(124,58,237,.1); color:#fff; transform:translateY(-2px); }
+
+        .dash-reciente { display:flex; align-items:center; gap:12px; padding:10px 4px; border-bottom:1px solid rgba(255,255,255,0.05); cursor:pointer; transition:.15s; border-radius:8px; }
+        .dash-reciente:hover { background:rgba(124,58,237,.07); }
+        .dash-reciente:last-child { border-bottom:none; }
+        .dash-reciente .avatar { width:36px; height:36px; border-radius:10px; background:rgba(124,58,237,.14); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+        .chip-estado { font-size:10px; font-weight:700; padding:3px 9px; border-radius:999px; white-space:nowrap; }
+
+        @media (max-width:1150px) { .dash-bento { grid-template-columns:repeat(2,1fr); } }
+        @media (max-width:640px)  { .dash-bento { grid-template-columns:1fr; } .bento-2 { grid-column:span 1; } .dash-reloj { display:none; } }
         .rep-per { border-radius:7px; transition: background .2s, color .2s; }
         .rep-accion { background:rgba(255,255,255,0.04); border:1px solid #333; color:#ccc; border-radius:9px; padding:8px 14px; font-size:13px; cursor:pointer; transition:.2s; display:inline-flex; align-items:center; gap:6px; }
         .rep-accion:hover { border-color: var(--bh-purple); color:white; background:rgba(124,58,237,0.12); }
@@ -1793,34 +1836,96 @@
             <div class="main-view">
 
                 <div id="dashboard" class="view active">
-                    <div class="bh-card" style="text-align:center; padding:40px; position:relative; overflow:hidden;">
-                        <div
-                            style="position:absolute; top:-50px; left:-50px; width:200px; height:200px; background:var(--bh-purple); filter:blur(100px); opacity:0.25; border-radius:50%;">
+                    <div class="dash-hero">
+                        <div class="dash-orb o1"></div>
+                        <div class="dash-orb o2"></div>
+                        <div class="dash-orb o3"></div>
+                        <div style="position:relative;">
+                            <h2 class="dash-titulo"><span id="dash-saludo">Panel de Control</span> 👋</h2>
+                            <p id="welcome-msg"
+                                style="color:var(--bh-purple); font-weight:600; margin:8px 0 0; font-size:14px;">
+                                Bienvenido al sistema</p>
                         </div>
-                        <h2 style="margin:0; font-size:32px;">Panel de Control</h2>
-                        <p id="welcome-msg"
-                            style="color:var(--bh-purple); font-weight:600; margin-top:10px; font-size:16px;">Bienvenido
-                            al sistema</p>
+                        <div class="dash-reloj">
+                            <span id="dash-reloj-hora">--:--:--</span>
+                            <small id="dash-reloj-fecha"></small>
+                        </div>
                     </div>
-                    <div
-                        style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:30px; margin-bottom:30px;">
-                        <div class="bh-card"
-                            style="background: linear-gradient(145deg, rgba(255,95,95,0.1), rgba(20,20,20,0.6)); border: 1px solid rgba(255,95,95,0.2);">
-                            <h3 style="color:#ff8a8a; margin:0; font-size:14px; text-transform:uppercase;">Por Asignar
-                            </h3>
-                            <div style="font-size:56px; font-weight:800; color:white; margin-top:15px;"
-                                id="dash-asignar">0</div>
+
+                    <div class="dash-bento">
+                        <div class="bento-tile bento-2" style="animation-delay:.05s;">
+                            <div class="bento-titulo"><i class='bx bx-wrench'></i> Flujo del Taller</div>
+                            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px;">
+                                <div class="pipe-col" onclick="showView('taller', null)" title="Ir al taller">
+                                    <div class="pipe-num" id="dash-asignar">0</div>
+                                    <div class="pipe-tag" style="color:#ff8a8a;">📥 Por Asignar</div>
+                                </div>
+                                <div class="pipe-col" onclick="showView('taller', null)" title="Ir al taller">
+                                    <div class="pipe-num" id="dash-proceso">0</div>
+                                    <div class="pipe-tag" style="color:#81e6d9;">🔧 En Proceso</div>
+                                </div>
+                                <div class="pipe-col" onclick="showView('taller', null)" title="Ir al taller">
+                                    <div class="pipe-num" id="dash-listos">0</div>
+                                    <div class="pipe-tag" style="color:#d8b4fe;">✅ Listos</div>
+                                </div>
+                            </div>
+                            <div class="pipe-barra" title="Distribución de las órdenes activas">
+                                <div id="dash-seg-1" style="width:0%; background:#f87171;"></div>
+                                <div id="dash-seg-2" style="width:0%; background:#4fd1c5;"></div>
+                                <div id="dash-seg-3" style="width:0%; background:#a78bfa;"></div>
+                            </div>
                         </div>
-                        <div class="bh-card"
-                            style="background: linear-gradient(145deg, rgba(79,209,197,0.1), rgba(20,20,20,0.6)); border: 1px solid rgba(79,209,197,0.2);">
-                            <h3 style="color:#81e6d9; margin:0; font-size:14px; text-transform:uppercase;">En Proceso
-                            </h3>
-                            <div style="font-size:56px; font-weight:800; color:white; margin-top:15px;" id="dash-proceso">0</div>
+
+                        <div class="bento-tile" style="animation-delay:.12s;">
+                            <div class="bento-titulo"><i class='bx bx-calendar-check'></i> Hoy</div>
+                            <div style="margin-top:8px;">
+                                <div class="hoy-fila">
+                                    <span class="l">📥 Equipos recibidos</span>
+                                    <span class="v" id="dash-hoy-nuevas">0</span>
+                                </div>
+                                <div class="hoy-fila">
+                                    <span class="l">📦 Entregados</span>
+                                    <span class="v" id="dash-hoy-entregadas" style="color:#34d399;">0</span>
+                                </div>
+                                <div class="hoy-fila">
+                                    <span class="l">🛠 En el taller ahora</span>
+                                    <span class="v" id="dash-activos" style="color:#c4b5fd;">0</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="bh-card"
-                            style="background: linear-gradient(145deg, rgba(124,58,237,0.1), rgba(20,20,20,0.6)); border: 1px solid rgba(124,58,237,0.2);">
-                            <h3 style="color:#d8b4fe; margin:0; font-size:14px; text-transform:uppercase;">Listos</h3>
-                            <div style="font-size:56px; font-weight:800; color:white; margin-top:15px;" id="dash-listos">0</div>
+
+                        <div class="bento-tile" style="animation-delay:.19s;">
+                            <div class="bento-titulo"><i class='bx bx-rocket'></i> Accesos Rápidos</div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px;">
+                                <div class="dash-accion" onclick="showView('recepcion', null)">
+                                    <i class='bx bx-plus-circle'></i> Nueva Orden
+                                </div>
+                                <div class="dash-accion" onclick="showView('inventario', null)">
+                                    <i class='bx bx-package'></i> Inventario
+                                </div>
+                                <div class="dash-accion" onclick="showView('facturas-view', null)">
+                                    <i class='bx bx-receipt'></i> Comprobantes
+                                </div>
+                                <div class="dash-accion" onclick="showView('reportes', null)">
+                                    <i class='bx bx-line-chart'></i> Métricas
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bento-tile bento-2" style="animation-delay:.26s;">
+                            <div class="bento-titulo"><i class='bx bx-history'></i> Órdenes Recientes</div>
+                            <div id="dash-recientes" style="margin-top:8px;">
+                                <p style="color:#666; font-size:13px; text-align:center; padding:18px 0;">Aún no hay
+                                    órdenes registradas.</p>
+                            </div>
+                        </div>
+
+                        <div class="bento-tile bento-2" style="animation-delay:.33s; display:flex; align-items:center; gap:16px;">
+                            <div style="font-size:34px;">💡</div>
+                            <div>
+                                <div class="bento-titulo">Consejo del día</div>
+                                <p id="dash-consejo" style="margin:6px 0 0; color:#c9cdd6; font-size:13px; line-height:1.5;"></p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -5250,8 +5355,88 @@
                 if (document.getElementById('dash-asignar')) document.getElementById('dash-asignar').innerText = porAsignar;
                 if (document.getElementById('dash-proceso')) document.getElementById('dash-proceso').innerText = enProceso;
                 if (document.getElementById('dash-listos')) document.getElementById('dash-listos').innerText = listos;
+                actualizarDashboardBento(porAsignar, enProceso, listos, rows);
             }
         }
+
+        // === DASHBOARD BENTO: barra de flujo, resumen de hoy y órdenes recientes ===
+        // Se alimenta de las mismas órdenes que ya llegan para la tabla del taller.
+        function actualizarDashboardBento(porAsignar, enProceso, listos, rows) {
+            try {
+                const total = porAsignar + enProceso + listos;
+                const pct = n => total > 0 ? Math.round((n / total) * 100) : 0;
+                const seg1 = document.getElementById('dash-seg-1');
+                if (seg1) {
+                    seg1.style.width = pct(porAsignar) + '%';
+                    document.getElementById('dash-seg-2').style.width = pct(enProceso) + '%';
+                    document.getElementById('dash-seg-3').style.width = pct(listos) + '%';
+                }
+
+                const hoy = new Date().toDateString();
+                const esHoy = f => f && new Date(f).toDateString() === hoy;
+                const setNum = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+                setNum('dash-hoy-nuevas', rows.filter(r => esHoy(r.created_at)).length);
+                setNum('dash-hoy-entregadas', rows.filter(r => r.estado === 'Entregado' && (esHoy(r.fecha_entregado) || (!r.fecha_entregado && esHoy(r.created_at)))).length);
+                setNum('dash-activos', rows.filter(r => r.estado !== 'Entregado').length);
+
+                const cont = document.getElementById('dash-recientes');
+                if (cont) {
+                    const escD = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+                    const chips = {
+                        'Recibido': ['📥 Recibido', 'rgba(248,113,113,.14)', '#f87171'],
+                        'En Proceso': ['🔧 En Proceso', 'rgba(79,209,197,.14)', '#4fd1c5'],
+                        'Completado': ['✅ Listo', 'rgba(167,139,250,.14)', '#c4b5fd'],
+                        'Entregado': ['📦 Entregado', 'rgba(52,211,153,.14)', '#34d399']
+                    };
+                    const recientes = [...rows].sort((a, b) => b.id - a.id).slice(0, 4);
+                    cont.innerHTML = recientes.length === 0
+                        ? '<p style="color:#666; font-size:13px; text-align:center; padding:18px 0;">Aún no hay órdenes registradas.</p>'
+                        : recientes.map(r => {
+                            const c = chips[r.estado] || ['❓ ' + escD(r.estado), 'rgba(255,255,255,.07)', '#aaa'];
+                            return `<div class="dash-reciente" onclick="verDetalleOrden(${r.id})" title="Ver detalle de la orden">
+                                <div class="avatar">📱</div>
+                                <div style="flex:1; min-width:0;">
+                                    <div style="color:#eee; font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">#${String(r.id).padStart(4, '0')} · ${escD(r.modelo || 'Equipo')}</div>
+                                    <div style="color:#8b8f98; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escD(r.cliente || '-')}</div>
+                                </div>
+                                <span class="chip-estado" style="background:${c[1]}; color:${c[2]};">${c[0]}</span>
+                            </div>`;
+                        }).join('');
+                }
+            } catch (e) { console.warn('Dashboard bento:', e.message); }
+        }
+
+        // Reloj en vivo + saludo según la hora + consejo del día
+        (function initDashboardHero() {
+            const CONSEJOS = [
+                'Registrá el costo real del repuesto al reparar: así la Ganancia Neta de Métricas es exacta.',
+                'Usá "🛒 Reponer Stock" en Inventario para saber qué comprarle al proveedor antes de quedarte sin nada.',
+                'El Cierre del Día en Métricas te muestra cuánto entró hoy entre taller y ventas.',
+                'Cargale precio a los productos nuevos: un producto con precio 0 se vende como S/ 0 en las métricas.',
+                'Tomá la foto y la firma en recepción: son tu respaldo si hay reclamos en la entrega.',
+                'Revisá "Más Vendidos" cada semana para saber qué micas y pantallas rotan más.',
+                'Asigná cada trabajador a su tienda en Usuarios para llevar el control de ventas por sucursal.'
+            ];
+            function tick() {
+                const ahora = new Date();
+                const elHora = document.getElementById('dash-reloj-hora');
+                const elFecha = document.getElementById('dash-reloj-fecha');
+                const elSaludo = document.getElementById('dash-saludo');
+                if (elHora) elHora.textContent = ahora.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                if (elFecha) elFecha.textContent = ahora.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' });
+                if (elSaludo) {
+                    const h = ahora.getHours();
+                    elSaludo.textContent = h < 12 ? 'Buenos días' : (h < 19 ? 'Buenas tardes' : 'Buenas noches');
+                }
+            }
+            const elConsejo = document.getElementById('dash-consejo');
+            if (elConsejo) {
+                const dia = Math.floor(Date.now() / 86400000);
+                elConsejo.textContent = CONSEJOS[dia % CONSEJOS.length];
+            }
+            tick();
+            setInterval(tick, 1000);
+        })();
 
         // === DETALLE DE ORDEN: datos captados en Recepción (incluye foto y firma) ===
         function verDetalleOrden(id) {
