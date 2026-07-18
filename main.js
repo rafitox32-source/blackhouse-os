@@ -1836,7 +1836,17 @@ ipcMain.on('obtener-top-ventas', async (event, periodo) => {
         else if (periodo === 'semana') desde = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
         else if (periodo === 'mes') desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
 
-        let qv = supabase.from('ventas_pos').select('id').eq('empresa_id', empresaActual);
+        const agg = {}; // categoria -> nombre -> { cantidad, total }
+        const sumar = (cat, nombre, cantidad, total) => {
+            const key = (nombre || 'Producto').trim();
+            agg[cat] = agg[cat] || {};
+            agg[cat][key] = agg[cat][key] || { nombre: key, cantidad: 0, total: 0 };
+            agg[cat][key].cantidad += cantidad;
+            agg[cat][key].total += total;
+        };
+
+        // 1) Ventas del POS (fuente principal desde la integración 010).
+        let qv = supabase.from('ventas_pos').select('id, creado_en').eq('empresa_id', empresaActual);
         if (desde) qv = qv.gte('creado_en', desde.toISOString());
         const { data: ventas } = await qv;
         const ids = (ventas || []).map(v => v.id);
@@ -1848,24 +1858,60 @@ ipcMain.on('obtener-top-ventas', async (event, periodo) => {
                 .in('venta_id', ids);
             items = data || [];
         }
-
-        // Categoría de cada producto vendido (los "libres" van a su propia categoría).
         const pids = [...new Set(items.map(i => i.producto_id).filter(Boolean))];
         const mapaCat = {};
         if (pids.length) {
             const { data: prods } = await supabase.from('productos').select('id, categoria').in('id', pids);
             (prods || []).forEach(p => { mapaCat[p.id] = p.categoria || 'Sin categoría'; });
         }
-
-        const agg = {}; // categoria -> nombre -> { cantidad, total }
         items.forEach(i => {
             const cat = i.origen === 'libre' ? 'Venta libre (sin stock)' : (mapaCat[i.producto_id] || 'Sin categoría');
-            const key = (i.nombre || 'Producto').trim();
-            agg[cat] = agg[cat] || {};
-            agg[cat][key] = agg[cat][key] || { nombre: key, cantidad: 0, total: 0 };
-            agg[cat][key].cantidad += cf(i.cantidad);
-            agg[cat][key].total += cf(i.subtotal);
+            sumar(cat, i.nombre, cf(i.cantidad), cf(i.subtotal));
         });
+
+        // 2) HISTÓRICO de ventas móviles anteriores a ventas_pos: viven solo como movimientos de
+        //    stock "Venta móvil - ...". Solo se cuentan los ANTERIORES a la primera venta de
+        //    ventas_pos, para no contar doble las nuevas (que generan ambos registros).
+        try {
+            const minVentaPos = ids.length ? (ventas || []).map(v => v.creado_en).sort()[0] : null;
+            let qm = supabase.from('movimientos_stock')
+                .select('sku, cantidad, creado_en')
+                .eq('empresa_id', String(empresaActual))
+                .ilike('nota', 'Venta móvil%');
+            if (desde) qm = qm.gte('creado_en', desde.toISOString());
+            const { data: movs } = await qm;
+            const historicos = (movs || []).filter(m => !minVentaPos || new Date(m.creado_en) < new Date(minVentaPos));
+            const skus = [...new Set(historicos.map(m => m.sku).filter(Boolean))];
+            const mapaSku = {};
+            if (skus.length) {
+                const { data: prods } = await supabase.from('productos')
+                    .select('sku, nombre, categoria, precio')
+                    .eq('empresa_id', empresaActual)
+                    .in('sku', skus);
+                (prods || []).forEach(p => { mapaSku[p.sku] = p; });
+            }
+            historicos.forEach(m => {
+                const p = mapaSku[m.sku];
+                const qty = Math.abs(cf(m.cantidad));
+                sumar(p ? (p.categoria || 'Sin categoría') : 'Sin categoría',
+                      p ? p.nombre : (m.sku || 'Producto'),
+                      qty, qty * (p ? cf(p.precio) : 0));
+            });
+        } catch (e) { /* sin movimientos: se ignora */ }
+
+        // 3) SERVICIOS del taller: órdenes entregadas del período, agrupadas por equipo.
+        //    (Así "Más Vendidos" también muestra qué reparaciones son las más frecuentes.)
+        try {
+            const { data: ords } = await supabase.from('ordenes')
+                .select('modelo, costo, estado, created_at, fecha_entregado')
+                .eq('empresa_id', String(empresaActual))
+                .eq('estado', 'Entregado');
+            (ords || []).forEach(o => {
+                const ref = o.fecha_entregado || o.created_at;
+                if (desde && (!ref || new Date(ref) < desde)) return;
+                sumar('🔧 Servicios del taller', (o.modelo || 'Equipo').trim(), 1, cf(o.costo));
+            });
+        } catch (e) { /* sin ordenes: se ignora */ }
 
         const categorias = Object.keys(agg).map(cat => {
             const lista = Object.values(agg[cat]).sort((a, b) => b.cantidad - a.cantidad);
