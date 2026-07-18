@@ -2730,17 +2730,41 @@ ipcMain.on('abrir-ambicion', async (event) => {
             return;
         }
 
-        // shell.openPath abre el .exe como si hicieras doble clic (ideal para una app de ventana)
-        // y NUNCA tumba la app: devuelve '' si abrió, o el motivo del error si no pudo (p. ej.
-        // bloqueo de antivirus/SmartScreen). Antes se usaba spawn sin manejar el evento 'error',
-        // por eso un fallo asíncrono podía cerrar toda la app o quedarse sin avisar.
-        const err = await shell.openPath(ambicionPath);
-        if (err) {
-            console.error('shell.openPath no pudo abrir Ambición:', err);
-            event.reply('ambicion-resultado', { success: false, msg: 'Windows no pudo abrir Ambición: ' + err });
-        } else {
-            event.reply('ambicion-resultado', { success: true });
-        }
+        // Antes se usaba shell.openPath: reportaba "abierto" aunque Ambición se cerrara sola al
+        // arrancar (no aparecía nada). Ahora se lanza con spawn usando la carpeta del .exe como
+        // directorio de trabajo (una app .NET self-contained puede buscar sus DLLs/config/base de
+        // datos relativos a ahí) y se DIAGNOSTICA: si el proceso muere en los primeros segundos,
+        // devolvemos el código de salida y el detalle del error para saber POR QUÉ no abre.
+        const { spawn } = require('child_process');
+        let salida = '';
+        let respondido = false;
+        const responder = (r) => { if (!respondido) { respondido = true; event.reply('ambicion-resultado', r); } };
+
+        const child = spawn(ambicionPath, [], {
+            cwd: path.dirname(ambicionPath),
+            detached: true,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            windowsHide: false
+        });
+
+        // Nunca tumba la app: cualquier fallo de lanzamiento se maneja aquí.
+        child.on('error', (e) => responder({ success: false, msg: 'No se pudo iniciar Ambición: ' + e.message }));
+        if (child.stdout) child.stdout.on('data', d => { salida += d.toString(); });
+        if (child.stderr) child.stderr.on('data', d => { salida += d.toString(); });
+
+        // Si sigue viva a los 3s, asumimos que abrió bien (es una app de ventana).
+        const timer = setTimeout(() => { responder({ success: true }); try { child.unref(); } catch (e) {} }, 3000);
+
+        // Si muere antes de los 3s => se cayó al arrancar: devolvemos código + detalle.
+        child.on('exit', (code, signal) => {
+            clearTimeout(timer);
+            if (code === 0) {
+                responder({ success: true });
+            } else {
+                const detalle = salida.trim().replace(/\s+/g, ' ').slice(0, 300);
+                responder({ success: false, msg: `Ambición se cerró al abrir (código ${code}${signal ? '/' + signal : ''}).${detalle ? ' Detalle: ' + detalle : ' Sin mensaje de error.'}` });
+            }
+        });
     } catch (err) {
         console.error("Error abriendo Ambicion:", err);
         event.reply('ambicion-resultado', { success: false, msg: err.message });
