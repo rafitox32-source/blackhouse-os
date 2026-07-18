@@ -2349,6 +2349,25 @@ ipcMain.on('registrar-nuevo-cliente-saas', async (event, data) => {
 // === 12. MÓDULO DE FACTURACIÓN AUTOMÁTICA ===
 ipcMain.on('emitir-factura-saas', async (event, data) => {
     try {
+        // La numeración vive en la base con candado (migración 012): dos PCs, o una PC
+        // y la boleta móvil de la vendedora, emitiendo a la vez ya no chocan de número.
+        const { data: numeroRpc, error: rpcErr } = await supabase.rpc('emitir_comprobante_escritorio', {
+            p_empresa_id: empresaActual,
+            p_tipo: data.tipo,
+            p_monto_total: parseFloat(data.total),
+            p_orden_id: data.ordenId || null,
+            p_cliente_documento: data.documento || null,
+            p_cliente_nombre: data.nombre || null,
+            p_vendedor: usuarioActual || null
+        });
+        if (!rpcErr) {
+            event.reply('factura-emitida-exito', { numero: numeroRpc, tipo: data.tipo });
+            return;
+        }
+        // Si esta base todavía no tiene la función (instalación sin migrar), se sigue
+        // con la lógica local de siempre. Cualquier otro error sí se reporta.
+        if (rpcErr.code !== 'PGRST202' && !/does not exist/i.test(rpcErr.message || '')) throw rpcErr;
+
         const { data: ultimasFacturas, error: errConsulta } = await supabase
             .from('facturas')
             .select('numero_comprobante')
