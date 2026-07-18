@@ -2816,12 +2816,19 @@
                                         onclick="document.getElementById('modal-usuario').style.display='flex'">+ Crear
                                         Usuario</button>
                                 </div>
+                                <div class="bh-card" style="margin-bottom:15px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                    <span style="font-size:13px; color:#aaa;">🏬 Tiendas:</span>
+                                    <span id="tiendas-chips" style="display:flex; gap:6px; flex-wrap:wrap;"></span>
+                                    <input id="nueva-tienda-nombre" class="bh-input" placeholder="Nombre (ej: Tienda Centro)" style="max-width:220px; margin-left:auto;">
+                                    <button class="bh-btn-purple" onclick="crearTienda()">+ Agregar Tienda</button>
+                                </div>
                                 <div class="bh-card">
                                     <table style="width:100%">
                                         <thead>
                                             <tr>
                                                 <th>Usuario</th>
                                                 <th>Rol</th>
+                                                <th>Tienda</th>
                                                 <th>Estado</th>
                                                 <th>Acción</th>
                                             </tr>
@@ -4467,6 +4474,7 @@
             // 2. Aquí mantenemos tu Configuración intacta con sus propias llaves
             if (id === 'config') {
                 ipcRenderer.send('obtener-usuarios');
+                ipcRenderer.send('obtener-tiendas');
                 cargarEstadoPlan();
                 const empresaId = localStorage.getItem('miEmpresaId');
                 if (empresaId) {
@@ -5528,14 +5536,61 @@
             }
         });
 
-        ipcRenderer.on('lista-de-usuarios', (e, rows) => {
+        // === TIENDAS (sucursales): asignación de personal por tienda ===
+        let ultimosUsuarios = [];
+        let todasLasTiendas = [];
+
+        function renderTiendasChips() {
+            const cont = document.getElementById('tiendas-chips');
+            if (!cont) return;
+            cont.innerHTML = todasLasTiendas.length
+                ? todasLasTiendas.map(t => `<span style="background:rgba(124,58,237,0.15); color:#d8b4fe; padding:3px 10px; border-radius:999px; font-size:12px;">${t.nombre}</span>`).join('')
+                : '<span style="color:#666; font-size:12px;">Sin tiendas aún — creá la primera →</span>';
+        }
+
+        function crearTienda() {
+            const nombre = (document.getElementById('nueva-tienda-nombre').value || '').trim();
+            if (!nombre) return showToast('Escribe el nombre de la tienda', 'warning');
+            ipcRenderer.send('crear-tienda', { nombre });
+        }
+
+        ipcRenderer.on('tienda-creada', (e, res) => {
+            if (res.success) {
+                showToast('Tienda creada 🏬', 'success');
+                document.getElementById('nueva-tienda-nombre').value = '';
+                ipcRenderer.send('obtener-tiendas');
+            } else {
+                showToast(res.msg || 'No se pudo crear la tienda', 'danger');
+            }
+        });
+
+        ipcRenderer.on('lista-de-tiendas', (e, rows) => {
+            todasLasTiendas = rows || [];
+            renderTiendasChips();
+            renderTablaUsuarios();
+        });
+
+        function asignarTiendaUsuario(id, tiendaId) {
+            ipcRenderer.send('asignar-tienda-usuario', { id, tienda_id: tiendaId ? parseInt(tiendaId) : null });
+        }
+
+        ipcRenderer.on('tienda-asignada', (e, res) => {
+            if (res.success) { showToast('Personal asignado a la tienda ✅', 'success'); ipcRenderer.send('obtener-usuarios'); }
+            else { showToast(res.msg || 'No se pudo asignar', 'danger'); }
+        });
+
+        function renderTablaUsuarios() {
             const tbody = document.getElementById('tabla-usuarios');
             if (!tbody) return;
-
+            const rows = ultimosUsuarios;
             if (!rows || rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No hay usuarios registrados.</td></tr>';
-            } else {
-                tbody.innerHTML = rows.map(u => `
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No hay usuarios registrados.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = rows.map(u => {
+                const optsTienda = '<option value="">Sin tienda</option>' +
+                    todasLasTiendas.map(t => `<option value="${t.id}" ${u.tienda_id === t.id ? 'selected' : ''}>${t.nombre}</option>`).join('');
+                return `
                     <tr>
                         <td style="font-weight:bold; color:white;">
                             <div style="display:flex; align-items:center; gap:10px;">
@@ -5544,13 +5599,18 @@
                             </div>
                         </td>
                         <td style="text-transform:uppercase; font-size:11px; color:#aaa;">${u.rol}</td>
+                        <td><select class="status-select" style="background:#222; color:white; min-width:130px;" onchange="asignarTiendaUsuario(${u.id}, this.value)">${optsTienda}</select></td>
                         <td><span class="status-badge ${u.estado === 'activo' ? 'bg-entregado' : 'bg-asignar'}">${u.estado}</span></td>
                         <td>
                             <button class="bh-btn-white" style="border-color:var(--danger); color:var(--danger); padding:4px 10px;" onclick="cambiarEstadoUsuario(${u.id}, '${u.estado === 'activo' ? 'inactivo' : 'activo'}')">${u.estado === 'activo' ? 'Desactivar' : 'Activar'}</button>
                         </td>
-                    </tr>
-                `).join('');
-            }
+                    </tr>`;
+            }).join('');
+        }
+
+        ipcRenderer.on('lista-de-usuarios', (e, rows) => {
+            ultimosUsuarios = rows || [];
+            renderTablaUsuarios();
         });
 
         function cambiarEstadoUsuario(id, nuevoEstado) { ipcRenderer.send('cambiar-estado-usuario', { id, nuevoEstado }); showToast(`Cambiando a ${nuevoEstado}...`, 'info'); }
@@ -6109,6 +6169,7 @@
                 ordenId: ordenAFacturar,
                 tipo: tipo,
                 documento: doc,
+                nombre: nom,
                 total: total
             });
         }

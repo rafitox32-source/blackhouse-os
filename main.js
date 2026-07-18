@@ -1939,6 +1939,47 @@ ipcMain.on('obtener-cierre-dia', async (event, params) => {
     }
 });
 
+// === 6d. TIENDAS (sucursales) — asignación de personal por tienda ===
+ipcMain.on('obtener-tiendas', async (event) => {
+    try {
+        const { data } = await supabase.from('tiendas')
+            .select('*')
+            .eq('empresa_id', empresaActual)
+            .order('id', { ascending: true });
+        event.reply('lista-de-tiendas', data || []);
+    } catch (e) {
+        event.reply('lista-de-tiendas', []);
+    }
+});
+
+ipcMain.on('crear-tienda', async (event, data) => {
+    try {
+        if (rolActual !== 'dueno') throw new Error('Solo el dueño puede crear tiendas');
+        const nombre = String((data && data.nombre) || '').trim();
+        if (!nombre) throw new Error('Falta el nombre de la tienda');
+        const { error } = await supabase.from('tiendas')
+            .insert([{ empresa_id: empresaActual, nombre }]);
+        if (error) throw error;
+        event.reply('tienda-creada', { success: true });
+    } catch (err) {
+        event.reply('tienda-creada', { success: false, msg: err.message });
+    }
+});
+
+ipcMain.on('asignar-tienda-usuario', async (event, data) => {
+    try {
+        if (rolActual !== 'dueno') throw new Error('Solo el dueño puede asignar personal a tiendas');
+        const { error } = await supabase.from('usuarios')
+            .update({ tienda_id: data.tienda_id || null })
+            .eq('id', data.id)
+            .eq('empresa_id', empresaActual);
+        if (error) throw error;
+        event.reply('tienda-asignada', { success: true });
+    } catch (err) {
+        event.reply('tienda-asignada', { success: false, msg: err.message });
+    }
+});
+
 // === 7. GESTIÓN DE USUARIOS (SOLO DE MI EMPRESA) ===
 ipcMain.on('crear-usuario-nuevo', async (event, data) => {
     if (rolActual !== 'dueno') {
@@ -2233,6 +2274,11 @@ ipcMain.on('emitir-factura-saas', async (event, data) => {
                 numero_comprobante: numeroFinal,
                 tipo: data.tipo,
                 cliente_documento: data.documento || 'S/N',
+                // Antes el nombre del cliente se descartaba y los comprobantes salían
+                // "sin especificar" en los listados. Ahora queda registrado, junto con
+                // quién lo emitió (para el control por trabajador).
+                cliente_nombre: data.nombre || null,
+                vendedor_usuario: usuarioActual || null,
                 monto_total: parseFloat(data.total)
             }]);
 
