@@ -2588,10 +2588,16 @@ ipcMain.on('buscar-stock-tecnico', async (event, valor) => {
 
 ipcMain.on('abrir-ambicion', (event) => {
     try {
-        const ambicionPath = path.join(__dirname, 'software', 'ambicion', 'ambicion.exe');
+        // En la app INSTALADA, __dirname apunta adentro de app.asar y Windows no puede
+        // ejecutar un .exe desde ahí (ENOENT). El software vive como extraResource en
+        // resources/software (ver package.json), así que la base correcta es:
+        //   instalado  -> process.resourcesPath (C:\...\BlackHouse OS V2\resources)
+        //   desarrollo -> __dirname (la carpeta del proyecto)
+        const base = app.isPackaged ? process.resourcesPath : __dirname;
+        const ambicionPath = path.join(base, 'software', 'ambicion', 'ambicion.exe');
         if (fs.existsSync(ambicionPath)) {
             const { spawn } = require('child_process');
-            spawn(ambicionPath, [], { detached: true, stdio: 'ignore' }).unref();
+            spawn(ambicionPath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(ambicionPath) }).unref();
         } else {
             console.error("No se encontró el ejecutable de Ambicion en:", ambicionPath);
         }

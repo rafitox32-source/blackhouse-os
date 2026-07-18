@@ -41,7 +41,14 @@
       "!.git/*",
       "!cosas-que-no-uso/**/*",
       "!tools/**/*",
-      "!docs/**/*"
+      "!docs/**/*",
+      "!software/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "software",
+        "to": "software"
+      }
     ]
   },
   "dependencies": {
