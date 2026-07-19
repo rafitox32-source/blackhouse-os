@@ -2183,9 +2183,15 @@
                                 </div>
                             </div>
                             <div class="input-group" style="grid-column:span 2">
-                                <label>🔒 Patrón / Contraseña del equipo</label>
-                                <input type="text" id="clave-equipo" class="bh-input"
-                                    placeholder="Ej: L invertida, PIN 1234, Contraseña abc123, Sin clave...">
+                                <label>🔒 Patrón / Clave / Contraseña del equipo</label>
+                                <div style="display:flex; gap:8px;">
+                                    <input type="text" id="clave-equipo" class="bh-input" style="flex:1;" readonly
+                                        placeholder="Toca 'Configurar' para dibujar el patrón, poner la clave o la contraseña...">
+                                    <button type="button" class="bh-btn-purple" onclick="abrirBloqueoEquipo()"
+                                        style="padding:0 16px; display:flex; align-items:center; gap:6px; white-space:nowrap;">
+                                        <i class='bx bx-lock-open-alt'></i> Configurar
+                                    </button>
+                                </div>
                             </div>
                             <div class="input-group" style="grid-column:span 2">
                                 <label>Diagnóstico / Falla Reportada</label>
@@ -4010,6 +4016,65 @@
             <div style="display:flex; justify-content:space-between; margin-top:20px;">
                 <button class="bh-btn-white" onclick="document.getElementById('modal-cobro-adicional').style.display='none'">Cancelar</button>
                 <button class="bh-btn-purple" style="background:var(--success);" onclick="guardarCobroAdicional()"><i class='bx bx-save'></i> Agregar cobro</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .blq-tab-active { background: var(--bh-purple) !important; color: #fff !important; border-color: var(--bh-purple) !important; }
+        .pin-key { font-size: 22px !important; font-weight: bold; padding: 14px 0 !important; }
+        .patron-dot:hover { border-color: #a855f7; }
+    </style>
+    <!-- Modal: Bloqueo del equipo (Patrón / Clave / Contraseña) -->
+    <div id="modal-bloqueo-equipo" class="modal-overlay">
+        <div class="modal-content" style="width: 380px;">
+            <h2 style="margin-top:0; color: var(--bh-purple);"><i class='bx bx-lock-alt'></i> Bloqueo del equipo</h2>
+            <p style="color:#aaa; font-size:13px; margin-bottom:14px;">¿Cómo se desbloquea el equipo? Elige el tipo:</p>
+            <div style="display:flex; gap:8px; margin-bottom:16px;">
+                <button type="button" id="tab-patron" class="bh-btn-white blq-tab" onclick="cambiarTipoBloqueo('patron')" style="flex:1; padding:9px;">✏️ Patrón</button>
+                <button type="button" id="tab-clave" class="bh-btn-white blq-tab" onclick="cambiarTipoBloqueo('clave')" style="flex:1; padding:9px;">🔢 Clave</button>
+                <button type="button" id="tab-pass" class="bh-btn-white blq-tab" onclick="cambiarTipoBloqueo('pass')" style="flex:1; padding:9px;">⌨️ Contraseña</button>
+            </div>
+
+            <!-- PATRÓN: 9 puntos para dibujar -->
+            <div id="blq-patron" style="text-align:center;">
+                <div id="patron-area" style="position:relative; width:240px; height:240px; margin:6px auto; user-select:none;">
+                    <svg id="patron-svg" width="240" height="240" style="position:absolute; top:0; left:0; pointer-events:none;"></svg>
+                </div>
+                <div style="font-size:13px; color:#c4b5fd; min-height:20px;" id="patron-seq-txt">Toca los puntos en orden</div>
+                <button type="button" class="bh-btn-white" onclick="borrarPatron()" style="margin-top:8px; font-size:12px; padding:6px 14px;">🗑️ Borrar patrón</button>
+            </div>
+
+            <!-- CLAVE: teclado numérico -->
+            <div id="blq-clave" style="display:none; text-align:center;">
+                <input type="text" id="clave-pin-display" class="bh-input" readonly style="text-align:center; font-size:22px; letter-spacing:6px; margin-bottom:12px;" placeholder="----">
+                <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:240px; margin:0 auto;">
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinTecla('1')">1</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinTecla('2')">2</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinTecla('3')">3</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinTecla('4')">4</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinTecla('5')">5</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinTecla('6')">6</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinTecla('7')">7</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinTecla('8')">8</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinTecla('9')">9</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinBorrar()" style="color:var(--danger);">⌫</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="pinTecla('0')">0</button>
+                    <button type="button" class="bh-btn-white pin-key" onclick="document.getElementById('clave-pin-display').value=''">C</button>
+                </div>
+            </div>
+
+            <!-- CONTRASEÑA: escribir -->
+            <div id="blq-pass" style="display:none;">
+                <input type="text" id="clave-pass-input" class="bh-input" placeholder="Escribe la contraseña del equipo">
+            </div>
+
+            <div style="display:flex; justify-content:space-between; margin-top:20px;">
+                <button class="bh-btn-white" onclick="document.getElementById('modal-bloqueo-equipo').style.display='none'">Cancelar</button>
+                <div>
+                    <button class="bh-btn-white" onclick="guardarBloqueoEquipo('Sin clave')" style="border-color:#888; color:#aaa;">Sin clave</button>
+                    <button class="bh-btn-purple" onclick="guardarBloqueoEquipoActual()"><i class='bx bx-check'></i> Guardar</button>
+                </div>
             </div>
         </div>
     </div>
@@ -7306,6 +7371,109 @@
         }
 
         // === REPUESTO EXTERNO (traído de otro proveedor) ===
+        // ===== BLOQUEO DEL EQUIPO: Patrón (9 puntos) / Clave (1-9) / Contraseña =====
+        let bloqueoTipo = 'patron';
+        let patronSeq = [];
+
+        function centroPunto(n) { // centro (cx,cy) del punto n (1..9) en el área de 240x240
+            const col = (n - 1) % 3, row = Math.floor((n - 1) / 3);
+            return { x: 40 + col * 80, y: 40 + row * 80 };
+        }
+
+        function construirPuntosPatron() {
+            const area = document.getElementById('patron-area');
+            if (!area) return;
+            // Quitar puntos previos (dejar el <svg>)
+            area.querySelectorAll('.patron-dot').forEach(d => d.remove());
+            for (let n = 1; n <= 9; n++) {
+                const c = centroPunto(n);
+                const dot = document.createElement('div');
+                dot.className = 'patron-dot';
+                dot.setAttribute('data-dot', n);
+                dot.style.cssText = `position:absolute; width:44px; height:44px; left:${c.x - 22}px; top:${c.y - 22}px; border-radius:50%; border:2px solid #7c3aed; background:#161622; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px; color:#7c3aed; font-weight:bold;`;
+                dot.textContent = n;
+                dot.onclick = () => tocarPunto(n);
+                area.appendChild(dot);
+            }
+        }
+
+        function tocarPunto(n) {
+            if (patronSeq.includes(n)) return; // no repetir
+            patronSeq.push(n);
+            const dot = document.querySelector(`.patron-dot[data-dot="${n}"]`);
+            if (dot) { dot.style.background = 'var(--bh-purple)'; dot.style.color = '#fff'; dot.textContent = patronSeq.indexOf(n) + 1; }
+            dibujarLineasPatron();
+            document.getElementById('patron-seq-txt').textContent = 'Orden: ' + patronSeq.join(' → ');
+        }
+
+        function dibujarLineasPatron() {
+            const svg = document.getElementById('patron-svg');
+            if (!svg) return;
+            let lines = '';
+            for (let i = 1; i < patronSeq.length; i++) {
+                const a = centroPunto(patronSeq[i - 1]), b = centroPunto(patronSeq[i]);
+                lines += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#a855f7" stroke-width="5" stroke-linecap="round"/>`;
+            }
+            svg.innerHTML = lines;
+        }
+
+        function borrarPatron() {
+            patronSeq = [];
+            document.getElementById('patron-svg').innerHTML = '';
+            document.getElementById('patron-seq-txt').textContent = 'Toca los puntos en orden';
+            construirPuntosPatron();
+        }
+
+        function pinTecla(d) {
+            const disp = document.getElementById('clave-pin-display');
+            if (disp.value.length < 12) disp.value += d;
+        }
+        function pinBorrar() {
+            const disp = document.getElementById('clave-pin-display');
+            disp.value = disp.value.slice(0, -1);
+        }
+
+        function cambiarTipoBloqueo(tipo) {
+            bloqueoTipo = tipo;
+            document.getElementById('blq-patron').style.display = tipo === 'patron' ? 'block' : 'none';
+            document.getElementById('blq-clave').style.display = tipo === 'clave' ? 'block' : 'none';
+            document.getElementById('blq-pass').style.display = tipo === 'pass' ? 'block' : 'none';
+            ['patron', 'clave', 'pass'].forEach(t => {
+                const btn = document.getElementById('tab-' + t);
+                if (btn) btn.classList.toggle('blq-tab-active', t === tipo);
+            });
+        }
+
+        function abrirBloqueoEquipo() {
+            borrarPatron();
+            document.getElementById('clave-pin-display').value = '';
+            document.getElementById('clave-pass-input').value = '';
+            cambiarTipoBloqueo('patron');
+            document.getElementById('modal-bloqueo-equipo').style.display = 'flex';
+        }
+
+        function guardarBloqueoEquipo(valor) {
+            document.getElementById('clave-equipo').value = valor;
+            document.getElementById('modal-bloqueo-equipo').style.display = 'none';
+        }
+
+        function guardarBloqueoEquipoActual() {
+            let valor = '';
+            if (bloqueoTipo === 'patron') {
+                if (patronSeq.length < 2) return showToast('Dibuja el patrón (toca al menos 2 puntos)', 'warning');
+                valor = 'Patrón: ' + patronSeq.join('-');
+            } else if (bloqueoTipo === 'clave') {
+                const pin = document.getElementById('clave-pin-display').value;
+                if (!pin) return showToast('Escribe la clave con el teclado', 'warning');
+                valor = 'Clave: ' + pin;
+            } else {
+                const pass = document.getElementById('clave-pass-input').value.trim();
+                if (!pass) return showToast('Escribe la contraseña', 'warning');
+                valor = 'Contraseña: ' + pass;
+            }
+            guardarBloqueoEquipo(valor);
+        }
+
         function abrirRepuestoExterno() {
             // Prefill del # de orden con el que esté cargado en el laboratorio (si hay).
             const ordenLab = (document.getElementById('lab-orden-id')?.value || '').trim().replace('#', '').replace(/^0+/, '');
