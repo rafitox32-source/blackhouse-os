@@ -5455,6 +5455,15 @@
             // Refrescar el logo del formulario y la vista previa del ticket.
             if (typeof sincronizarLogoDesdeUrl === 'function') sincronizarLogoDesdeUrl();
             if (typeof renderTicketPreview === 'function') renderTicketPreview();
+
+            // Tema por defecto de la empresa: se aplica solo si en ESTE equipo el
+            // usuario no eligió su propio tema (su elección local siempre gana).
+            try {
+                if (!localStorage.getItem('appTheme') && data.tema &&
+                    typeof TEMAS_VALIDOS !== 'undefined' && TEMAS_VALIDOS.includes(data.tema)) {
+                    _pintarTema(data.tema);
+                }
+            } catch (e) {}
         });
 
         // Función unificada para el menú de Ajustes

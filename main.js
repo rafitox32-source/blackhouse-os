@@ -2217,7 +2217,7 @@ ipcMain.on('guardar-datos-empresa', async (event, data) => {
         // "Datos de la Empresa" y la de "Ticket/Comprobante" pueden guardar por separado sin
         // pisarse entre ellas.
         const camposPermitidos = ['nombre', 'razon_social', 'ruc', 'direccion', 'telefono',
-                                  'logo_url', 'ticket_mensaje', 'ticket_extra', 'ticket_opciones'];
+                                  'logo_url', 'ticket_mensaje', 'ticket_extra', 'ticket_opciones', 'tema'];
         const datosActualizar = {};
         camposPermitidos.forEach(k => { if (data[k] !== undefined) datosActualizar[k] = data[k]; });
         if (Object.keys(datosActualizar).length === 0) throw new Error('No hay datos para guardar');
