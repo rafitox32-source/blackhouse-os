@@ -1970,9 +1970,23 @@ ipcMain.on('obtener-cierre-dia', async (event, params) => {
 
             const ingresosTaller = adelantos + saldosCobrados;
             const detalleTecnico = Object.values(mapa).filter(x => x.cobrado > 0).sort((a, b) => b.cobrado - a.cobrado);
+
+            // Ventas de productos que hizo ÉL hoy (venta rápida). Se identifican por vendedor_usuario.
+            let ventasPropias = 0, ventasPropiasCount = 0;
+            try {
+                const { data: vp, error: errVP } = await supabase.from('ventas_pos')
+                    .select('total')
+                    .eq('empresa_id', Number(empresaActual))
+                    .eq('vendedor_usuario', usuarioActual)
+                    .gte('creado_en', desde.toISOString()).lt('creado_en', hasta.toISOString());
+                if (!errVP && vp) { ventasPropiasCount = vp.length; ventasPropias = vp.reduce((s, v) => s + cf(v.total), 0); }
+            } catch (e) { /* POS sin migrar */ }
+
             return event.reply('cierre-dia-datos', {
                 success: true, fecha: fechaTxt, soloTecnico: true,
-                adelantos, saldosCobrados, ingresosTaller, neto: ingresosTaller,
+                adelantos, saldosCobrados, ingresosTaller,
+                ventasPropias, ventasPropiasCount,
+                neto: ingresosTaller + ventasPropias,
                 detalleTecnico, registrado: false
             });
         }
@@ -2871,6 +2885,65 @@ ipcMain.on('abrir-log-ambicion', () => {
         if (fs.existsSync(diagPath)) shell.openPath(diagPath);
         else shell.openPath(app.getPath('userData'));
     } catch (e) { console.error('No se pudo abrir el log de Ambición:', e.message); }
+});
+
+// === VENTA RÁPIDA DE ESCRITORIO (POS para cualquier rol) ===
+// Registra una venta de productos SIN orden de taller. Reutiliza ventas_pos/ventas_pos_items
+// (las mismas que la vendedora móvil) para que el cierre y los reportes la cuenten igual.
+// Descuenta stock de los items de inventario y deja el movimiento; los "libres" no tocan stock.
+ipcMain.on('registrar-venta-desktop', async (event, params) => {
+    const cf = v => parseFloat(v) || 0;
+    try {
+        if (!empresaActual) throw new Error('No hay sesión activa');
+        const items = (params && Array.isArray(params.items)) ? params.items : [];
+        const medioPago = (params && params.medio_pago) || 'efectivo';
+        if (!items.length) throw new Error('La venta está vacía');
+
+        // 1) Descontar stock de los items de inventario (valida stock antes).
+        for (const it of items) {
+            if (it.origen === 'stock' && it.producto_id) {
+                const cant = cf(it.cantidad);
+                const { data: prod, error } = await supabase.from('productos')
+                    .select('stock, sku, costo').eq('id', it.producto_id).eq('empresa_id', empresaActual).single();
+                if (error || !prod) throw new Error('Producto no encontrado: ' + (it.nombre || it.producto_id));
+                if (cf(prod.stock) < cant) throw new Error('Stock insuficiente de ' + (it.nombre || ''));
+                await supabase.from('productos').update({ stock: cf(prod.stock) - cant }).eq('id', it.producto_id);
+                await supabase.from('movimientos_stock').insert([{
+                    empresa_id: empresaActual, sku: prod.sku || 'S/N', cantidad: -cant,
+                    proveedor: 'VENTA MOSTRADOR', costo: prod.costo || null,
+                    nota: `Venta rápida - ${it.nombre || ''} (${usuarioActual || ''})`
+                }]);
+            }
+        }
+
+        // 2) Cabecera de la venta (ventas_pos.empresa_id es BIGINT). Se guarda quién vendió.
+        const total = items.reduce((s, it) => s + cf(it.precio) * cf(it.cantidad), 0);
+        const { data: venta, error: errV } = await supabase.from('ventas_pos').insert([{
+            empresa_id: Number(empresaActual),
+            total, medio_pago: medioPago,
+            vendedor_id: usuarioActual || null,
+            vendedor_usuario: usuarioActual || null
+        }]).select('id').single();
+        if (errV) throw new Error('No se pudo registrar la venta: ' + errV.message);
+
+        // 3) Detalle de items.
+        const rows = items.map(it => ({
+            venta_id: venta.id,
+            producto_id: it.origen === 'stock' ? it.producto_id : null,
+            nombre: it.nombre || 'Producto',
+            origen: it.origen === 'stock' ? 'stock' : 'libre',
+            cantidad: cf(it.cantidad),
+            precio_unitario: cf(it.precio),
+            subtotal: cf(it.precio) * cf(it.cantidad)
+        }));
+        const { error: errI } = await supabase.from('ventas_pos_items').insert(rows);
+        if (errI) console.error('Venta guardada pero fallaron los items:', errI.message);
+
+        event.reply('venta-desktop-resultado', { success: true, total, ventaId: venta.id });
+    } catch (err) {
+        console.error('Error en venta de escritorio:', err.message);
+        event.reply('venta-desktop-resultado', { success: false, msg: err.message });
+    }
 });
 
 ipcMain.on('usar-repuesto-lab', async (event, params) => {
