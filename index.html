@@ -132,7 +132,7 @@
 
         /* Tarjetas del selector de tema */
         .tema-card:hover { transform: translateY(-3px); border-color: var(--bh-purple) !important; }
-        .tema-card.activo {
+        .tema-card.activo, .tema-opt.activo {
             border-color: var(--bh-purple) !important;
             box-shadow: 0 0 0 3px var(--bh-purple-glow);
         }
@@ -493,8 +493,8 @@
         }
 
         .bh-btn-white {
-            background: rgba(255, 255, 255, 0.05);
-            color: white;
+            background: var(--bh-input-bg);
+            color: var(--text-main);
             border: 1px solid var(--bh-border);
             padding: 8px 16px;
             border-radius: 6px;
@@ -1885,7 +1885,13 @@
                     Ajustes</div>
             </div>
             
-            <div style="padding: 15px; margin-top: auto; border-top: 1px solid var(--border-color); text-align: center;">
+            <div style="padding: 12px 12px 15px; margin-top: auto; border-top: 1px solid var(--border-color); text-align: center;">
+                <div style="display:flex; gap:8px; justify-content:center; margin-bottom:10px;">
+                    <button onclick="abrirSelectorTema()" title="Cambiar el tema de colores"
+                        style="flex:1; background:var(--bh-input-bg); border:1px solid var(--bh-border); color:var(--text-main); padding:9px 6px; border-radius:10px; cursor:pointer; font-size:12px; font-weight:700;">🎨 Tema</button>
+                    <button id="btn-cerrar-caja-side" onclick="abrirCierreDia()" title="Cerrar caja del día"
+                        style="display:none; flex:1; background:var(--bh-input-bg); border:1px solid var(--bh-border); color:var(--text-main); padding:9px 6px; border-radius:10px; cursor:pointer; font-size:12px; font-weight:700;">🧾 Cerrar caja</button>
+                </div>
                 <span id="app-version" style="color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 1px;">Cargando versión...</span>
             </div>
         </div>
@@ -2007,11 +2013,14 @@
                                 <div class="dash-accion" onclick="showView('inventario', null)">
                                     <i class='bx bx-package'></i> Inventario
                                 </div>
-                                <div class="dash-accion" onclick="showView('facturas-view', null)">
+                                <div class="dash-accion" id="dash-acc-comprobantes" onclick="showView('facturas-view', null)">
                                     <i class='bx bx-receipt'></i> Comprobantes
                                 </div>
-                                <div class="dash-accion" onclick="showView('reportes', null)">
+                                <div class="dash-accion" id="dash-acc-metricas" onclick="showView('reportes', null)">
                                     <i class='bx bx-line-chart'></i> Métricas
+                                </div>
+                                <div class="dash-accion" id="dash-acc-cerrar-caja" style="display:none;" onclick="abrirCierreDia()">
+                                    <i class='bx bx-receipt'></i> Cerrar caja
                                 </div>
                             </div>
                         </div>
@@ -4439,6 +4448,27 @@
         </div>
     </div>
 
+    <!-- Modal: Selector de tema (visible para TODOS los roles desde el botón del sidebar) -->
+    <div id="modal-tema" class="modal-overlay">
+        <div class="modal-content" style="width: 460px;">
+            <h2 style="margin-top:0;">🎨 Elige tu tema</h2>
+            <p style="color:var(--text-muted); font-size:13px; margin-top:-6px;">Se aplica al instante y se recuerda en esta computadora.</p>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px;">
+                <button class="bh-btn-white tema-opt" data-tema="original" onclick="aplicarTema('original')" style="padding:14px; text-align:left;">
+                    <b>Original</b><br><span style="font-size:11px; color:var(--text-muted);">Oscuro con morado</span></button>
+                <button class="bh-btn-white tema-opt" data-tema="negro" onclick="aplicarTema('negro')" style="padding:14px; text-align:left;">
+                    <b>Negro</b><br><span style="font-size:11px; color:var(--text-muted);">Negro puro, alto contraste</span></button>
+                <button class="bh-btn-white tema-opt" data-tema="blanco" onclick="aplicarTema('blanco')" style="padding:14px; text-align:left;">
+                    <b>Blanco</b><br><span style="font-size:11px; color:var(--text-muted);">Claro</span></button>
+                <button class="bh-btn-white tema-opt" data-tema="doha" onclick="aplicarTema('doha')" style="padding:14px; text-align:left;">
+                    <b>Doha-cell</b><br><span style="font-size:11px; color:var(--text-muted);">Azul y verde (marca)</span></button>
+            </div>
+            <div style="text-align:right; margin-top:16px;">
+                <button class="bh-btn-purple" onclick="cerrarSelectorTema()">Listo</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Cierre del Día unificado (taller + POS − gastos − compras − devoluciones) -->
     <div id="modal-cierre-dia" class="modal-overlay">
         <div class="modal-content" style="width: 480px;">
@@ -4996,9 +5026,18 @@
             if (tema === 'original') document.body.removeAttribute('data-theme');
             else document.body.setAttribute('data-theme', tema);
             document.body.classList.toggle('tema-claro', TEMAS_CLAROS.includes(tema));
-            document.querySelectorAll('.tema-card').forEach(c => {
+            document.querySelectorAll('.tema-card, .tema-opt').forEach(c => {
                 c.classList.toggle('activo', c.getAttribute('data-tema') === tema);
             });
+        }
+
+        // Selector de tema rápido (botón del sidebar, disponible para todos los roles).
+        function abrirSelectorTema() {
+            _pintarTema((localStorage.getItem('appTheme') || 'original'));
+            document.getElementById('modal-tema').style.display = 'flex';
+        }
+        function cerrarSelectorTema() {
+            document.getElementById('modal-tema').style.display = 'none';
         }
 
         function aplicarTema(tema) {
@@ -5040,6 +5079,12 @@
             const btnMenuTop = document.getElementById('menu-config-btn');
             if (btnMenuTop) btnMenuTop.style.display = 'none';
 
+            // Helper para mostrar/ocultar por id sin romper si el elemento no existe.
+            const setVis = (id, visible, disp = 'flex') => { const el = document.getElementById(id); if (el) el.style.display = visible ? disp : 'none'; };
+            // Por defecto: accesos del dashboard visibles, "Cerrar caja" del técnico oculto.
+            setVis('dash-acc-comprobantes', true); setVis('dash-acc-metricas', true);
+            setVis('dash-acc-cerrar-caja', false); setVis('btn-cerrar-caja-side', false);
+
             // 1. ASIGNACIÓN DE PERMISOS BASE
             if (rol === 'dueno') {
                 items.forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
@@ -5052,6 +5097,11 @@
             } else if (rol === 'tecnico') {
                 ['nav-dash', 'nav-recep', 'nav-taller', 'nav-inv'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
                 if (document.getElementById('btn-add-prod')) document.getElementById('btn-add-prod').style.display = 'none';
+                // El técnico NO ve métricas ni comprobantes en el dashboard, pero SÍ puede cerrar caja.
+                setVis('dash-acc-metricas', false);
+                setVis('dash-acc-comprobantes', false);
+                setVis('dash-acc-cerrar-caja', true);
+                setVis('btn-cerrar-caja-side', true);
             }
 
             // 🚨 2. REGLA ESTRICTA PARA EL GENERADOR DE LICENCIAS Y DISTRIBUIDORES 🚨
