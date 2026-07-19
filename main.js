@@ -2713,75 +2713,127 @@ ipcMain.on('buscar-stock-tecnico', async (event, valor) => {
     }
 });
 
+// Copia recursiva ASÍNCRONA (no congela el proceso principal durante la copia inicial de ~207MB).
+// Reserva a copia manual por si fs.promises.cp no existe (Node viejo).
+async function copiarCarpetaRecursivo(src, dest) {
+    if (fs.promises && typeof fs.promises.cp === 'function') {
+        await fs.promises.cp(src, dest, { recursive: true, force: true });
+        return;
+    }
+    await fs.promises.mkdir(dest, { recursive: true });
+    for (const ent of await fs.promises.readdir(src, { withFileTypes: true })) {
+        const s = path.join(src, ent.name);
+        const d = path.join(dest, ent.name);
+        if (ent.isDirectory()) await copiarCarpetaRecursivo(s, d);
+        else await fs.promises.copyFile(s, d);
+    }
+}
+
 ipcMain.on('abrir-ambicion', async (event) => {
+    // Log de diagnóstico EXHAUSTIVO: se escribe en la carpeta de datos del usuario para que el
+    // dueño pueda enviárnoslo si algo falla. Ruta: %APPDATA%\<app>\bh_ambicion_diag.log
+    const diagPath = path.join(app.getPath('userData'), 'bh_ambicion_diag.log');
+    const logLines = [];
+    const log = (m) => { const l = `[${new Date().toISOString()}] ${m}`; logLines.push(l); console.log('AMBICION', l); };
+    const volcarLog = () => { try { fs.writeFileSync(diagPath, logLines.join('\n'), 'utf8'); } catch (e) {} };
+
+    let respondido = false;
+    const responder = (r) => { if (!respondido) { respondido = true; volcarLog(); event.reply('ambicion-resultado', Object.assign({ diagPath }, r)); } };
+
     try {
-        // El software vive como extraResource en resources/software (ver package.json), NO dentro
-        // de app.asar (Windows no puede ejecutar un .exe desde el asar). Probamos ambas rutas:
-        //   instalado  -> process.resourcesPath (C:\...\BlackHouse OS V2\resources)
-        //   desarrollo -> __dirname (la carpeta del proyecto)
-        const candidatos = [
-            path.join(process.resourcesPath || '', 'software', 'ambicion', 'ambicion.exe'),
-            path.join(__dirname, 'software', 'ambicion', 'ambicion.exe')
+        log(`app v${app.getVersion()} · resourcesPath=${process.resourcesPath} · __dirname=${__dirname}`);
+
+        // 1) Ubicar la carpeta ORIGEN de Ambición (extraResource, de solo lectura en Program Files).
+        const candidatosDir = [
+            path.join(process.resourcesPath || '', 'software', 'ambicion'),
+            path.join(__dirname, 'software', 'ambicion')
         ];
-        const ambicionPath = candidatos.find(p => { try { return p && fs.existsSync(p); } catch (e) { return false; } });
+        const srcDir = candidatosDir.find(p => { try { return p && fs.existsSync(path.join(p, 'ambicion.exe')); } catch (e) { return false; } });
+        log(`Rutas origen probadas: ${JSON.stringify(candidatosDir)} · elegida: ${srcDir || 'NINGUNA'}`);
 
-        if (!ambicionPath) {
-            console.error('No se encontró Ambición. Rutas probadas:', candidatos);
-            event.reply('ambicion-resultado', { success: false, msg: 'No se encontró Ambición en esta instalación. Descarga/reinstala la última versión desde la página.' });
-            return;
+        if (!srcDir) {
+            log('ERROR: no se encontró ambicion.exe en ninguna ruta.');
+            return responder({ success: false, msg: 'No se encontró Ambición en esta instalación. Reinstala la última versión desde la página.' });
         }
 
-        // Antes se usaba shell.openPath: reportaba "abierto" aunque Ambición se cerrara sola al
-        // arrancar (no aparecía nada). El diagnóstico reveló el motivo real:
-        //   System.UnauthorizedAccessException: Access to the path '...\ambicion\startlog' is denied
-        // Ambición escribe un archivo ("startlog", y probablemente más) RELATIVO a su directorio de
-        // trabajo. Si el cwd es la carpeta del .exe —que queda en C:\Program Files\, de SOLO
-        // LECTURA para usuarios normales— Windows niega la escritura y Ambición se cae.
-        // Solución: darle como cwd una carpeta ESCRIBIBLE (los datos del usuario), donde sí puede
-        // crear sus archivos. Las DLLs del .NET self-contained se cargan por la ubicación del exe,
-        // no por el cwd, así que cambiar el cwd no afecta su arranque.
-        let cwdEscribible;
-        try {
-            cwdEscribible = path.join(app.getPath('userData'), 'ambicion');
-            if (!fs.existsSync(cwdEscribible)) fs.mkdirSync(cwdEscribible, { recursive: true });
-        } catch (e) {
-            try { cwdEscribible = require('os').tmpdir(); } catch (e2) { cwdEscribible = undefined; }
+        // 2) Copiar TODO a una carpeta ESCRIBIBLE y ejecutar desde ahí. Clave del arreglo:
+        // Ambición lee Y escribe archivos relativos a su directorio de trabajo (startlog, config, etc.).
+        // Si el cwd es Program Files (solo lectura) o una carpeta vacía, se cae o se queda "abriendo"
+        // sin mostrar ventana. Al copiar la carpeta completa a datos del usuario y ejecutar ahí, tanto
+        // las lecturas como las escrituras funcionan en cualquier PC.
+        const destDir = path.join(app.getPath('userData'), 'ambicion-app');
+        const verMarker = path.join(destDir, '.bh_ver');
+        const exeSrc = path.join(srcDir, 'ambicion.exe');
+        const firma = `${app.getVersion()}|${(() => { try { const s = fs.statSync(exeSrc); return s.size + ':' + s.mtimeMs; } catch (e) { return '?'; } })()}`;
+
+        let alDia = false;
+        try { alDia = fs.existsSync(path.join(destDir, 'ambicion.exe')) && fs.readFileSync(verMarker, 'utf8') === firma; } catch (e) { alDia = false; }
+
+        if (!alDia) {
+            log(`Copiando Ambición a carpeta escribible: ${srcDir} -> ${destDir} (firma ${firma})`);
+            const t0 = Date.now();
+            try {
+                await copiarCarpetaRecursivo(srcDir, destDir);
+                fs.writeFileSync(verMarker, firma, 'utf8');
+                const n = (() => { try { return fs.readdirSync(destDir).length; } catch (e) { return '?'; } })();
+                log(`Copia OK en ${Date.now() - t0} ms · ${n} entradas en destino.`);
+            } catch (e) {
+                log(`ERROR copiando: ${e.message}. Se intentará ejecutar desde el origen (puede fallar por permisos de escritura).`);
+            }
+        } else {
+            log('Copia ya al día, se omite.');
         }
+
+        // Elegir desde dónde ejecutar: preferimos la copia escribible; si no existe, el origen.
+        const destExe = path.join(destDir, 'ambicion.exe');
+        const usarCopia = fs.existsSync(destExe);
+        const exePath = usarCopia ? destExe : exeSrc;
+        const cwd = usarCopia ? destDir : path.join(app.getPath('userData'), 'ambicion');
+        if (!usarCopia) { try { fs.mkdirSync(cwd, { recursive: true }); } catch (e) {} }
+        log(`Ejecutando: ${exePath} · cwd=${cwd} · desdeCopia=${usarCopia}`);
 
         const { spawn } = require('child_process');
         let salida = '';
-        let respondido = false;
-        const responder = (r) => { if (!respondido) { respondido = true; event.reply('ambicion-resultado', r); } };
 
-        const child = spawn(ambicionPath, [], {
-            cwd: cwdEscribible,
+        const child = spawn(exePath, [], {
+            cwd,
             detached: true,
             stdio: ['ignore', 'pipe', 'pipe'],
             windowsHide: false
         });
+        log(`spawn pid=${child.pid}`);
 
-        // Nunca tumba la app: cualquier fallo de lanzamiento se maneja aquí.
-        child.on('error', (e) => responder({ success: false, msg: 'No se pudo iniciar Ambición: ' + e.message }));
+        child.on('error', (e) => { log(`spawn error: ${e.message}`); responder({ success: false, msg: 'No se pudo iniciar Ambición: ' + e.message }); });
         if (child.stdout) child.stdout.on('data', d => { salida += d.toString(); });
         if (child.stderr) child.stderr.on('data', d => { salida += d.toString(); });
 
-        // Si sigue viva a los 3s, asumimos que abrió bien (es una app de ventana).
-        const timer = setTimeout(() => { responder({ success: true }); try { child.unref(); } catch (e) {} }, 3000);
+        // Si sigue viva a los 4s, asumimos que abrió (es una app de ventana). Guardamos el log igual.
+        const timer = setTimeout(() => { log('Sigue viva a los 4s => se asume abierta.'); responder({ success: true }); try { child.unref(); } catch (e) {} }, 4000);
 
-        // Si muere antes de los 3s => se cayó al arrancar: devolvemos código + detalle.
         child.on('exit', (code, signal) => {
             clearTimeout(timer);
+            const detalle = salida.trim().replace(/\s+/g, ' ').slice(0, 500);
+            log(`exit code=${code} signal=${signal} salida="${detalle}"`);
             if (code === 0) {
                 responder({ success: true });
             } else {
-                const detalle = salida.trim().replace(/\s+/g, ' ').slice(0, 300);
-                responder({ success: false, msg: `Ambición se cerró al abrir (código ${code}${signal ? '/' + signal : ''}).${detalle ? ' Detalle: ' + detalle : ' Sin mensaje de error.'}` });
+                responder({ success: false, msg: `Ambición se cerró al abrir (código ${code}${signal ? '/' + signal : ''}).${detalle ? ' Detalle: ' + detalle : ' Sin mensaje. Revisa el log: ' + diagPath}` });
             }
         });
     } catch (err) {
+        log(`EXCEPCIÓN: ${err.message}`);
         console.error("Error abriendo Ambicion:", err);
-        event.reply('ambicion-resultado', { success: false, msg: err.message });
+        responder({ success: false, msg: err.message });
     }
+});
+
+// Abre el log de diagnóstico de Ambición para que el dueño pueda enviárnoslo.
+ipcMain.on('abrir-log-ambicion', () => {
+    try {
+        const diagPath = path.join(app.getPath('userData'), 'bh_ambicion_diag.log');
+        if (fs.existsSync(diagPath)) shell.openPath(diagPath);
+        else shell.openPath(app.getPath('userData'));
+    } catch (e) { console.error('No se pudo abrir el log de Ambición:', e.message); }
 });
 
 ipcMain.on('usar-repuesto-lab', async (event, params) => {

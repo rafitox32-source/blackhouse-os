@@ -8152,10 +8152,23 @@
                 showToast("Ambición abierto ✅", "success");
             } else {
                 const msg = (res && res.msg) || "No se pudo abrir Ambición";
+                const diag = res && res.diagPath ? res.diagPath : null;
                 showToast("No se pudo abrir Ambición", "danger");
                 // El diagnóstico se muestra en una alerta para que se pueda leer/capturar completo
-                // (un toast desaparece y el mensaje de error puede ser largo).
-                setTimeout(() => { try { alert("⚠️ Ambición no se abrió:\n\n" + msg); } catch (e) {} }, 100);
+                // (un toast desaparece y el mensaje de error puede ser largo). Ofrecemos abrir el
+                // archivo de diagnóstico para poder enviárnoslo.
+                setTimeout(() => {
+                    try {
+                        let txt = "⚠️ Ambición no se abrió:\n\n" + msg;
+                        if (diag) {
+                            txt += "\n\nSe guardó un diagnóstico en:\n" + diag +
+                                   "\n\n¿Abrir el archivo de diagnóstico para enviarlo al soporte?";
+                            if (confirm(txt)) ipcRenderer.send('abrir-log-ambicion');
+                        } else {
+                            alert(txt);
+                        }
+                    } catch (e) {}
+                }, 100);
             }
         });
 
