@@ -18,19 +18,103 @@
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/index.min.js"></script>
 
     <style>
+        /* ===================== SISTEMA DE TEMAS =====================
+           El tema por defecto (:root) es el ORIGINAL (oscuro con morado).
+           Otros temas se activan con body[data-theme="blanco"] o "negro"
+           y solo redefinen estas variables. Para crear un tema nuevo basta
+           con copiar un bloque body[data-theme="..."] y cambiar los colores.
+           -------------------------------------------------------------- */
         :root {
             --bh-purple: #7c3aed;
             --bh-purple-dark: #5b21b6;
             --bh-purple-glow: rgba(124, 58, 237, 0.5);
             --bh-bg-dark: #050505;
+            --bh-bg-gradient: radial-gradient(circle at top right, #1a0b2e 0%, #000000 100%);
             --bh-card-bg: rgba(20, 20, 20, 0.8);
+            --bh-surface: #141414;      /* superficie sólida (tarjetas opacas) */
+            --bh-surface-2: #1e1e1e;    /* superficie elevada / hover */
+            --bh-input-bg: rgba(255, 255, 255, 0.04);
             --bh-border: rgba(255, 255, 255, 0.08);
+            --bh-scroll-thumb: #333;
             --text-main: #e0e0e0;
             --text-muted: #9ca3af;
             --success: #10b981;
             --danger: #ef4444;
             --warning: #e2950f;
             --info: #3b82f6;
+        }
+
+        /* ---- TEMA NEGRO: negro puro, alto contraste, mismo acento morado ---- */
+        body[data-theme="negro"] {
+            --bh-bg-dark: #000000;
+            --bh-bg-gradient: linear-gradient(180deg, #0a0a0a 0%, #000000 100%);
+            --bh-card-bg: rgba(255, 255, 255, 0.04);
+            --bh-surface: #0d0d0d;
+            --bh-surface-2: #171717;
+            --bh-input-bg: rgba(255, 255, 255, 0.06);
+            --bh-border: rgba(255, 255, 255, 0.12);
+            --bh-scroll-thumb: #444;
+            --text-main: #f5f5f5;
+            --text-muted: #a0a0a0;
+        }
+
+        /* ---- TEMA BLANCO: claro, para quienes no soportan el fondo negro ---- */
+        body[data-theme="blanco"] {
+            --bh-purple-glow: rgba(124, 58, 237, 0.28);
+            --bh-bg-dark: #f4f5f7;
+            --bh-bg-gradient: radial-gradient(circle at top right, #ece9ff 0%, #f4f5f7 100%);
+            --bh-card-bg: #ffffff;
+            --bh-surface: #ffffff;
+            --bh-surface-2: #f0f0f4;
+            --bh-input-bg: #ffffff;
+            --bh-border: rgba(0, 0, 0, 0.12);
+            --bh-scroll-thumb: #c3c3cf;
+            --text-main: #1a1a2e;
+            --text-muted: #5b5b6b;
+        }
+
+        /* Retoques del tema BLANCO para elementos con estilos en línea (color/fondo
+           escritos directo en el HTML). Primero forzamos texto oscuro donde había
+           texto claro, y luego re-forzamos texto blanco sobre fondos de acento. */
+        body[data-theme="blanco"] [style*="color:#fff"],
+        body[data-theme="blanco"] [style*="color: #fff"],
+        body[data-theme="blanco"] [style*="color:white"],
+        body[data-theme="blanco"] [style*="color: white"],
+        body[data-theme="blanco"] [style*="color:#ddd"],
+        body[data-theme="blanco"] [style*="color: #ddd"],
+        body[data-theme="blanco"] [style*="color:#eee"],
+        body[data-theme="blanco"] [style*="color: #eee"],
+        body[data-theme="blanco"] [style*="color:#e0e0e0"],
+        body[data-theme="blanco"] [style*="color: #e0e0e0"] {
+            color: #1a1a2e !important;
+        }
+        /* Fondos oscuros puestos en línea → superficie clara */
+        body[data-theme="blanco"] [style*="background: rgba(0,0,0"],
+        body[data-theme="blanco"] [style*="background:rgba(0,0,0"],
+        body[data-theme="blanco"] [style*="background:#1a1a1a"],
+        body[data-theme="blanco"] [style*="background: #1a1a1a"],
+        body[data-theme="blanco"] [style*="background:#111"],
+        body[data-theme="blanco"] [style*="background: #111"],
+        body[data-theme="blanco"] [style*="background:#222"],
+        body[data-theme="blanco"] [style*="background: #222"] {
+            background-color: var(--bh-surface-2) !important;
+        }
+        /* Re-afirmar texto blanco donde el fondo es un acento sólido (botones, chips) */
+        body[data-theme="blanco"] .bh-btn-purple,
+        body[data-theme="blanco"] .bh-btn-purple *,
+        body[data-theme="blanco"] [style*="background:var(--bh-purple)"],
+        body[data-theme="blanco"] [style*="background: var(--bh-purple)"],
+        body[data-theme="blanco"] [style*="background:#7c3aed"],
+        body[data-theme="blanco"] [style*="background: #7c3aed"],
+        body[data-theme="blanco"] [style*="background:linear-gradient"] {
+            color: #ffffff !important;
+        }
+
+        /* Tarjetas del selector de tema */
+        .tema-card:hover { transform: translateY(-3px); border-color: var(--bh-purple) !important; }
+        .tema-card.activo {
+            border-color: var(--bh-purple) !important;
+            box-shadow: 0 0 0 3px var(--bh-purple-glow);
         }
 
         * {
@@ -51,7 +135,7 @@
             margin: 0;
             display: flex;
             background-color: var(--bh-bg-dark);
-            background-image: radial-gradient(circle at top right, #1a0b2e 0%, #000000 100%);
+            background-image: var(--bh-bg-gradient);
             color: var(--text-main);
             height: 100vh;
             overflow: hidden;
@@ -83,7 +167,7 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #333;
+            background: var(--bh-scroll-thumb);
             border-radius: 3px;
         }
 
@@ -212,7 +296,7 @@
 
         .sidebar {
             width: 260px;
-            background: rgba(5, 5, 5, 0.95);
+            background: var(--bh-card-bg);
             backdrop-filter: blur(20px);
             border-right: 1px solid var(--bh-border);
             display: flex;
@@ -316,10 +400,10 @@
         }
 
         .bh-card {
-            background: rgba(15, 15, 15, 0.6);
+            background: var(--bh-card-bg);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--bh-border);
             border-top: 1px solid rgba(124, 58, 237, 0.4);
             border-radius: 16px;
             padding: 30px;
@@ -330,9 +414,9 @@
 
         .bh-input {
             width: 100%;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: white;
+            background: var(--bh-input-bg);
+            border: 1px solid var(--bh-border);
+            color: var(--text-main);
             padding: 15px 20px;
             border-radius: 12px;
             box-sizing: border-box;
@@ -569,11 +653,11 @@
         }
 
         .modal-content {
-            background: #101010;
+            background: var(--bh-surface);
             width: 550px;
             border-radius: 20px;
             padding: 40px;
-            border: 1px solid #333;
+            border: 1px solid var(--bh-border);
             max-width: 95%;
         }
 
@@ -719,7 +803,7 @@
         .config-sidebar {
             width: 250px !important;
             min-width: 250px;
-            background: rgba(10, 10, 10, 0.5);
+            background: var(--bh-card-bg);
             border-right: 1px solid var(--bh-border);
             padding-top: 20px;
             display: flex;
@@ -2816,6 +2900,8 @@
                                 Empresa</div>
                             <div class="config-item" onclick="showConfigSection('conf-personalizacion', this)">
                                 Personalización</div>
+                            <div class="config-item" onclick="showConfigSection('conf-apariencia', this)">
+                                Apariencia / Tema</div>
                             <div class="config-item" onclick="showConfigSection('conf-ticket', this); renderTicketPreview();">
                                 Ticket / Comprobante</div>
                             <div class="config-item" onclick="showConfigSection('conf-usuarios', this)">Usuarios</div>
@@ -2972,6 +3058,64 @@
                                     <p style="font-size:11px; color:#aaa; margin-top:10px;">* El logo aparecerá como
                                         marca de agua en el fondo.</p>
                                 </div>
+                            </div>
+
+                            <!-- ============ APARIENCIA / TEMA ============ -->
+                            <div id="conf-apariencia" class="config-section">
+                                <h2>Apariencia / Tema</h2>
+                                <p style="font-size:13px; color:var(--text-muted); margin-top:-6px;">
+                                    Elige el diseño que más te guste. El cambio se aplica al instante y se
+                                    recuerda en esta computadora.
+                                </p>
+                                <div id="tema-galeria"
+                                    style="display:flex; flex-wrap:wrap; gap:16px; margin-top:8px;">
+                                    <!-- ORIGINAL -->
+                                    <div class="tema-card" data-tema="original" onclick="aplicarTema('original')"
+                                        style="cursor:pointer; border:2px solid var(--bh-border); border-radius:16px; padding:14px; width:170px; transition:.2s;">
+                                        <div style="height:74px; border-radius:10px; overflow:hidden; display:flex; background:radial-gradient(circle at top right,#1a0b2e,#000);">
+                                            <div style="width:34%; background:rgba(20,20,20,0.9); border-right:1px solid rgba(255,255,255,0.08);"></div>
+                                            <div style="flex:1; padding:10px;">
+                                                <div style="height:9px; width:70%; background:#7c3aed; border-radius:4px;"></div>
+                                                <div style="height:7px; width:90%; background:rgba(255,255,255,0.18); border-radius:4px; margin-top:7px;"></div>
+                                                <div style="height:7px; width:55%; background:rgba(255,255,255,0.12); border-radius:4px; margin-top:5px;"></div>
+                                            </div>
+                                        </div>
+                                        <div style="margin-top:10px; font-weight:700;">Original</div>
+                                        <div style="font-size:11px; color:var(--text-muted);">Oscuro con morado (el de siempre)</div>
+                                    </div>
+                                    <!-- NEGRO -->
+                                    <div class="tema-card" data-tema="negro" onclick="aplicarTema('negro')"
+                                        style="cursor:pointer; border:2px solid var(--bh-border); border-radius:16px; padding:14px; width:170px; transition:.2s;">
+                                        <div style="height:74px; border-radius:10px; overflow:hidden; display:flex; background:#000;">
+                                            <div style="width:34%; background:#0d0d0d; border-right:1px solid rgba(255,255,255,0.12);"></div>
+                                            <div style="flex:1; padding:10px;">
+                                                <div style="height:9px; width:70%; background:#7c3aed; border-radius:4px;"></div>
+                                                <div style="height:7px; width:90%; background:rgba(255,255,255,0.28); border-radius:4px; margin-top:7px;"></div>
+                                                <div style="height:7px; width:55%; background:rgba(255,255,255,0.16); border-radius:4px; margin-top:5px;"></div>
+                                            </div>
+                                        </div>
+                                        <div style="margin-top:10px; font-weight:700;">Negro</div>
+                                        <div style="font-size:11px; color:var(--text-muted);">Negro puro, alto contraste</div>
+                                    </div>
+                                    <!-- BLANCO -->
+                                    <div class="tema-card" data-tema="blanco" onclick="aplicarTema('blanco')"
+                                        style="cursor:pointer; border:2px solid var(--bh-border); border-radius:16px; padding:14px; width:170px; transition:.2s;">
+                                        <div style="height:74px; border-radius:10px; overflow:hidden; display:flex; background:radial-gradient(circle at top right,#ece9ff,#f4f5f7);">
+                                            <div style="width:34%; background:#ffffff; border-right:1px solid rgba(0,0,0,0.12);"></div>
+                                            <div style="flex:1; padding:10px;">
+                                                <div style="height:9px; width:70%; background:#7c3aed; border-radius:4px;"></div>
+                                                <div style="height:7px; width:90%; background:rgba(0,0,0,0.22); border-radius:4px; margin-top:7px;"></div>
+                                                <div style="height:7px; width:55%; background:rgba(0,0,0,0.12); border-radius:4px; margin-top:5px;"></div>
+                                            </div>
+                                        </div>
+                                        <div style="margin-top:10px; font-weight:700;">Blanco</div>
+                                        <div style="font-size:11px; color:var(--text-muted);">Claro, ideal si no te gusta el negro</div>
+                                    </div>
+                                </div>
+                                <p style="font-size:11px; color:var(--text-muted); margin-top:16px;">
+                                    ¿Quieres un tema con los colores de tu marca? Pronto se podrán diseñar temas
+                                    personalizados aparte.
+                                </p>
                             </div>
 
                             <!-- ============ TICKET / COMPROBANTE (personalización de impresión) ============ -->
@@ -4803,6 +4947,41 @@
                 ipcRenderer.send('pedir-datos-empresa', { id: empId });
             }
         }
+
+        // ===================== TEMAS / APARIENCIA =====================
+        // "original" es el diseño por defecto (sin atributo). "negro" y "blanco"
+        // se activan poniendo data-theme en <body>. Se recuerda en localStorage.
+        const TEMAS_VALIDOS = ['original', 'negro', 'blanco'];
+
+        function aplicarTema(tema) {
+            if (!TEMAS_VALIDOS.includes(tema)) tema = 'original';
+            if (tema === 'original') document.body.removeAttribute('data-theme');
+            else document.body.setAttribute('data-theme', tema);
+            try { localStorage.setItem('appTheme', tema); } catch (e) {}
+            // Marca visualmente la tarjeta elegida (si el panel está montado).
+            document.querySelectorAll('.tema-card').forEach(c => {
+                c.classList.toggle('activo', c.getAttribute('data-tema') === tema);
+            });
+            if (typeof showToast === 'function' && document.getElementById('app-content')?.style.display !== 'none') {
+                const nombres = { original: 'Original', negro: 'Negro', blanco: 'Blanco' };
+                showToast('Tema aplicado: ' + (nombres[tema] || tema), 'success');
+            }
+        }
+
+        // Aplica el tema guardado lo antes posible (incluye la pantalla de login).
+        function cargarTemaGuardado() {
+            if (!document.body) return;
+            let t = 'original';
+            try { t = localStorage.getItem('appTheme') || 'original'; } catch (e) {}
+            if (!TEMAS_VALIDOS.includes(t)) t = 'original';
+            if (t === 'original') document.body.removeAttribute('data-theme');
+            else document.body.setAttribute('data-theme', t);
+            document.querySelectorAll('.tema-card').forEach(c => {
+                c.classList.toggle('activo', c.getAttribute('data-tema') === t);
+            });
+        }
+        if (document.body) cargarTemaGuardado();
+        else document.addEventListener('DOMContentLoaded', cargarTemaGuardado);
 
         function aplicarPermisos(rol, usuario) {
             document.getElementById('user-display-name').innerText = usuario;
