@@ -175,6 +175,16 @@ input:focus, select:focus { outline: none; border-color: var(--acento); }
 .cierre-detalle .dfila .dc { color: var(--texto-suave); }
 .chip-libre { font-size: 10px; background: var(--naranja); color:#3a2600; padding: 0 5px; border-radius: 999px; margin-left: 4px; }
 
+/* Secciones del cierre unificado (ventas + servicio técnico) */
+.cierre-seccion { margin-top: 18px; padding: 12px; background: var(--card2); border: 1px solid var(--borde); border-radius: 12px; }
+.cierre-seccion h3 { font-size: 15px; margin: 0 0 8px; }
+.cierre-fila.destacada { font-size: 15px; font-weight: 700; border-bottom: 1px solid var(--borde); }
+.cierre-fila.destacada .v { color: var(--acento); }
+.cierre-fila.sub { padding: 6px 2px; font-size: 13px; color: var(--texto-suave); border-bottom: 1px dashed var(--borde); }
+.cierre-detalle .dfila.serv { flex-wrap: wrap; }
+.cierre-detalle .dfila.serv .dn { flex: 1 1 60%; }
+.cierre-detalle .dfila.serv .dsub { flex: 1 1 100%; font-size: 11px; color: var(--texto-suave); margin-top: 2px; }
+
 /* ---- Toast ---- */
 .toast {
   position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);

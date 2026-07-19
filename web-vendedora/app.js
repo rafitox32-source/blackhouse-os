@@ -228,14 +228,18 @@
   }
 
   // ==========================================================================
-  //  CIERRE DE CAJA
+  //  CIERRE DE CAJA (reporte unificado: ventas de la vendedora + servicio técnico)
+  //  Cada uno mantiene su cuenta por separado, pero la vendedora entrega UN solo
+  //  reporte al dueño con las dos secciones y el gran total del día.
   // ==========================================================================
-  var ultimoCierre = null;
+  var ultimoCierre = null;   // respuesta de pos_cierre_completo
+  var cajaCerrada = false;    // true cuando ya se registró el cierre del POS
 
   function verCierre() {
     abrirModal("modal-cierre");
+    cajaCerrada = false;
     $("cierre-cuerpo").innerHTML = '<p class="cargando">Calculando…</p>';
-    rpc("pos_cierre_caja", { p_token: sesion.token }).then(function (res) {
+    rpc("pos_cierre_completo", { p_token: sesion.token }).then(function (res) {
       if (!res || !res.ok) {
         if (res && /sesi/i.test(res.msg || "")) { cerrarSesion(); }
         throw new Error((res && res.msg) || "No se pudo calcular el cierre");
@@ -248,35 +252,67 @@
   }
 
   function renderCierre(res, cerrado) {
-    var detalle = res.detalle || [];
-    var filas = detalle.map(function (d) {
-      var chip = d.origen === "libre" ? '<span class="chip-libre">sin stock</span>' : "";
+    var v = res.ventas || { total: 0, cantidad: 0, efectivo: 0, otros: 0, detalle: [] };
+    var s = res.servicio || { total: 0, cantidad: 0, adelantos: 0, saldos: 0, efectivo: 0, otros: 0, detalle: [] };
+
+    // --- Sección VENTAS (accesorios de la vendedora) ---
+    var filasV = (v.detalle || []).map(function (d) {
+      var chip = d.origen === "libre" ? ' <span class="chip-libre">sin stock</span>' : "";
       return '<div class="dfila"><span class="dn">' + esc(d.nombre) + chip +
              '</span><span class="dc">x' + fmtStock(d.cantidad) + '</span><span class="v">' +
              money(d.subtotal) + '</span></div>';
     }).join("");
 
+    // --- Sección SERVICIO TÉCNICO (reparaciones cobradas hoy, con costo y ganancia) ---
+    var filasS = (s.detalle || []).map(function (d) {
+      var quien = esc((d.cliente || "—") + (d.modelo ? " · " + d.modelo : ""));
+      return '<div class="dfila serv"><span class="dn">' + quien + '</span>' +
+             '<span class="v">' + money(d.cobrado_hoy) + '</span>' +
+             '<span class="dsub">costo ' + money(d.costo) + ' · gana ' + money(d.ganancia) + '</span></div>';
+    }).join("");
+
     $("cierre-cuerpo").innerHTML =
-      '<div class="cierre-total-grande"><span class="n">' + money(res.total_ventas) + '</span>' +
-      '<span class="l">Total de ventas · ' + esc(res.fecha) + (cerrado ? " · CERRADO" : "") + '</span></div>' +
-      '<div class="cierre-fila"><span>Cantidad de ventas</span><span class="v">' + res.cantidad_ventas + '</span></div>' +
-      '<div class="cierre-fila"><span>Efectivo</span><span class="v">' + money(res.total_efectivo) + '</span></div>' +
-      '<div class="cierre-fila"><span>Otros medios</span><span class="v">' + money(res.total_otros) + '</span></div>' +
-      '<div class="cierre-detalle"><h3>Detalle por producto</h3>' +
-      (filas || '<div class="dfila"><span class="dn">Sin ventas hoy</span></div>') + '</div>';
+      '<div class="cierre-total-grande"><span class="n">' + money(res.total_dia) + '</span>' +
+      '<span class="l">Total del día · ' + esc(res.fecha) + (cerrado ? " · CAJA CERRADA" : "") + '</span></div>' +
+      '<div class="cierre-fila"><span>Efectivo (todo)</span><span class="v">' + money(res.total_efectivo) + '</span></div>' +
+      '<div class="cierre-fila"><span>Otros medios (todo)</span><span class="v">' + money(res.total_otros) + '</span></div>' +
+
+      '<div class="cierre-seccion"><h3>🛒 Ventas de la vendedora</h3>' +
+        '<div class="cierre-fila destacada"><span>Total ventas (' + v.cantidad + ')</span><span class="v">' + money(v.total) + '</span></div>' +
+        '<div class="cierre-fila sub"><span>Efectivo</span><span class="v">' + money(v.efectivo) + '</span></div>' +
+        '<div class="cierre-fila sub"><span>Otros medios</span><span class="v">' + money(v.otros) + '</span></div>' +
+        '<div class="cierre-detalle">' +
+          (filasV || '<div class="dfila"><span class="dn">Sin ventas hoy</span></div>') + '</div>' +
+      '</div>' +
+
+      '<div class="cierre-seccion"><h3>🔧 Servicio técnico</h3>' +
+        '<div class="cierre-fila destacada"><span>Total cobrado (' + s.cantidad + ')</span><span class="v">' + money(s.total) + '</span></div>' +
+        '<div class="cierre-fila sub"><span>Adelantos de hoy</span><span class="v">' + money(s.adelantos) + '</span></div>' +
+        '<div class="cierre-fila sub"><span>Saldos entregados hoy</span><span class="v">' + money(s.saldos) + '</span></div>' +
+        '<div class="cierre-fila sub"><span>Efectivo</span><span class="v">' + money(s.efectivo) + '</span></div>' +
+        '<div class="cierre-fila sub"><span>Otros medios</span><span class="v">' + money(s.otros) + '</span></div>' +
+        '<div class="cierre-detalle">' +
+          (filasS || '<div class="dfila"><span class="dn">Sin reparaciones cobradas hoy</span></div>') + '</div>' +
+      '</div>';
 
     $("btn-confirmar-cierre").style.display = cerrado ? "none" : "";
+    $("btn-confirmar-cierre").textContent = "Cerrar caja del día";
   }
 
   function confirmarCierre() {
     var btn = $("btn-confirmar-cierre");
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Cerrando…';
-    rpc("pos_cierre_caja", { p_token: sesion.token, p_registrar: true }).then(function (res) {
-      if (!res || !res.ok) { throw new Error((res && res.msg) || "No se pudo cerrar"); }
-      ultimoCierre = res;
-      renderCierre(res, true);
-      toast("Caja cerrada: " + money(res.total_ventas), "exito");
+    // Registra el cierre del POS (ventas de la vendedora). El servicio técnico no se
+    // "cierra" aquí: se cobra/entrega desde el escritorio; aquí sólo se reporta.
+    rpc("pos_cierre_caja", { p_token: sesion.token, p_registrar: true }).then(function (resPos) {
+      if (!resPos || !resPos.ok) { throw new Error((resPos && resPos.msg) || "No se pudo cerrar"); }
+      cajaCerrada = true;
+      toast("Caja cerrada: ventas " + money(resPos.total_ventas), "exito");
+      // Volvemos a pedir el reporte completo para mostrarlo ya marcado como cerrado.
+      return rpc("pos_cierre_completo", { p_token: sesion.token });
+    }).then(function (res) {
+      if (res && res.ok) { ultimoCierre = res; renderCierre(res, true); }
     }).catch(function (e) {
       toast(e.message || "Error al cerrar", "error");
     }).then(function () {
@@ -288,16 +324,22 @@
   function compartirCierre() {
     if (!ultimoCierre) return;
     var r = ultimoCierre;
-    var txt = "CIERRE DE CAJA — " + r.fecha + "\n" +
-      "Total: " + money(r.total_ventas) + "\n" +
-      "Ventas: " + r.cantidad_ventas + "\n" +
-      "Efectivo: " + money(r.total_efectivo) + "\n" +
-      "Otros: " + money(r.total_otros) + "\n\nDetalle:\n" +
-      (r.detalle || []).map(function (d) {
-        return "· " + d.nombre + " x" + fmtStock(d.cantidad) + " = " + money(d.subtotal);
+    var v = r.ventas || {}, s = r.servicio || {};
+    var txt = "CIERRE DEL DÍA — " + r.fecha + (cajaCerrada ? " (CAJA CERRADA)" : "") + "\n" +
+      "TOTAL DEL DÍA: " + money(r.total_dia) + "\n" +
+      "  Efectivo: " + money(r.total_efectivo) + "  |  Otros: " + money(r.total_otros) + "\n" +
+      "\n🛒 VENTAS DE LA VENDEDORA: " + money(v.total) + " (" + (v.cantidad || 0) + ")\n" +
+      (v.detalle || []).map(function (d) {
+        return "  · " + d.nombre + " x" + fmtStock(d.cantidad) + " = " + money(d.subtotal);
+      }).join("\n") +
+      "\n\n🔧 SERVICIO TÉCNICO: " + money(s.total) + " (" + (s.cantidad || 0) + ")\n" +
+      "  Adelantos: " + money(s.adelantos) + "  |  Saldos: " + money(s.saldos) + "\n" +
+      (s.detalle || []).map(function (d) {
+        return "  · " + (d.cliente || "—") + (d.modelo ? " (" + d.modelo + ")" : "") +
+               " = " + money(d.cobrado_hoy) + "  [costo " + money(d.costo) + ", gana " + money(d.ganancia) + "]";
       }).join("\n");
     if (navigator.share) {
-      navigator.share({ title: "Cierre de caja", text: txt }).catch(function () {});
+      navigator.share({ title: "Cierre del día", text: txt }).catch(function () {});
     } else {
       try { navigator.clipboard.writeText(txt); toast("Copiado al portapapeles", "exito"); }
       catch (e) { window.print(); }
