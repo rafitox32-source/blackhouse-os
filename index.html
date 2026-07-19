@@ -2816,6 +2816,8 @@
                                 Empresa</div>
                             <div class="config-item" onclick="showConfigSection('conf-personalizacion', this)">
                                 Personalización</div>
+                            <div class="config-item" onclick="showConfigSection('conf-ticket', this); renderTicketPreview();">
+                                Ticket / Comprobante</div>
                             <div class="config-item" onclick="showConfigSection('conf-usuarios', this)">Usuarios</div>
                             <div class="config-item" onclick="showConfigSection('conf-qr', this)">QR Clientes</div>
                             <div class="config-item" onclick="showConfigSection('conf-wa', this)">WhatsApp</div>
@@ -2971,6 +2973,65 @@
                                         marca de agua en el fondo.</p>
                                 </div>
                             </div>
+
+                            <!-- ============ TICKET / COMPROBANTE (personalización de impresión) ============ -->
+                            <div id="conf-ticket" class="config-section">
+                                <h2>Ticket / Comprobante</h2>
+                                <p style="font-size:13px; color:var(--text-muted,#888); margin-top:-6px;">
+                                    Personaliza por completo lo que se imprime en la tickera 80&nbsp;mm: tu logo, los
+                                    datos del negocio y los textos del pie. Los datos del encabezado (nombre, RUC,
+                                    dirección, teléfono) se toman de <b>Datos de la Empresa</b>.
+                                </p>
+                                <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start;">
+                                    <!-- Formulario -->
+                                    <div class="bh-card" style="flex:1 1 340px; min-width:320px;">
+                                        <div class="input-group">
+                                            <label>Logo del negocio</label>
+                                            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                                <img id="ticket-logo-preview" alt="logo"
+                                                    style="width:64px; height:64px; object-fit:contain; background:#fff; border-radius:8px; border:1px solid #444; display:none;">
+                                                <button type="button" class="bh-btn-purple"
+                                                    onclick="document.getElementById('ticket-logo-file').click()">Subir
+                                                    imagen</button>
+                                                <button type="button" class="bh-input"
+                                                    style="width:auto; cursor:pointer;"
+                                                    onclick="quitarLogoTicket()">Quitar</button>
+                                                <input type="file" id="ticket-logo-file" accept="image/*"
+                                                    style="display:none;" onchange="cargarLogoTicket(this)">
+                                            </div>
+                                            <input type="text" id="conf-ticket-logo" class="bh-input"
+                                                style="margin-top:8px;" placeholder="…o pega una URL: https://misitio.com/logo.png"
+                                                oninput="sincronizarLogoDesdeUrl()">
+                                            <p style="font-size:11px; color:#aaa; margin:4px 0 0;">Recomendado: PNG con
+                                                fondo blanco/transparente. Se imprime en blanco y negro.</p>
+                                        </div>
+                                        <div class="input-group" style="margin-top:14px;">
+                                            <label>Mensaje de agradecimiento (pie)</label>
+                                            <input type="text" id="conf-ticket-mensaje" class="bh-input"
+                                                maxlength="80" placeholder="¡Gracias por su preferencia!"
+                                                oninput="renderTicketPreview()">
+                                        </div>
+                                        <div class="input-group" style="margin-top:14px;">
+                                            <label>Nota extra (garantía, redes, horario…)</label>
+                                            <textarea id="conf-ticket-extra" class="bh-input" rows="3"
+                                                maxlength="200" placeholder="Ej: Garantía 30 días en pantallas · Síguenos en @mitienda · Lun-Sáb 9am-7pm"
+                                                oninput="renderTicketPreview()"></textarea>
+                                        </div>
+                                        <button class="bh-btn-purple" style="margin-top:14px;"
+                                            onclick="guardarTicket()">Guardar personalización</button>
+                                    </div>
+
+                                    <!-- Vista previa en vivo (80mm) -->
+                                    <div style="flex:0 0 auto;">
+                                        <p style="font-size:12px; color:var(--text-muted,#888); margin:0 0 6px; text-align:center;">
+                                            Vista previa en vivo</p>
+                                        <div id="ticket-preview"
+                                            style="width:280px; background:#fff; color:#000; padding:14px 12px; border-radius:6px; box-shadow:0 6px 24px rgba(0,0,0,.4); font-family:'Courier New',monospace; font-size:12px; line-height:1.35;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div id="conf-usuarios" class="config-section">
                                 <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
                                     <h2>Gestión de Usuarios</h2>
@@ -4331,9 +4392,9 @@
                         <div>
                             <h2 style="margin: 0; color: #1a1a1a; font-size: 26px; font-weight: 900; letter-spacing: -0.5px;"
                                 id="inv-empresa">MI EMPRESA S.A.C.</h2>
-                            <p style="margin: 5px 0 0; font-size: 13px; color: #666;">Servicios Tecnológicos
-                                Especializados</p>
-                            <p style="margin: 2px 0 0; font-size: 11px; color: #999;">contacto@miempresa.com | +51 999
+                            <p style="margin: 5px 0 0; font-size: 13px; color: #666;" id="inv-subtitulo">Servicios
+                                Tecnológicos Especializados</p>
+                            <p style="margin: 2px 0 0; font-size: 11px; color: #999;" id="inv-contacto">contacto@miempresa.com | +51 999
                                 888 777</p>
                         </div>
                     </div>
@@ -4717,6 +4778,13 @@
             document.getElementById('app-title-login').innerHTML = tituloHtml;
             document.getElementById('app-title-sidebar').innerHTML = tituloHtml;
             if (logo) { document.getElementById('watermark-bg').style.backgroundImage = `url('${logo}')`; }
+
+            // Cargamos los datos de la empresa (logo y textos del ticket incluidos) apenas se entra,
+            // para que el comprobante ya salga personalizado aunque no se haya abierto Configuración.
+            const empId = localStorage.getItem('miEmpresaId');
+            if (empId && empId !== 'null' && empId !== 'undefined' && typeof ipcRenderer !== 'undefined') {
+                ipcRenderer.send('pedir-datos-empresa', { id: empId });
+            }
         }
 
         function aplicarPermisos(rol, usuario) {
@@ -5127,17 +5195,25 @@
         // Recibir y mostrar los datos de la empresa en Ajustes
         ipcRenderer.on('datos-empresa-respuesta', (e, data) => {
             if (!data) return;
+            // Cache global: lo usa el ticket/comprobante para el encabezado y el pie.
+            window.datosEmpresa = data;
             const campos = {
                 'conf-empresa-nombre': data.nombre,
                 'conf-empresa-razonsocial': data.razon_social,
                 'conf-empresa-ruc': data.ruc,
                 'conf-empresa-dir': data.direccion,
-                'conf-empresa-tel': data.telefono
+                'conf-empresa-tel': data.telefono,
+                'conf-ticket-logo': data.logo_url,
+                'conf-ticket-mensaje': data.ticket_mensaje,
+                'conf-ticket-extra': data.ticket_extra
             };
             Object.entries(campos).forEach(([id, valor]) => {
                 const el = document.getElementById(id);
                 if (el) el.value = valor || '';
             });
+            // Refrescar el logo del formulario y la vista previa del ticket.
+            if (typeof sincronizarLogoDesdeUrl === 'function') sincronizarLogoDesdeUrl();
+            if (typeof renderTicketPreview === 'function') renderTicketPreview();
         });
 
         // Función unificada para el menú de Ajustes
@@ -7001,7 +7077,21 @@
             const desc = d.desc || 'Venta / Servicio';
             const montoFinal = parseFloat(d.monto) || 0;
 
-            document.getElementById('inv-empresa').innerText = appName;
+            // Encabezado del comprobante A4 con los datos reales de la empresa (logo incluido).
+            const emp = window.datosEmpresa || {};
+            document.getElementById('inv-empresa').innerText = emp.razon_social || emp.nombre || appName;
+            const invLogo = document.getElementById('inv-logo');
+            if (invLogo) {
+                if (emp.logo_url) { invLogo.src = emp.logo_url; invLogo.style.display = 'block'; }
+                else { invLogo.removeAttribute('src'); invLogo.style.display = 'none'; }
+            }
+            const invRuc = document.getElementById('inv-ruc-empresa');
+            if (invRuc && emp.ruc) invRuc.innerText = emp.ruc;
+            const invContacto = document.getElementById('inv-contacto');
+            if (invContacto) {
+                const contacto = [emp.direccion, emp.telefono].filter(Boolean).join(' | ');
+                if (contacto) invContacto.innerText = contacto;
+            }
             document.getElementById('inv-cliente').innerText = nom;
             document.getElementById('inv-cliente-doc').innerText = doc;
             document.getElementById('inv-cliente-dir').innerText = dir;
@@ -7182,45 +7272,156 @@
             showToast('Preparando PDF…', 'info');
         }
 
-        // Arma el ticket de 80mm a partir de los datos del comprobante emitido.
-        function _htmlTicket() {
-            const c = window.comprobanteActual || {};
+        // Cuerpo del ticket 80mm: encabezado personalizable (logo + datos del negocio),
+        // detalle del comprobante y pie personalizable (agradecimiento + nota extra).
+        // Usa estilos en línea para que se vea IGUAL en la vista previa de Configuración
+        // y en la impresión real. `emp` = datos de la empresa (window.datosEmpresa).
+        function _ticketInner(c, emp) {
+            emp = emp || {};
             const sym = c.currency || 'S/';
             const fmt = n => (parseFloat(n) || 0).toFixed(2);
-            const bloqueIgv = (c.tipo === 'Factura')
-                ? `<div class="row"><span>Subtotal</span><span>${sym} ${fmt(c.subtotal)}</span></div>
-                   <div class="row"><span>IGV (18%)</span><span>${sym} ${fmt(c.igv)}</span></div>`
+            const esc = _escComp;
+            const nl2br = s => esc(s).replace(/\n/g, '<br>');
+            const HR = '<hr style="border:none;border-top:1px dashed #000;margin:5px 0">';
+
+            const logo = emp.logo_url
+                ? `<div style="text-align:center;margin-bottom:4px"><img src="${esc(emp.logo_url)}" style="max-width:45mm;max-height:22mm;object-fit:contain"></div>`
                 : '';
+            const nombreNeg = emp.razon_social || emp.nombre || c.appName || '';
+            const lineasNeg = [];
+            if (emp.ruc) lineasNeg.push('RUC: ' + esc(emp.ruc));
+            if (emp.direccion) lineasNeg.push(esc(emp.direccion));
+            if (emp.telefono) lineasNeg.push('Tel: ' + esc(emp.telefono));
+            const headerNeg = lineasNeg.length
+                ? `<div style="text-align:center;font-size:11px">${lineasNeg.join('<br>')}</div>` : '';
+
+            const bloqueIgv = (c.tipo === 'Factura')
+                ? `<div style="display:flex;justify-content:space-between"><span>Subtotal</span><span>${sym} ${fmt(c.subtotal)}</span></div>
+                   <div style="display:flex;justify-content:space-between"><span>IGV (18%)</span><span>${sym} ${fmt(c.igv)}</span></div>`
+                : '';
+
+            const mensaje = (emp.ticket_mensaje && emp.ticket_mensaje.trim()) || '¡Gracias por su preferencia!';
+            const extra = (emp.ticket_extra && emp.ticket_extra.trim())
+                ? `<div style="text-align:center;font-size:10px;margin-top:4px">${nl2br(emp.ticket_extra.trim())}</div>` : '';
+
+            return `
+              ${logo}
+              <div style="text-align:center;font-weight:bold;font-size:15px">${esc(nombreNeg)}</div>
+              ${headerNeg}
+              ${HR}
+              <div style="text-align:center">${esc(c.tipoLabel || c.tipo)}</div>
+              <div style="text-align:center;font-weight:bold">N° ${esc(c.numero)}</div>
+              ${HR}
+              <div style="display:flex;justify-content:space-between"><span>Fecha:</span><span>${esc(c.fecha)}</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Cliente:</span><span>${esc(c.nom)}</span></div>
+              <div style="display:flex;justify-content:space-between"><span>${esc(c.docLabel || 'Doc')}:</span><span>${esc(c.doc || '-')}</span></div>
+              ${HR}
+              <div style="font-weight:bold">Detalle</div>
+              <div>${esc(c.desc)}</div>
+              ${HR}
+              ${bloqueIgv}
+              <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:bold;margin-top:2px"><span>TOTAL</span><span>${sym} ${fmt(c.total)}</span></div>
+              ${HR}
+              <div style="font-size:10px">SON: ${esc(c.letras)}</div>
+              ${HR}
+              <div style="text-align:center">${esc(mensaje)}</div>
+              ${extra}
+            `;
+        }
+
+        // Documento completo del ticket para imprimir (envuelve el cuerpo con @page 80mm).
+        function construirTicketHTML(c, emp) {
             return `<!DOCTYPE html><html><head><meta charset="utf-8">
             <style>
               @page { size: 80mm auto; margin: 0; }
               * { box-sizing: border-box; }
               body { width: 80mm; margin: 0; padding: 4mm 3mm; color:#000;
                      font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.35; }
-              .c { text-align:center; } .b{ font-weight:bold; } .big{ font-size:15px; }
-              .row{ display:flex; justify-content:space-between; gap:6px; }
-              hr{ border:none; border-top:1px dashed #000; margin:5px 0; }
-              .tot{ font-size:16px; font-weight:bold; margin-top:2px; }
-              .small{ font-size:10px; }
-            </style></head><body>
-              <div class="c b big">${_escComp(c.appName)}</div>
-              <div class="c">${_escComp(c.tipoLabel || c.tipo)}</div>
-              <div class="c b">N° ${_escComp(c.numero)}</div>
-              <hr>
-              <div class="row"><span>Fecha:</span><span>${_escComp(c.fecha)}</span></div>
-              <div class="row"><span>Cliente:</span><span>${_escComp(c.nom)}</span></div>
-              <div class="row"><span>${_escComp(c.docLabel || 'Doc')}:</span><span>${_escComp(c.doc || '-')}</span></div>
-              <hr>
-              <div class="b">Detalle</div>
-              <div>${_escComp(c.desc)}</div>
-              <hr>
-              ${bloqueIgv}
-              <div class="row tot"><span>TOTAL</span><span>${sym} ${fmt(c.total)}</span></div>
-              <hr>
-              <div class="small">SON: ${_escComp(c.letras)}</div>
-              <hr>
-              <div class="c">¡Gracias por su preferencia!</div>
-            </body></html>`;
+              img { display:inline-block; }
+            </style></head><body>${_ticketInner(c, emp)}</body></html>`;
+        }
+
+        // Arma el ticket de 80mm a partir del comprobante emitido + datos de la empresa.
+        function _htmlTicket() {
+            return construirTicketHTML(window.comprobanteActual || {}, window.datosEmpresa || {});
+        }
+
+        // ===== Personalización del ticket (Configuración → Ticket / Comprobante) =====
+        function cargarLogoTicket(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            if (file.size > 1024 * 1024) {
+                showToast('El logo pesa más de 1MB. Usa una imagen más liviana para que imprima rápido.', 'warning');
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+                document.getElementById('conf-ticket-logo').value = reader.result;
+                sincronizarLogoDesdeUrl();
+            };
+            reader.readAsDataURL(file);
+            input.value = '';
+        }
+
+        function quitarLogoTicket() {
+            document.getElementById('conf-ticket-logo').value = '';
+            sincronizarLogoDesdeUrl();
+        }
+
+        function sincronizarLogoDesdeUrl() {
+            const url = (document.getElementById('conf-ticket-logo')?.value || '').trim();
+            const img = document.getElementById('ticket-logo-preview');
+            if (img) {
+                if (url) { img.src = url; img.style.display = 'inline-block'; }
+                else { img.removeAttribute('src'); img.style.display = 'none'; }
+            }
+            renderTicketPreview();
+        }
+
+        function renderTicketPreview() {
+            const cont = document.getElementById('ticket-preview');
+            if (!cont) return;
+            const sym = (typeof globalCurrency !== 'undefined' && globalCurrency)
+                ? globalCurrency : (localStorage.getItem('globalCurrency') || 'S/');
+            const de = window.datosEmpresa || {};
+            const val = id => (document.getElementById(id)?.value || '');
+            // Mezcla lo guardado con lo que se está editando ahora mismo en el formulario.
+            const emp = {
+                nombre: val('conf-empresa-nombre') || de.nombre || '',
+                razon_social: val('conf-empresa-razonsocial') || de.razon_social || '',
+                ruc: val('conf-empresa-ruc') || de.ruc || '',
+                direccion: val('conf-empresa-dir') || de.direccion || '',
+                telefono: val('conf-empresa-tel') || de.telefono || '',
+                logo_url: val('conf-ticket-logo').trim(),
+                ticket_mensaje: val('conf-ticket-mensaje'),
+                ticket_extra: val('conf-ticket-extra')
+            };
+            const ejemplo = {
+                currency: sym, tipo: 'Boleta', tipoLabel: 'BOLETA ELECTRÓNICA',
+                numero: 'BBB-000123', docLabel: 'DNI/RUC', doc: '12345678',
+                nom: 'Cliente de Ejemplo', fecha: new Date().toLocaleDateString(),
+                desc: '1x Cambio de pantalla Samsung A20s', subtotal: 80, igv: 0, total: 80,
+                letras: (typeof numeroALetras === 'function' ? numeroALetras(80, sym) : 'OCHENTA'),
+                appName: emp.nombre
+            };
+            cont.innerHTML = _ticketInner(ejemplo, emp);
+        }
+
+        function guardarTicket() {
+            const empresaId = localStorage.getItem('miEmpresaId');
+            if (!empresaId || empresaId === 'null' || empresaId === 'undefined') {
+                return showToast('Error: vuelve a iniciar sesión para conectar la base de datos.', 'danger');
+            }
+            const payload = {
+                id: empresaId,
+                logo_url: (document.getElementById('conf-ticket-logo').value || '').trim(),
+                ticket_mensaje: (document.getElementById('conf-ticket-mensaje').value || '').trim(),
+                ticket_extra: (document.getElementById('conf-ticket-extra').value || '').trim()
+            };
+            // Actualizamos el cache para que el próximo ticket ya salga personalizado sin recargar.
+            window.datosEmpresa = Object.assign({}, window.datosEmpresa, {
+                logo_url: payload.logo_url, ticket_mensaje: payload.ticket_mensaje, ticket_extra: payload.ticket_extra
+            });
+            ipcRenderer.send('guardar-datos-empresa', payload);
         }
 
         function imprimirComprobanteTicket() {
