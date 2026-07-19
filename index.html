@@ -25,8 +25,9 @@
            con copiar un bloque body[data-theme="..."] y cambiar los colores.
            -------------------------------------------------------------- */
         :root {
-            --bh-purple: #7c3aed;
+            --bh-purple: #7c3aed;        /* acento principal (se re-colorea por tema) */
             --bh-purple-dark: #5b21b6;
+            --bh-accent-2: #5b21b6;      /* fin del degradado de botones/acentos */
             --bh-purple-glow: rgba(124, 58, 237, 0.5);
             --bh-bg-dark: #050505;
             --bh-bg-gradient: radial-gradient(circle at top right, #1a0b2e 0%, #000000 100%);
@@ -73,40 +74,59 @@
             --text-muted: #5b5b6b;
         }
 
-        /* Retoques del tema BLANCO para elementos con estilos en línea (color/fondo
-           escritos directo en el HTML). Primero forzamos texto oscuro donde había
+        /* ---- TEMA DOHA-CELL: colores de la marca (azul → verde), fondo claro ---- */
+        body[data-theme="doha"] {
+            --bh-purple: #1c9fe0;        /* azul de la marca (acento principal) */
+            --bh-purple-dark: #0e6bb0;   /* azul profundo */
+            --bh-accent-2: #6dbe45;      /* verde de la marca (fin del degradado) */
+            --bh-purple-glow: rgba(28, 159, 224, 0.30);
+            --bh-bg-dark: #f3f8fc;
+            --bh-bg-gradient: radial-gradient(circle at top right, #e3f5e8 0%, #eaf4fc 55%, #f3f8fc 100%);
+            --bh-card-bg: #ffffff;
+            --bh-surface: #ffffff;
+            --bh-surface-2: #eef5f9;
+            --bh-input-bg: #ffffff;
+            --bh-border: rgba(14, 107, 176, 0.16);
+            --bh-scroll-thumb: #a9d3ec;
+            --text-main: #10344d;        /* azul muy oscuro para el texto */
+            --text-muted: #5a7688;
+        }
+
+        /* Retoques para TEMAS CLAROS (Blanco, Doha-cell…) en elementos con estilos en
+           línea escritos directo en el HTML. body.tema-claro lo activa el JS para
+           cualquier tema de fondo claro. Primero forzamos texto oscuro donde había
            texto claro, y luego re-forzamos texto blanco sobre fondos de acento. */
-        body[data-theme="blanco"] [style*="color:#fff"],
-        body[data-theme="blanco"] [style*="color: #fff"],
-        body[data-theme="blanco"] [style*="color:white"],
-        body[data-theme="blanco"] [style*="color: white"],
-        body[data-theme="blanco"] [style*="color:#ddd"],
-        body[data-theme="blanco"] [style*="color: #ddd"],
-        body[data-theme="blanco"] [style*="color:#eee"],
-        body[data-theme="blanco"] [style*="color: #eee"],
-        body[data-theme="blanco"] [style*="color:#e0e0e0"],
-        body[data-theme="blanco"] [style*="color: #e0e0e0"] {
+        body.tema-claro [style*="color:#fff"],
+        body.tema-claro [style*="color: #fff"],
+        body.tema-claro [style*="color:white"],
+        body.tema-claro [style*="color: white"],
+        body.tema-claro [style*="color:#ddd"],
+        body.tema-claro [style*="color: #ddd"],
+        body.tema-claro [style*="color:#eee"],
+        body.tema-claro [style*="color: #eee"],
+        body.tema-claro [style*="color:#e0e0e0"],
+        body.tema-claro [style*="color: #e0e0e0"] {
             color: #1a1a2e !important;
         }
         /* Fondos oscuros puestos en línea → superficie clara */
-        body[data-theme="blanco"] [style*="background: rgba(0,0,0"],
-        body[data-theme="blanco"] [style*="background:rgba(0,0,0"],
-        body[data-theme="blanco"] [style*="background:#1a1a1a"],
-        body[data-theme="blanco"] [style*="background: #1a1a1a"],
-        body[data-theme="blanco"] [style*="background:#111"],
-        body[data-theme="blanco"] [style*="background: #111"],
-        body[data-theme="blanco"] [style*="background:#222"],
-        body[data-theme="blanco"] [style*="background: #222"] {
+        body.tema-claro [style*="background: rgba(0,0,0"],
+        body.tema-claro [style*="background:rgba(0,0,0"],
+        body.tema-claro [style*="background:#1a1a1a"],
+        body.tema-claro [style*="background: #1a1a1a"],
+        body.tema-claro [style*="background:#111"],
+        body.tema-claro [style*="background: #111"],
+        body.tema-claro [style*="background:#222"],
+        body.tema-claro [style*="background: #222"] {
             background-color: var(--bh-surface-2) !important;
         }
         /* Re-afirmar texto blanco donde el fondo es un acento sólido (botones, chips) */
-        body[data-theme="blanco"] .bh-btn-purple,
-        body[data-theme="blanco"] .bh-btn-purple *,
-        body[data-theme="blanco"] [style*="background:var(--bh-purple)"],
-        body[data-theme="blanco"] [style*="background: var(--bh-purple)"],
-        body[data-theme="blanco"] [style*="background:#7c3aed"],
-        body[data-theme="blanco"] [style*="background: #7c3aed"],
-        body[data-theme="blanco"] [style*="background:linear-gradient"] {
+        body.tema-claro .bh-btn-purple,
+        body.tema-claro .bh-btn-purple *,
+        body.tema-claro [style*="background:var(--bh-purple)"],
+        body.tema-claro [style*="background: var(--bh-purple)"],
+        body.tema-claro [style*="background:#7c3aed"],
+        body.tema-claro [style*="background: #7c3aed"],
+        body.tema-claro [style*="background:linear-gradient"] {
             color: #ffffff !important;
         }
 
@@ -434,7 +454,7 @@
         }
 
         .bh-btn-purple {
-            background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+            background: linear-gradient(135deg, var(--bh-purple) 0%, var(--bh-accent-2) 100%);
             color: white;
             border: none;
             padding: 12px 25px;
@@ -1265,7 +1285,7 @@
 
         /* Botón flotante corregido */
         .btn-glow {
-            background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+            background: linear-gradient(135deg, var(--bh-purple) 0%, var(--bh-accent-2) 100%);
             color: white;
             width: 46px;
             height: 46px;
@@ -3111,10 +3131,24 @@
                                         <div style="margin-top:10px; font-weight:700;">Blanco</div>
                                         <div style="font-size:11px; color:var(--text-muted);">Claro, ideal si no te gusta el negro</div>
                                     </div>
+                                    <!-- DOHA-CELL (marca) -->
+                                    <div class="tema-card" data-tema="doha" onclick="aplicarTema('doha')"
+                                        style="cursor:pointer; border:2px solid var(--bh-border); border-radius:16px; padding:14px; width:170px; transition:.2s;">
+                                        <div style="height:74px; border-radius:10px; overflow:hidden; display:flex; background:radial-gradient(circle at top right,#e3f5e8,#eaf4fc 55%,#f3f8fc);">
+                                            <div style="width:34%; background:#ffffff; border-right:1px solid rgba(14,107,176,0.16);"></div>
+                                            <div style="flex:1; padding:10px;">
+                                                <div style="height:9px; width:70%; background:linear-gradient(135deg,#1c9fe0,#6dbe45); border-radius:4px;"></div>
+                                                <div style="height:7px; width:90%; background:rgba(16,52,77,0.22); border-radius:4px; margin-top:7px;"></div>
+                                                <div style="height:7px; width:55%; background:rgba(16,52,77,0.12); border-radius:4px; margin-top:5px;"></div>
+                                            </div>
+                                        </div>
+                                        <div style="margin-top:10px; font-weight:700;">Doha-cell</div>
+                                        <div style="font-size:11px; color:var(--text-muted);">Los colores de tu marca (azul y verde)</div>
+                                    </div>
                                 </div>
                                 <p style="font-size:11px; color:var(--text-muted); margin-top:16px;">
-                                    ¿Quieres un tema con los colores de tu marca? Pronto se podrán diseñar temas
-                                    personalizados aparte.
+                                    ¿Quieres otro tema con colores distintos? Se pueden diseñar más temas aparte —
+                                    pídelo cuando quieras.
                                 </p>
                             </div>
 
@@ -4951,20 +4985,28 @@
         // ===================== TEMAS / APARIENCIA =====================
         // "original" es el diseño por defecto (sin atributo). "negro" y "blanco"
         // se activan poniendo data-theme en <body>. Se recuerda en localStorage.
-        const TEMAS_VALIDOS = ['original', 'negro', 'blanco'];
+        const TEMAS_VALIDOS = ['original', 'negro', 'blanco', 'doha'];
+        const TEMAS_CLAROS = ['blanco', 'doha'];   // temas de fondo claro
+        const TEMAS_NOMBRES = { original: 'Original', negro: 'Negro', blanco: 'Blanco', doha: 'Doha-cell' };
 
-        function aplicarTema(tema) {
-            if (!TEMAS_VALIDOS.includes(tema)) tema = 'original';
+        // Aplica el tema al <body>: pone data-theme y la clase tema-claro (para los
+        // retoques de estilos en línea de los temas claros) y marca la tarjeta activa.
+        function _pintarTema(tema) {
+            if (!document.body) return;
             if (tema === 'original') document.body.removeAttribute('data-theme');
             else document.body.setAttribute('data-theme', tema);
-            try { localStorage.setItem('appTheme', tema); } catch (e) {}
-            // Marca visualmente la tarjeta elegida (si el panel está montado).
+            document.body.classList.toggle('tema-claro', TEMAS_CLAROS.includes(tema));
             document.querySelectorAll('.tema-card').forEach(c => {
                 c.classList.toggle('activo', c.getAttribute('data-tema') === tema);
             });
+        }
+
+        function aplicarTema(tema) {
+            if (!TEMAS_VALIDOS.includes(tema)) tema = 'original';
+            _pintarTema(tema);
+            try { localStorage.setItem('appTheme', tema); } catch (e) {}
             if (typeof showToast === 'function' && document.getElementById('app-content')?.style.display !== 'none') {
-                const nombres = { original: 'Original', negro: 'Negro', blanco: 'Blanco' };
-                showToast('Tema aplicado: ' + (nombres[tema] || tema), 'success');
+                showToast('Tema aplicado: ' + (TEMAS_NOMBRES[tema] || tema), 'success');
             }
         }
 
@@ -4974,11 +5016,7 @@
             let t = 'original';
             try { t = localStorage.getItem('appTheme') || 'original'; } catch (e) {}
             if (!TEMAS_VALIDOS.includes(t)) t = 'original';
-            if (t === 'original') document.body.removeAttribute('data-theme');
-            else document.body.setAttribute('data-theme', t);
-            document.querySelectorAll('.tema-card').forEach(c => {
-                c.classList.toggle('activo', c.getAttribute('data-tema') === t);
-            });
+            _pintarTema(t);
         }
         if (document.body) cargarTemaGuardado();
         else document.addEventListener('DOMContentLoaded', cargarTemaGuardado);
