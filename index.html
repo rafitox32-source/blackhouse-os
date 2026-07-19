@@ -6160,16 +6160,49 @@
 
         function cobrarVenta() {
             if (!ventaCarrito.length) { showToast('La venta está vacía', 'warning'); return; }
+            const medio = document.getElementById('venta-pago').value;
             const items = ventaCarrito.map(c => ({ origen: c.origen, producto_id: c.producto_id, nombre: c.nombre, precio: c.precio, cantidad: c.cantidad }));
-            ipcRenderer.send('registrar-venta-desktop', { items, medio_pago: document.getElementById('venta-pago').value });
+            // Guardamos una foto de la venta para poder imprimir el ticket después de cobrar
+            // (el carrito se vacía al recibir la confirmación).
+            window._ventaEnCurso = {
+                medio,
+                items: ventaCarrito.map(c => ({ nombre: c.nombre, cantidad: c.cantidad, precio: c.precio, subtotal: c.precio * c.cantidad })),
+                total: totalVenta()
+            };
+            ipcRenderer.send('registrar-venta-desktop', { items, medio_pago: medio });
+        }
+
+        // Arma e imprime el ticket 80mm de la venta rápida (reutiliza el generador del taller,
+        // con logo y datos de la empresa). Muestra los productos vendidos y el medio de pago.
+        function imprimirTicketVenta(sale, total, ventaId) {
+            const currency = (typeof globalCurrency !== 'undefined' && globalCurrency) ? globalCurrency : (localStorage.getItem('globalCurrency') || 'S/');
+            const emp = window.datosEmpresa || {};
+            const nombreNeg = emp.razon_social || emp.nombre || localStorage.getItem('appName') || 'BlackHouse';
+            const c = {
+                appName: nombreNeg, currency, tipo: 'Nota', tipoLabel: 'TICKET DE VENTA',
+                numero: 'V-' + String(ventaId || '').padStart(5, '0'),
+                docLabel: 'Doc', doc: '-', nom: 'Mostrador',
+                fecha: new Date().toLocaleDateString(),
+                items: (sale.items || []).map(i => ({ nombre: i.nombre, cantidad: i.cantidad, subtotal: i.subtotal })),
+                medioPago: sale.medio,
+                subtotal: total, igv: 0, total,
+                letras: (typeof numeroALetras === 'function' ? numeroALetras(total, currency) : '')
+            };
+            ipcRenderer.send('imprimir-documento', { modo: 'ticket', html: construirTicketHTML(c, emp), filename: `Ticket_${c.numero}.pdf` });
+            showToast('Abriendo impresión del ticket…', 'info');
         }
 
         ipcRenderer.on('venta-desktop-resultado', (e, res) => {
             if (res && res.success) {
-                showToast('✅ Venta registrada: S/ ' + (parseFloat(res.total) || 0).toFixed(2), 'success');
+                const total = parseFloat(res.total) || 0;
+                showToast('✅ Venta registrada: S/ ' + total.toFixed(2), 'success');
+                const sale = window._ventaEnCurso;
                 ventaCarrito = [];
                 renderVentaCarrito();
                 ipcRenderer.send('obtener-productos'); // refresca el stock descontado
+                if (sale && confirm(`Venta registrada por S/ ${total.toFixed(2)}.\n¿Imprimir el ticket?`)) {
+                    imprimirTicketVenta(sale, total, res.ventaId);
+                }
             } else {
                 showToast('No se pudo cobrar: ' + ((res && res.msg) || 'error'), 'danger');
             }
@@ -7819,10 +7852,13 @@
               <div style="display:flex;justify-content:space-between"><span>${esc(c.docLabel || 'Doc')}:</span><span>${esc(c.doc || '-')}</span></div>
               ${HR}
               <div style="font-weight:bold">Detalle</div>
-              <div>${esc(c.desc)}</div>
+              ${(Array.isArray(c.items) && c.items.length)
+                ? c.items.map(i => `<div style="display:flex;justify-content:space-between"><span>${esc((i.cantidad || 1) + 'x ' + (i.nombre || ''))}</span><span>${sym} ${fmt(i.subtotal)}</span></div>`).join('')
+                : `<div>${esc(c.desc)}</div>`}
               ${HR}
               ${bloqueIgv}
               <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:bold;margin-top:2px"><span>TOTAL</span><span>${sym} ${fmt(c.total)}</span></div>
+              ${c.medioPago ? `<div style="display:flex;justify-content:space-between"><span>Pago:</span><span>${esc(c.medioPago)}</span></div>` : ''}
               ${HR}
               <div style="font-size:10px">SON: ${esc(c.letras)}</div>
               ${HR}
