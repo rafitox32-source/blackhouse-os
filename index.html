@@ -6464,16 +6464,8 @@
 
                 const porc = res.porcentaje || 50;
                 let h = `<div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:30px; font-weight:800; color:var(--success);">${f(res.neto)}</div>
+                    <div style="font-size:32px; font-weight:800; color:var(--success);">${f(res.neto)}</div>
                     <div style="font-size:12px; color:#aaa;">Total en tu caja (a entregar) · ${esc(res.fecha)}</div></div>`;
-
-                // ===== TU COMISIÓN: 50% de la mano de obra (destacado) =====
-                h += `<div style="background:linear-gradient(160deg, rgba(14,165,233,0.16), rgba(16,185,129,0.10)); border:1px solid rgba(14,165,233,0.35); border-radius:14px; padding:14px 16px; margin:12px 0;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:13px; color:#cbd5e1;">💵 Tu comisión (${porc}% de la mano de obra)</span>
-                        <strong style="font-size:26px; color:#0ea5e9;">${f(res.comision)}</strong></div>
-                    <div style="font-size:11px; color:#94a3b8; margin-top:4px;">El repuesto no cuenta (lo pone el dueño). Los productos vendidos tampoco.</div>
-                </div>`;
 
                 // ===== SERVICIO TÉCNICO (mano de obra + repuesto) =====
                 h += subhead({ l: '🔧 Servicio técnico', v: res.ingresosTaller });
@@ -6495,6 +6487,13 @@
                 if (!detEq.length && !(res.ventasPropias > 0)) {
                     h += `<p style="color:#888; font-size:13px; text-align:center; padding:12px;">No cobraste nada hoy todavía.</p>`;
                 }
+
+                // ===== Comentario aparte (solo para el técnico): su comisión =====
+                // Va al final y discreto a propósito, separado de la cuenta que se le entrega al
+                // dueño, para evitar malos ratos.
+                h += `<div style="margin-top:16px; padding:10px 12px; border-left:3px solid rgba(148,163,184,0.5); background:rgba(148,163,184,0.06); border-radius:6px;">
+                    <div style="font-size:11px; color:#94a3b8;">💬 Nota (solo para ti, aparte de la cuenta): tu comisión ≈ ${porc}% de la mano de obra (${f(res.manoObra || 0)}) = <strong style="color:#cbd5e1;">${f(res.comision)}</strong></div>
+                </div>`;
                 cont.innerHTML = h;
                 return;
             }
@@ -6545,7 +6544,8 @@
                     `\nPRECIO DE VENTA: ${f(r.ventasPropias || 0)}\n` +
                     (detVe ? detVe + '\n' : '') +
                     `\nTOTAL EN CAJA (a entregar): ${f(r.neto)}\n` +
-                    `>> MI COMISIÓN (${r.porcentaje || 50}% mano de obra): ${f(r.comision || 0)}`;
+                    `\n— — — nota personal (aparte de la cuenta) — — —\n` +
+                    `Comisión ≈ ${r.porcentaje || 50}% de la mano de obra = ${f(r.comision || 0)}`;
                 try { navigator.clipboard.writeText(txtT); showToast('Resumen copiado 📋', 'success'); }
                 catch (e) { showToast('No se pudo copiar', 'danger'); }
                 return;
