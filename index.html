@@ -1871,6 +1871,8 @@
                         class='bx bx-group'></i> Clientes</div>
                 <div id="nav-inv" class="nav-item" onclick="showView('inventario', this)"><i class='bx bx-box'></i>
                     Inventario</div>
+                <div id="nav-ventas" class="nav-item" onclick="showView('ventas-view', this)"><i class='bx bx-cart'></i>
+                    Ventas</div>
                 <div id="nav-proveedores" class="nav-item" onclick="showView('proveedores-view', this)"><i
                         class='bx bx-truck'></i> Proveedores</div>
                 <div id="nav-report" class="nav-item" onclick="showView('reportes', this)"><i
@@ -2255,6 +2257,60 @@
                                         style="display:none;position:absolute;top:8px;right:10px;background:var(--danger);color:white;font-size:10px;font-weight:900;padding:2px 7px;border-radius:10px;min-width:18px;text-align:center;"></span>
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============ VENTA RÁPIDA (POS de escritorio, para todos los roles) ============ -->
+                <div id="ventas-view" class="view">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;">
+                        <h2 style="margin:0;">🛒 Venta rápida</h2>
+                        <span style="font-size:12px; color:var(--text-muted);">Vende productos sin abrir una orden de taller</span>
+                    </div>
+                    <div style="display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap;">
+                        <div class="bh-card" style="flex:1 1 420px; min-width:320px;">
+                            <div style="display:flex; gap:10px; margin-bottom:12px;">
+                                <input id="venta-buscar" class="bh-input" placeholder="Buscar producto…" oninput="renderVentaProductos()" style="flex:1;">
+                                <button class="bh-btn-white" onclick="abrirVentaLibre()" title="Vender algo que no está en el inventario">+ Sin stock</button>
+                            </div>
+                            <div id="venta-productos" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; max-height:62vh; overflow-y:auto;"></div>
+                        </div>
+                        <div class="bh-card" style="flex:0 0 340px; min-width:300px;">
+                            <h3 style="margin:0 0 12px;">Venta actual</h3>
+                            <div id="venta-carrito" style="max-height:42vh; overflow-y:auto;"></div>
+                            <div style="border-top:1px solid var(--bh-border); margin-top:12px; padding-top:12px;">
+                                <label style="font-size:12px; color:var(--text-muted);">Medio de pago</label>
+                                <select id="venta-pago" class="bh-input" style="margin:6px 0 12px;">
+                                    <option value="efectivo">Efectivo</option>
+                                    <option value="yape">Yape</option>
+                                    <option value="plin">Plin</option>
+                                    <option value="transferencia">Transferencia</option>
+                                    <option value="tarjeta">Tarjeta</option>
+                                    <option value="otro">Otro</option>
+                                </select>
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                    <span style="font-size:15px;">Total</span>
+                                    <strong id="venta-total" style="font-size:24px; color:var(--bh-purple);">S/ 0.00</strong>
+                                </div>
+                                <button class="bh-btn-purple" style="width:100%;" onclick="cobrarVenta()">Cobrar</button>
+                                <button class="bh-btn-white" style="width:100%; margin-top:8px;" onclick="vaciarVenta()">Vaciar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal: producto libre (venta sin stock) -->
+                <div id="modal-venta-libre" class="modal-overlay">
+                    <div class="modal-content" style="width:400px;">
+                        <h2 style="margin-top:0;">Producto sin stock</h2>
+                        <p style="color:var(--text-muted); font-size:13px; margin-top:-6px;">Se vende sin tocar el inventario (útil para algo que no tienes registrado).</p>
+                        <label style="font-size:12px;">Nombre del producto</label>
+                        <input id="venta-libre-nombre" class="bh-input" placeholder="Ej: Chip / Mica" style="margin:6px 0 12px;">
+                        <label style="font-size:12px;">Precio de venta</label>
+                        <input id="venta-libre-precio" type="number" min="0" step="any" class="bh-input" placeholder="0.00" style="margin:6px 0 12px;">
+                        <div style="text-align:right;">
+                            <button class="bh-btn-white" onclick="document.getElementById('modal-venta-libre').style.display='none'">Cancelar</button>
+                            <button class="bh-btn-purple" onclick="agregarVentaLibre()">Agregar a la venta</button>
                         </div>
                     </div>
                 </div>
@@ -5073,7 +5129,7 @@
                 avatarContainer.innerHTML = `<img src="${avatarUrl}" style="width:100%; height:100%; object-fit:cover;">`;
             }
 
-            const items = ['nav-dash', 'nav-recep', 'nav-taller', 'nav-clientes', 'nav-inv', 'nav-proveedores', 'nav-report', 'nav-config', 'nav-facturas'];
+            const items = ['nav-dash', 'nav-recep', 'nav-taller', 'nav-clientes', 'nav-inv', 'nav-ventas', 'nav-proveedores', 'nav-report', 'nav-config', 'nav-facturas'];
             items.forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'none'; });
 
             const btnMenuTop = document.getElementById('menu-config-btn');
@@ -5092,10 +5148,10 @@
                 if (btnMenuTop) btnMenuTop.style.display = 'block';
 
             } else if (rol === 'vendedor') {
-                ['nav-dash', 'nav-clientes', 'nav-inv'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
+                ['nav-dash', 'nav-clientes', 'nav-inv', 'nav-ventas'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
                 if (document.getElementById('btn-add-prod')) document.getElementById('btn-add-prod').style.display = 'none';
             } else if (rol === 'tecnico') {
-                ['nav-dash', 'nav-recep', 'nav-taller', 'nav-inv'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
+                ['nav-dash', 'nav-recep', 'nav-taller', 'nav-inv', 'nav-ventas'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
                 if (document.getElementById('btn-add-prod')) document.getElementById('btn-add-prod').style.display = 'none';
                 // El técnico NO ve métricas ni comprobantes en el dashboard, pero SÍ puede cerrar caja.
                 setVis('dash-acc-metricas', false);
@@ -5135,6 +5191,11 @@
                 ipcRenderer.send('obtener-productos');
                 ipcRenderer.send('obtener-subcategorias-custom');
                 ipcRenderer.send('obtener-grupos-compatibilidad');
+            }
+            if (id === 'ventas-view' && !window.isDemoMode) {
+                ipcRenderer.send('obtener-productos');
+                if (typeof renderVentaCarrito === 'function') renderVentaCarrito();
+                if (typeof renderVentaProductos === 'function') renderVentaProductos();
             }
             if (id === 'compatibilidades-view' && !window.isDemoMode) {
                 ipcRenderer.send('obtener-grupos-compatibilidad');
@@ -6011,6 +6072,107 @@
             const hint = document.getElementById('inv-sin-productos-hint');
             if (hint) hint.style.display = todosLosProductos.length === 0 ? 'block' : 'none';
             renderizarProductosFiltrados();
+            if (typeof renderVentaProductos === 'function') renderVentaProductos();
+        });
+
+        // ============ VENTA RÁPIDA (POS de escritorio, para todos los roles) ============
+        let ventaCarrito = [];
+        function _escV(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+        function renderVentaProductos() {
+            const cont = document.getElementById('venta-productos');
+            if (!cont) return;
+            const q = (document.getElementById('venta-buscar')?.value || '').trim().toLowerCase();
+            const lista = (todosLosProductos || []).filter(p => !q || (p.nombre || '').toLowerCase().includes(q));
+            if (!lista.length) { cont.innerHTML = '<p style="grid-column:1/-1; color:var(--text-muted); text-align:center; padding:20px;">No hay productos que coincidan.</p>'; return; }
+            cont.innerHTML = lista.map(p => {
+                const stock = parseFloat(p.stock) || 0;
+                const agotado = stock <= 0;
+                return `<div ${agotado ? '' : `onclick="agregarVentaProducto('${p.id}')"`} style="border:1px solid var(--bh-border); border-radius:12px; padding:12px; cursor:${agotado ? 'not-allowed' : 'pointer'}; opacity:${agotado ? '0.5' : '1'}; background:var(--bh-input-bg);">
+                    <div style="font-weight:600; font-size:13px; margin-bottom:6px; min-height:32px;">${_escV(p.nombre)}</div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px;">
+                        <span style="color:var(--bh-purple); font-weight:700;">S/ ${(parseFloat(p.precio) || 0).toFixed(2)}</span>
+                        <span style="color:${agotado ? 'var(--danger)' : 'var(--text-muted)'};">${agotado ? 'sin stock' : 'stock: ' + stock}</span>
+                    </div></div>`;
+            }).join('');
+        }
+
+        function agregarVentaProducto(id) {
+            const p = (todosLosProductos || []).find(x => String(x.id) === String(id));
+            if (!p) return;
+            const stock = parseFloat(p.stock) || 0;
+            const ex = ventaCarrito.find(c => c.origen === 'stock' && String(c.producto_id) === String(id));
+            if (ex) {
+                if (ex.cantidad + 1 > stock) { showToast('No hay más stock de ' + p.nombre, 'warning'); return; }
+                ex.cantidad++;
+            } else {
+                ventaCarrito.push({ origen: 'stock', producto_id: p.id, nombre: p.nombre, precio: parseFloat(p.precio) || 0, cantidad: 1, stock });
+            }
+            renderVentaCarrito();
+        }
+
+        function abrirVentaLibre() {
+            document.getElementById('venta-libre-nombre').value = '';
+            document.getElementById('venta-libre-precio').value = '';
+            document.getElementById('modal-venta-libre').style.display = 'flex';
+            setTimeout(() => document.getElementById('venta-libre-nombre').focus(), 120);
+        }
+        function agregarVentaLibre() {
+            const nombre = (document.getElementById('venta-libre-nombre').value || '').trim();
+            const precio = parseFloat(document.getElementById('venta-libre-precio').value);
+            if (!nombre || isNaN(precio)) { showToast('Completa nombre y precio', 'warning'); return; }
+            ventaCarrito.push({ origen: 'libre', producto_id: null, nombre, precio, cantidad: 1 });
+            document.getElementById('modal-venta-libre').style.display = 'none';
+            renderVentaCarrito();
+        }
+
+        function cambiarCantidadVenta(idx, delta) {
+            const it = ventaCarrito[idx]; if (!it) return;
+            it.cantidad += delta;
+            if (it.origen === 'stock' && it.cantidad > (it.stock || 0)) { it.cantidad = it.stock; showToast('Stock máximo', 'warning'); }
+            if (it.cantidad <= 0) ventaCarrito.splice(idx, 1);
+            renderVentaCarrito();
+        }
+
+        function totalVenta() { return ventaCarrito.reduce((s, c) => s + c.precio * c.cantidad, 0); }
+
+        function renderVentaCarrito() {
+            const cont = document.getElementById('venta-carrito');
+            if (!cont) return;
+            if (!ventaCarrito.length) {
+                cont.innerHTML = '<p style="color:var(--text-muted); font-size:13px; text-align:center; padding:14px;">Agrega productos para vender.</p>';
+            } else {
+                cont.innerHTML = ventaCarrito.map((c, i) => `<div style="display:flex; align-items:center; gap:6px; padding:8px 0; border-bottom:1px dashed var(--bh-border);">
+                    <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_escV(c.nombre)}</div><div style="font-size:11px; color:var(--text-muted);">S/ ${c.precio.toFixed(2)} c/u</div></div>
+                    <button onclick="cambiarCantidadVenta(${i},-1)" class="bh-btn-white" style="padding:2px 9px;">−</button>
+                    <span style="min-width:20px; text-align:center;">${c.cantidad}</span>
+                    <button onclick="cambiarCantidadVenta(${i},1)" class="bh-btn-white" style="padding:2px 9px;">+</button>
+                    <strong style="min-width:66px; text-align:right; font-size:13px;">S/ ${(c.precio * c.cantidad).toFixed(2)}</strong>
+                </div>`).join('');
+            }
+            const t = document.getElementById('venta-total');
+            if (t) t.innerText = 'S/ ' + totalVenta().toFixed(2);
+        }
+
+        function vaciarVenta() {
+            if (ventaCarrito.length && confirm('¿Vaciar la venta?')) { ventaCarrito = []; renderVentaCarrito(); }
+        }
+
+        function cobrarVenta() {
+            if (!ventaCarrito.length) { showToast('La venta está vacía', 'warning'); return; }
+            const items = ventaCarrito.map(c => ({ origen: c.origen, producto_id: c.producto_id, nombre: c.nombre, precio: c.precio, cantidad: c.cantidad }));
+            ipcRenderer.send('registrar-venta-desktop', { items, medio_pago: document.getElementById('venta-pago').value });
+        }
+
+        ipcRenderer.on('venta-desktop-resultado', (e, res) => {
+            if (res && res.success) {
+                showToast('✅ Venta registrada: S/ ' + (parseFloat(res.total) || 0).toFixed(2), 'success');
+                ventaCarrito = [];
+                renderVentaCarrito();
+                ipcRenderer.send('obtener-productos'); // refresca el stock descontado
+            } else {
+                showToast('No se pudo cobrar: ' + ((res && res.msg) || 'error'), 'danger');
+            }
         });
 
         function toggleMenuAgregarInventario() {
@@ -6250,10 +6412,13 @@
                 if (tituloEl) tituloEl.innerHTML = '🧾 Tu caja de hoy';
                 if (btnGuardar) btnGuardar.style.display = 'none';   // el técnico no guarda el cierre del negocio
                 let h = `<div style="text-align:center; margin-bottom:12px;">
-                    <div style="font-size:34px; font-weight:800; color:var(--success);">${f(res.ingresosTaller)}</div>
+                    <div style="font-size:34px; font-weight:800; color:var(--success);">${f(res.neto)}</div>
                     <div style="font-size:12px; color:#aaa;">Lo que cobraste hoy · ${esc(res.fecha)}</div></div>`;
-                h += `<div style="display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;"><span style="color:#ccc;">Adelantos de hoy</span><strong style="color:var(--success);">${f(res.adelantos)}</strong></div>`;
-                h += `<div style="display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;"><span style="color:#ccc;">Saldos de equipos entregados hoy</span><strong style="color:var(--success);">${f(res.saldosCobrados)}</strong></div>`;
+                h += `<div style="display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;"><span style="color:#ccc;">Reparaciones — adelantos de hoy</span><strong style="color:var(--success);">${f(res.adelantos)}</strong></div>`;
+                h += `<div style="display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;"><span style="color:#ccc;">Reparaciones — saldos entregados hoy</span><strong style="color:var(--success);">${f(res.saldosCobrados)}</strong></div>`;
+                if ((res.ventasPropias || 0) > 0 || res.ventasPropiasCount) {
+                    h += `<div style="display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;"><span style="color:#ccc;">Ventas de productos ${res.ventasPropiasCount ? `<span style='color:#666; font-size:11px;'>(${res.ventasPropiasCount})</span>` : ''}</span><strong style="color:var(--success);">${f(res.ventasPropias)}</strong></div>`;
+                }
                 const det = res.detalleTecnico || [];
                 h += `<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:.05em; margin:14px 0 4px;">Detalle por equipo</div>`;
                 h += det.length
@@ -6302,10 +6467,11 @@
             if (r.soloTecnico) {
                 const det = (r.detalleTecnico || []).map(d => `  · ${d.cliente || '—'}${d.modelo ? ' (' + d.modelo + ')' : ''}: ${f(d.cobrado)}`).join('\n');
                 const txtT = `MI CAJA — ${r.fecha}\n` +
-                    `  Adelantos de hoy: ${f(r.adelantos)}\n` +
-                    `  Saldos entregados hoy: ${f(r.saldosCobrados)}\n` +
-                    `TOTAL COBRADO: ${f(r.ingresosTaller)}\n` +
-                    (det ? `\nDetalle:\n${det}` : '');
+                    `  Reparaciones (adelantos): ${f(r.adelantos)}\n` +
+                    `  Reparaciones (saldos entregados): ${f(r.saldosCobrados)}\n` +
+                    ((r.ventasPropias || 0) > 0 ? `  Ventas de productos: ${f(r.ventasPropias)}\n` : '') +
+                    `TOTAL COBRADO: ${f(r.neto)}\n` +
+                    (det ? `\nDetalle reparaciones:\n${det}` : '');
                 try { navigator.clipboard.writeText(txtT); showToast('Resumen copiado 📋', 'success'); }
                 catch (e) { showToast('No se pudo copiar', 'danger'); }
                 return;
