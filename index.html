@@ -3006,6 +3006,23 @@
                                                 fondo blanco/transparente. Se imprime en blanco y negro.</p>
                                         </div>
                                         <div class="input-group" style="margin-top:14px;">
+                                            <label>Qué datos mostrar en el ticket</label>
+                                            <div style="display:flex; flex-wrap:wrap; gap:14px 18px; margin-top:4px;">
+                                                <label style="display:flex; align-items:center; gap:6px; font-weight:normal; cursor:pointer;">
+                                                    <input type="checkbox" id="tk-opt-logo" checked
+                                                        onchange="renderTicketPreview()"> Logo</label>
+                                                <label style="display:flex; align-items:center; gap:6px; font-weight:normal; cursor:pointer;">
+                                                    <input type="checkbox" id="tk-opt-ruc" checked
+                                                        onchange="renderTicketPreview()"> RUC</label>
+                                                <label style="display:flex; align-items:center; gap:6px; font-weight:normal; cursor:pointer;">
+                                                    <input type="checkbox" id="tk-opt-direccion" checked
+                                                        onchange="renderTicketPreview()"> Dirección</label>
+                                                <label style="display:flex; align-items:center; gap:6px; font-weight:normal; cursor:pointer;">
+                                                    <input type="checkbox" id="tk-opt-telefono" checked
+                                                        onchange="renderTicketPreview()"> Teléfono</label>
+                                            </div>
+                                        </div>
+                                        <div class="input-group" style="margin-top:14px;">
                                             <label>Mensaje de agradecimiento (pie)</label>
                                             <input type="text" id="conf-ticket-mensaje" class="bh-input"
                                                 maxlength="80" placeholder="¡Gracias por su preferencia!"
@@ -5211,6 +5228,13 @@
                 const el = document.getElementById(id);
                 if (el) el.value = valor || '';
             });
+            // Restaurar las casillas "Qué datos mostrar" (NULL/ausente = marcado).
+            const o = data.ticket_opciones || {};
+            const setChk = (id, k) => { const el = document.getElementById(id); if (el) el.checked = (o[k] !== false); };
+            setChk('tk-opt-logo', 'logo');
+            setChk('tk-opt-ruc', 'ruc');
+            setChk('tk-opt-direccion', 'direccion');
+            setChk('tk-opt-telefono', 'telefono');
             // Refrescar el logo del formulario y la vista previa del ticket.
             if (typeof sincronizarLogoDesdeUrl === 'function') sincronizarLogoDesdeUrl();
             if (typeof renderTicketPreview === 'function') renderTicketPreview();
@@ -7284,14 +7308,18 @@
             const nl2br = s => esc(s).replace(/\n/g, '<br>');
             const HR = '<hr style="border:none;border-top:1px dashed #000;margin:5px 0">';
 
-            const logo = emp.logo_url
+            // Opciones de visibilidad: NULL/ausente = mostrar (true por defecto).
+            const o = emp.ticket_opciones || {};
+            const ver = k => o[k] !== false;
+
+            const logo = (emp.logo_url && ver('logo'))
                 ? `<div style="text-align:center;margin-bottom:4px"><img src="${esc(emp.logo_url)}" style="max-width:45mm;max-height:22mm;object-fit:contain"></div>`
                 : '';
             const nombreNeg = emp.razon_social || emp.nombre || c.appName || '';
             const lineasNeg = [];
-            if (emp.ruc) lineasNeg.push('RUC: ' + esc(emp.ruc));
-            if (emp.direccion) lineasNeg.push(esc(emp.direccion));
-            if (emp.telefono) lineasNeg.push('Tel: ' + esc(emp.telefono));
+            if (emp.ruc && ver('ruc')) lineasNeg.push('RUC: ' + esc(emp.ruc));
+            if (emp.direccion && ver('direccion')) lineasNeg.push(esc(emp.direccion));
+            if (emp.telefono && ver('telefono')) lineasNeg.push('Tel: ' + esc(emp.telefono));
             const headerNeg = lineasNeg.length
                 ? `<div style="text-align:center;font-size:11px">${lineasNeg.join('<br>')}</div>` : '';
 
@@ -7377,6 +7405,17 @@
             renderTicketPreview();
         }
 
+        // Lee el estado de las casillas "Qué datos mostrar" del formulario.
+        function _leerOpcionesTicket() {
+            const chk = (id, def) => { const el = document.getElementById(id); return el ? el.checked : def; };
+            return {
+                logo: chk('tk-opt-logo', true),
+                ruc: chk('tk-opt-ruc', true),
+                direccion: chk('tk-opt-direccion', true),
+                telefono: chk('tk-opt-telefono', true)
+            };
+        }
+
         function renderTicketPreview() {
             const cont = document.getElementById('ticket-preview');
             if (!cont) return;
@@ -7393,7 +7432,8 @@
                 telefono: val('conf-empresa-tel') || de.telefono || '',
                 logo_url: val('conf-ticket-logo').trim(),
                 ticket_mensaje: val('conf-ticket-mensaje'),
-                ticket_extra: val('conf-ticket-extra')
+                ticket_extra: val('conf-ticket-extra'),
+                ticket_opciones: _leerOpcionesTicket()
             };
             const ejemplo = {
                 currency: sym, tipo: 'Boleta', tipoLabel: 'BOLETA ELECTRÓNICA',
@@ -7415,11 +7455,13 @@
                 id: empresaId,
                 logo_url: (document.getElementById('conf-ticket-logo').value || '').trim(),
                 ticket_mensaje: (document.getElementById('conf-ticket-mensaje').value || '').trim(),
-                ticket_extra: (document.getElementById('conf-ticket-extra').value || '').trim()
+                ticket_extra: (document.getElementById('conf-ticket-extra').value || '').trim(),
+                ticket_opciones: _leerOpcionesTicket()
             };
             // Actualizamos el cache para que el próximo ticket ya salga personalizado sin recargar.
             window.datosEmpresa = Object.assign({}, window.datosEmpresa, {
-                logo_url: payload.logo_url, ticket_mensaje: payload.ticket_mensaje, ticket_extra: payload.ticket_extra
+                logo_url: payload.logo_url, ticket_mensaje: payload.ticket_mensaje,
+                ticket_extra: payload.ticket_extra, ticket_opciones: payload.ticket_opciones
             });
             ipcRenderer.send('guardar-datos-empresa', payload);
         }
