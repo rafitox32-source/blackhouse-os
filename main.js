@@ -1940,6 +1940,43 @@ ipcMain.on('obtener-cierre-dia', async (event, params) => {
         const hasta = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1);
         const fechaTxt = `${desde.getFullYear()}-${String(desde.getMonth() + 1).padStart(2, '0')}-${String(desde.getDate()).padStart(2, '0')}`;
 
+        // CAJA DEL TÉCNICO: cierra viendo SOLO lo que él generó hoy (adelantos de SUS órdenes
+        // creadas hoy + saldos de SUS órdenes entregadas hoy). No ve POS, gastos ni compras; eso
+        // es del negocio. La vendedora, en cambio, cierra viendo su POS + lo del técnico (PWA).
+        if (rolActual === 'tecnico') {
+            const { data: creadas } = await supabase.from('ordenes')
+                .select('id, cliente, modelo, adelanto')
+                .eq('empresa_id', empresaActual).eq('tecnico_id', usuarioActual)
+                .gte('created_at', desde.toISOString()).lt('created_at', hasta.toISOString());
+            let adelantos = 0; const mapa = {};
+            (creadas || []).forEach(o => {
+                const a = cf(o.adelanto); adelantos += a;
+                mapa[o.id] = { cliente: o.cliente, modelo: o.modelo, cobrado: a };
+            });
+
+            let saldosCobrados = 0;
+            try {
+                const { data: entregadas, error: errE } = await supabase.from('ordenes')
+                    .select('id, cliente, modelo, costo, adelanto')
+                    .eq('empresa_id', empresaActual).eq('tecnico_id', usuarioActual)
+                    .gte('fecha_entregado', desde.toISOString()).lt('fecha_entregado', hasta.toISOString());
+                if (!errE) (entregadas || []).forEach(o => {
+                    const saldo = Math.max(cf(o.costo) - cf(o.adelanto), 0);
+                    saldosCobrados += saldo;
+                    if (mapa[o.id]) mapa[o.id].cobrado += saldo;
+                    else mapa[o.id] = { cliente: o.cliente, modelo: o.modelo, cobrado: saldo };
+                });
+            } catch (e) { /* sin migración 009 */ }
+
+            const ingresosTaller = adelantos + saldosCobrados;
+            const detalleTecnico = Object.values(mapa).filter(x => x.cobrado > 0).sort((a, b) => b.cobrado - a.cobrado);
+            return event.reply('cierre-dia-datos', {
+                success: true, fecha: fechaTxt, soloTecnico: true,
+                adelantos, saldosCobrados, ingresosTaller, neto: ingresosTaller,
+                detalleTecnico, registrado: false
+            });
+        }
+
         // 1) Taller — adelantos cobrados hoy (órdenes creadas hoy con adelanto).
         let adelantos = 0;
         const { data: creadas } = await supabase.from('ordenes')
