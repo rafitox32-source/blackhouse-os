@@ -1971,21 +1971,35 @@ ipcMain.on('obtener-cierre-dia', async (event, params) => {
             const ingresosTaller = adelantos + saldosCobrados;
             const detalleTecnico = Object.values(mapa).filter(x => x.cobrado > 0).sort((a, b) => b.cobrado - a.cobrado);
 
-            // Ventas de productos que hizo ÉL hoy (venta rápida). Se identifican por vendedor_usuario.
-            let ventasPropias = 0, ventasPropiasCount = 0;
+            // PRECIO DE VENTA: productos que vendió ÉL hoy (venta rápida), aparte del servicio.
+            // Se separan porque el técnico trabaja por porcentaje con el dueño.
+            let ventasPropias = 0, ventasPropiasCount = 0, ventasDetalle = [];
             try {
                 const { data: vp, error: errVP } = await supabase.from('ventas_pos')
-                    .select('total')
+                    .select('id, total')
                     .eq('empresa_id', Number(empresaActual))
                     .eq('vendedor_usuario', usuarioActual)
                     .gte('creado_en', desde.toISOString()).lt('creado_en', hasta.toISOString());
-                if (!errVP && vp) { ventasPropiasCount = vp.length; ventasPropias = vp.reduce((s, v) => s + cf(v.total), 0); }
+                if (!errVP && vp && vp.length) {
+                    ventasPropiasCount = vp.length;
+                    ventasPropias = vp.reduce((s, v) => s + cf(v.total), 0);
+                    const ids = vp.map(v => v.id);
+                    const { data: its } = await supabase.from('ventas_pos_items')
+                        .select('nombre, cantidad, subtotal').in('venta_id', ids);
+                    const mapaV = {};
+                    (its || []).forEach(i => {
+                        const k = i.nombre || '-';
+                        if (!mapaV[k]) mapaV[k] = { nombre: k, cantidad: 0, subtotal: 0 };
+                        mapaV[k].cantidad += cf(i.cantidad); mapaV[k].subtotal += cf(i.subtotal);
+                    });
+                    ventasDetalle = Object.values(mapaV).sort((a, b) => b.subtotal - a.subtotal);
+                }
             } catch (e) { /* POS sin migrar */ }
 
             return event.reply('cierre-dia-datos', {
                 success: true, fecha: fechaTxt, soloTecnico: true,
                 adelantos, saldosCobrados, ingresosTaller,
-                ventasPropias, ventasPropiasCount,
+                ventasPropias, ventasPropiasCount, ventasDetalle,
                 neto: ingresosTaller + ventasPropias,
                 detalleTecnico, registrado: false
             });
