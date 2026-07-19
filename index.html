@@ -6242,6 +6242,27 @@
             cierreDiaCache = res;
             const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
             const f = n => `S/ ${(parseFloat(n) || 0).toFixed(2)}`;
+            const tituloEl = document.querySelector('#modal-cierre-dia h2');
+            const btnGuardar = document.getElementById('btn-guardar-cierre-dia');
+
+            // === CAJA DEL TÉCNICO: solo lo que él generó hoy ===
+            if (res.soloTecnico) {
+                if (tituloEl) tituloEl.innerHTML = '🧾 Tu caja de hoy';
+                if (btnGuardar) btnGuardar.style.display = 'none';   // el técnico no guarda el cierre del negocio
+                let h = `<div style="text-align:center; margin-bottom:12px;">
+                    <div style="font-size:34px; font-weight:800; color:var(--success);">${f(res.ingresosTaller)}</div>
+                    <div style="font-size:12px; color:#aaa;">Lo que cobraste hoy · ${esc(res.fecha)}</div></div>`;
+                h += `<div style="display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;"><span style="color:#ccc;">Adelantos de hoy</span><strong style="color:var(--success);">${f(res.adelantos)}</strong></div>`;
+                h += `<div style="display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;"><span style="color:#ccc;">Saldos de equipos entregados hoy</span><strong style="color:var(--success);">${f(res.saldosCobrados)}</strong></div>`;
+                const det = res.detalleTecnico || [];
+                h += `<div style="font-size:11px; color:#888; text-transform:uppercase; letter-spacing:.05em; margin:14px 0 4px;">Detalle por equipo</div>`;
+                h += det.length
+                    ? det.map(d => `<div style="display:flex; justify-content:space-between; padding:6px 2px; border-bottom:1px dashed rgba(255,255,255,0.06); font-size:13px;"><span style="color:#ddd;">${esc(d.cliente || '—')}${d.modelo ? ' · ' + esc(d.modelo) : ''}</span><strong>${f(d.cobrado)}</strong></div>`).join('')
+                    : `<p style="color:#888; font-size:13px; text-align:center; padding:10px;">No cobraste nada hoy todavía.</p>`;
+                cont.innerHTML = h;
+                return;
+            }
+            if (tituloEl) tituloEl.innerHTML = '🧾 Cierre del Día';
             const fila = (lbl, val, color, extra) =>
                 `<div style="display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;">
                     <span style="color:#ccc;">${lbl}${extra ? ` <span style='color:#666; font-size:11px;'>${extra}</span>` : ''}</span>
@@ -6278,6 +6299,17 @@
             if (!cierreDiaCache) return;
             const r = cierreDiaCache;
             const f = n => `S/ ${(parseFloat(n) || 0).toFixed(2)}`;
+            if (r.soloTecnico) {
+                const det = (r.detalleTecnico || []).map(d => `  · ${d.cliente || '—'}${d.modelo ? ' (' + d.modelo + ')' : ''}: ${f(d.cobrado)}`).join('\n');
+                const txtT = `MI CAJA — ${r.fecha}\n` +
+                    `  Adelantos de hoy: ${f(r.adelantos)}\n` +
+                    `  Saldos entregados hoy: ${f(r.saldosCobrados)}\n` +
+                    `TOTAL COBRADO: ${f(r.ingresosTaller)}\n` +
+                    (det ? `\nDetalle:\n${det}` : '');
+                try { navigator.clipboard.writeText(txtT); showToast('Resumen copiado 📋', 'success'); }
+                catch (e) { showToast('No se pudo copiar', 'danger'); }
+                return;
+            }
             const txt = `CIERRE DEL DÍA — ${r.fecha}\n` +
                 `ENTRÓ:\n` +
                 `  Taller (adelantos): ${f(r.adelantos)}\n` +
