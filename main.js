@@ -2900,12 +2900,15 @@ ipcMain.on('registrar-venta-desktop', async (event, params) => {
         if (!items.length) throw new Error('La venta está vacía');
 
         // 1) Descontar stock de los items de inventario (valida stock antes).
+        //    Los productos con stock = NULL son "sin control de cantidad": se venden sin descontar
+        //    (útil para artículos que aún no tienen stock cargado; el dueño lo carga luego).
         for (const it of items) {
             if (it.origen === 'stock' && it.producto_id) {
                 const cant = cf(it.cantidad);
                 const { data: prod, error } = await supabase.from('productos')
                     .select('stock, sku, costo').eq('id', it.producto_id).eq('empresa_id', empresaActual).single();
                 if (error || !prod) throw new Error('Producto no encontrado: ' + (it.nombre || it.producto_id));
+                if (prod.stock === null || prod.stock === undefined) continue; // sin control de stock
                 if (cf(prod.stock) < cant) throw new Error('Stock insuficiente de ' + (it.nombre || ''));
                 await supabase.from('productos').update({ stock: cf(prod.stock) - cant }).eq('id', it.producto_id);
                 await supabase.from('movimientos_stock').insert([{
@@ -2938,6 +2941,24 @@ ipcMain.on('registrar-venta-desktop', async (event, params) => {
         }));
         const { error: errI } = await supabase.from('ventas_pos_items').insert(rows);
         if (errI) console.error('Venta guardada pero fallaron los items:', errI.message);
+
+        // 4) MEMORIA: los productos vendidos "sin stock" quedan guardados (nombre + precio,
+        //    sin cantidad) para venderlos la próxima vez. El dueño podrá cargarles stock luego.
+        for (const it of items) {
+            const nombre = String(it.nombre || '').trim();
+            if (it.origen === 'libre' && nombre) {
+                try {
+                    const { data: yaExiste } = await supabase.from('productos')
+                        .select('id').eq('empresa_id', empresaActual).ilike('nombre', nombre).limit(1);
+                    if (!yaExiste || !yaExiste.length) {
+                        await supabase.from('productos').insert([{
+                            empresa_id: empresaActual, nombre, precio: cf(it.precio),
+                            stock: null, categoria: 'Venta rápida'
+                        }]);
+                    }
+                } catch (e) { console.error('No se pudo recordar el producto libre:', e.message); }
+            }
+        }
 
         event.reply('venta-desktop-resultado', { success: true, total, ventaId: venta.id });
     } catch (err) {

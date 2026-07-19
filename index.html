@@ -6079,20 +6079,31 @@
         let ventaCarrito = [];
         function _escV(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
+        // Un producto "sin control de cantidad" es el que tiene stock nulo/vacío: se vende siempre,
+        // sin descontar (el dueño le cargará stock luego). La CANTIDAD solo la ve el dueño.
+        function _ventaSinControl(p) { return p.stock === null || p.stock === undefined || p.stock === ''; }
+
         function renderVentaProductos() {
             const cont = document.getElementById('venta-productos');
             if (!cont) return;
+            const esDueno = (localStorage.getItem('userRol') || '') === 'dueno';
             const q = (document.getElementById('venta-buscar')?.value || '').trim().toLowerCase();
             const lista = (todosLosProductos || []).filter(p => !q || (p.nombre || '').toLowerCase().includes(q));
             if (!lista.length) { cont.innerHTML = '<p style="grid-column:1/-1; color:var(--text-muted); text-align:center; padding:20px;">No hay productos que coincidan.</p>'; return; }
             cont.innerHTML = lista.map(p => {
+                const sinControl = _ventaSinControl(p);
                 const stock = parseFloat(p.stock) || 0;
-                const agotado = stock <= 0;
+                const agotado = !sinControl && stock <= 0;      // solo los controlados se agotan
+                // Etiqueta de la derecha: la cantidad solo la ve el dueño; los demás solo ven
+                // "sin stock" cuando aplica (para no vender algo agotado), nunca el número.
+                let etiqueta = '';
+                if (esDueno) etiqueta = sinControl ? 'sin control' : (agotado ? 'sin stock' : 'stock: ' + stock);
+                else etiqueta = agotado ? 'sin stock' : '';
                 return `<div ${agotado ? '' : `onclick="agregarVentaProducto('${p.id}')"`} style="border:1px solid var(--bh-border); border-radius:12px; padding:12px; cursor:${agotado ? 'not-allowed' : 'pointer'}; opacity:${agotado ? '0.5' : '1'}; background:var(--bh-input-bg);">
                     <div style="font-weight:600; font-size:13px; margin-bottom:6px; min-height:32px;">${_escV(p.nombre)}</div>
                     <div style="display:flex; justify-content:space-between; font-size:12px;">
                         <span style="color:var(--bh-purple); font-weight:700;">S/ ${(parseFloat(p.precio) || 0).toFixed(2)}</span>
-                        <span style="color:${agotado ? 'var(--danger)' : 'var(--text-muted)'};">${agotado ? 'sin stock' : 'stock: ' + stock}</span>
+                        <span style="color:${agotado ? 'var(--danger)' : 'var(--text-muted)'};">${etiqueta}</span>
                     </div></div>`;
             }).join('');
         }
@@ -6100,13 +6111,14 @@
         function agregarVentaProducto(id) {
             const p = (todosLosProductos || []).find(x => String(x.id) === String(id));
             if (!p) return;
+            const sinControl = _ventaSinControl(p);
             const stock = parseFloat(p.stock) || 0;
             const ex = ventaCarrito.find(c => c.origen === 'stock' && String(c.producto_id) === String(id));
             if (ex) {
-                if (ex.cantidad + 1 > stock) { showToast('No hay más stock de ' + p.nombre, 'warning'); return; }
+                if (!ex.sinControl && ex.cantidad + 1 > stock) { showToast('No hay más stock de ' + p.nombre, 'warning'); return; }
                 ex.cantidad++;
             } else {
-                ventaCarrito.push({ origen: 'stock', producto_id: p.id, nombre: p.nombre, precio: parseFloat(p.precio) || 0, cantidad: 1, stock });
+                ventaCarrito.push({ origen: 'stock', producto_id: p.id, nombre: p.nombre, precio: parseFloat(p.precio) || 0, cantidad: 1, stock, sinControl });
             }
             renderVentaCarrito();
         }
@@ -6129,7 +6141,8 @@
         function cambiarCantidadVenta(idx, delta) {
             const it = ventaCarrito[idx]; if (!it) return;
             it.cantidad += delta;
-            if (it.origen === 'stock' && it.cantidad > (it.stock || 0)) { it.cantidad = it.stock; showToast('Stock máximo', 'warning'); }
+            // El tope de stock solo aplica a productos CON control de cantidad.
+            if (it.origen === 'stock' && !it.sinControl && it.cantidad > (it.stock || 0)) { it.cantidad = it.stock; showToast('Stock máximo', 'warning'); }
             if (it.cantidad <= 0) ventaCarrito.splice(idx, 1);
             renderVentaCarrito();
         }
