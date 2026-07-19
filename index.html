@@ -6462,20 +6462,29 @@
                 const detEq = res.detalleTecnico || [];
                 const detVe = res.ventasDetalle || [];
 
+                const porc = res.porcentaje || 50;
                 let h = `<div style="text-align:center; margin-bottom:6px;">
-                    <div style="font-size:34px; font-weight:800; color:var(--success);">${f(res.neto)}</div>
-                    <div style="font-size:12px; color:#aaa;">Total que cobraste hoy · ${esc(res.fecha)}</div></div>`;
+                    <div style="font-size:30px; font-weight:800; color:var(--success);">${f(res.neto)}</div>
+                    <div style="font-size:12px; color:#aaa;">Total en tu caja (a entregar) · ${esc(res.fecha)}</div></div>`;
 
-                // ===== SERVICIO TÉCNICO (reparaciones: repuesto + mano de obra) =====
+                // ===== TU COMISIÓN: 50% de la mano de obra (destacado) =====
+                h += `<div style="background:linear-gradient(160deg, rgba(14,165,233,0.16), rgba(16,185,129,0.10)); border:1px solid rgba(14,165,233,0.35); border-radius:14px; padding:14px 16px; margin:12px 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:13px; color:#cbd5e1;">💵 Tu comisión (${porc}% de la mano de obra)</span>
+                        <strong style="font-size:26px; color:#0ea5e9;">${f(res.comision)}</strong></div>
+                    <div style="font-size:11px; color:#94a3b8; margin-top:4px;">El repuesto no cuenta (lo pone el dueño). Los productos vendidos tampoco.</div>
+                </div>`;
+
+                // ===== SERVICIO TÉCNICO (mano de obra + repuesto) =====
                 h += subhead({ l: '🔧 Servicio técnico', v: res.ingresosTaller });
-                h += filaMini('Adelantos de hoy', res.adelantos);
-                h += filaMini('Saldos entregados hoy', res.saldosCobrados);
+                h += filaMini('Mano de obra (tu trabajo)', res.manoObra || 0);
+                h += filaMini('Repuesto (lo pone el dueño)', res.repuesto || 0);
                 if (detEq.length) {
-                    h += `<div style="font-size:11px; color:#888; margin:8px 0 2px;">Por equipo:</div>`;
-                    h += detEq.map(d => `<div style="display:flex; justify-content:space-between; padding:5px 2px; border-bottom:1px dashed rgba(255,255,255,0.06); font-size:12px;"><span style="color:#ddd;">${esc(d.cliente || '—')}${d.modelo ? ' · ' + esc(d.modelo) : ''}</span><strong>${f(d.cobrado)}</strong></div>`).join('');
+                    h += `<div style="font-size:11px; color:#888; margin:8px 0 2px;">Por equipo (cobrado · mano de obra):</div>`;
+                    h += detEq.map(d => `<div style="display:flex; justify-content:space-between; padding:5px 2px; border-bottom:1px dashed rgba(255,255,255,0.06); font-size:12px;"><span style="color:#ddd;">${esc(d.cliente || '—')}${d.modelo ? ' · ' + esc(d.modelo) : ''}</span><strong>${f(d.cobrado)} <span style="color:#0ea5e9; font-weight:600;">· ${f(d.manoObra)}</span></strong></div>`).join('');
                 }
 
-                // ===== PRECIO DE VENTA (productos vendidos aparte) =====
+                // ===== PRECIO DE VENTA (productos vendidos aparte, del negocio) =====
                 h += subhead({ l: '🛒 Precio de venta', v: res.ventasPropias || 0 });
                 if (detVe.length) {
                     h += detVe.map(d => `<div style="display:flex; justify-content:space-between; padding:5px 2px; border-bottom:1px dashed rgba(255,255,255,0.06); font-size:12px;"><span style="color:#ddd;">${esc((d.cantidad || 1) + 'x ' + (d.nombre || '—'))}</span><strong>${f(d.subtotal)}</strong></div>`).join('');
@@ -6531,11 +6540,12 @@
                 const detVe = (r.ventasDetalle || []).map(d => `  · ${(d.cantidad || 1)}x ${d.nombre || '—'}: ${f(d.subtotal)}`).join('\n');
                 const txtT = `MI CAJA — ${r.fecha}\n\n` +
                     `SERVICIO TÉCNICO: ${f(r.ingresosTaller)}\n` +
-                    `  Adelantos: ${f(r.adelantos)}  |  Saldos entregados: ${f(r.saldosCobrados)}\n` +
+                    `  Mano de obra: ${f(r.manoObra || 0)}  |  Repuesto (del dueño): ${f(r.repuesto || 0)}\n` +
                     (detEq ? detEq + '\n' : '') +
                     `\nPRECIO DE VENTA: ${f(r.ventasPropias || 0)}\n` +
                     (detVe ? detVe + '\n' : '') +
-                    `\nTOTAL COBRADO: ${f(r.neto)}`;
+                    `\nTOTAL EN CAJA (a entregar): ${f(r.neto)}\n` +
+                    `>> MI COMISIÓN (${r.porcentaje || 50}% mano de obra): ${f(r.comision || 0)}`;
                 try { navigator.clipboard.writeText(txtT); showToast('Resumen copiado 📋', 'success'); }
                 catch (e) { showToast('No se pudo copiar', 'danger'); }
                 return;

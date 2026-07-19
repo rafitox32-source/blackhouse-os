@@ -1944,32 +1944,46 @@ ipcMain.on('obtener-cierre-dia', async (event, params) => {
         // creadas hoy + saldos de SUS órdenes entregadas hoy). No ve POS, gastos ni compras; eso
         // es del negocio. La vendedora, en cambio, cierra viendo su POS + lo del técnico (PWA).
         if (rolActual === 'tecnico') {
+            const PORC_TECNICO = 0.5; // el técnico se queda el 50% de la MANO DE OBRA (el repuesto es del dueño)
             const { data: creadas } = await supabase.from('ordenes')
-                .select('id, cliente, modelo, adelanto')
+                .select('id, cliente, modelo, adelanto, precio_servicio, precio_repuesto, costo')
                 .eq('empresa_id', empresaActual).eq('tecnico_id', usuarioActual)
                 .gte('created_at', desde.toISOString()).lt('created_at', hasta.toISOString());
             let adelantos = 0; const mapa = {};
-            (creadas || []).forEach(o => {
-                const a = cf(o.adelanto); adelantos += a;
-                mapa[o.id] = { cliente: o.cliente, modelo: o.modelo, cobrado: a };
-            });
+            const guardar = (o, monto) => {
+                if (mapa[o.id]) { mapa[o.id].cobrado += monto; }
+                else mapa[o.id] = { cliente: o.cliente, modelo: o.modelo, cobrado: monto, ps: cf(o.precio_servicio), pr: cf(o.precio_repuesto), costo: cf(o.costo) };
+            };
+            (creadas || []).forEach(o => { const a = cf(o.adelanto); adelantos += a; guardar(o, a); });
 
             let saldosCobrados = 0;
             try {
                 const { data: entregadas, error: errE } = await supabase.from('ordenes')
-                    .select('id, cliente, modelo, costo, adelanto')
+                    .select('id, cliente, modelo, costo, adelanto, precio_servicio, precio_repuesto')
                     .eq('empresa_id', empresaActual).eq('tecnico_id', usuarioActual)
                     .gte('fecha_entregado', desde.toISOString()).lt('fecha_entregado', hasta.toISOString());
                 if (!errE) (entregadas || []).forEach(o => {
                     const saldo = Math.max(cf(o.costo) - cf(o.adelanto), 0);
                     saldosCobrados += saldo;
-                    if (mapa[o.id]) mapa[o.id].cobrado += saldo;
-                    else mapa[o.id] = { cliente: o.cliente, modelo: o.modelo, cobrado: saldo };
+                    guardar(o, saldo);
                 });
             } catch (e) { /* sin migración 009 */ }
 
             const ingresosTaller = adelantos + saldosCobrados;
-            const detalleTecnico = Object.values(mapa).filter(x => x.cobrado > 0).sort((a, b) => b.cobrado - a.cobrado);
+
+            // Repartir lo cobrado de cada orden entre MANO DE OBRA (precio_servicio) y REPUESTO
+            // (precio_repuesto), proporcional a lo que se cobró. La comisión es 50% de la mano de obra.
+            let manoObra = 0, repuesto = 0;
+            Object.values(mapa).forEach(o => {
+                const base = (o.ps + o.pr) || o.costo || o.cobrado;
+                const fracMO = base > 0 ? o.ps / base : 1;   // sin desglose => se asume mano de obra
+                o.manoObra = o.cobrado * fracMO;
+                manoObra += o.manoObra;
+                repuesto += (o.cobrado - o.manoObra);
+            });
+            const comision = manoObra * PORC_TECNICO;
+            const detalleTecnico = Object.values(mapa).filter(x => x.cobrado > 0).sort((a, b) => b.cobrado - a.cobrado)
+                .map(x => ({ cliente: x.cliente, modelo: x.modelo, cobrado: x.cobrado, manoObra: x.manoObra }));
 
             // PRECIO DE VENTA: productos que vendió ÉL hoy (venta rápida), aparte del servicio.
             // Se separan porque el técnico trabaja por porcentaje con el dueño.
@@ -1999,6 +2013,7 @@ ipcMain.on('obtener-cierre-dia', async (event, params) => {
             return event.reply('cierre-dia-datos', {
                 success: true, fecha: fechaTxt, soloTecnico: true,
                 adelantos, saldosCobrados, ingresosTaller,
+                manoObra, repuesto, comision, porcentaje: Math.round(PORC_TECNICO * 100),
                 ventasPropias, ventasPropiasCount, ventasDetalle,
                 neto: ingresosTaller + ventasPropias,
                 detalleTecnico, registrado: false
