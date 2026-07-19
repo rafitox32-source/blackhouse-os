@@ -2213,13 +2213,14 @@ ipcMain.on('obtener-estado-plan', async (event, data) => {
 ipcMain.on('guardar-datos-empresa', async (event, data) => {
     try {
         if (!empresaActual) throw new Error('No hay sesión activa');
-        const datosActualizar = {
-            nombre: data.nombre,
-            razon_social: data.razon_social,
-            ruc: data.ruc,
-            direccion: data.direccion,
-            telefono: data.telefono
-        };
+        // Actualización parcial: solo se tocan los campos que el renderer envía, así la sección
+        // "Datos de la Empresa" y la de "Ticket/Comprobante" pueden guardar por separado sin
+        // pisarse entre ellas.
+        const camposPermitidos = ['nombre', 'razon_social', 'ruc', 'direccion', 'telefono',
+                                  'logo_url', 'ticket_mensaje', 'ticket_extra'];
+        const datosActualizar = {};
+        camposPermitidos.forEach(k => { if (data[k] !== undefined) datosActualizar[k] = data[k]; });
+        if (Object.keys(datosActualizar).length === 0) throw new Error('No hay datos para guardar');
 
         const { error } = await supabase
             .from('empresas')
