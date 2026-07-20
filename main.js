@@ -41,6 +41,24 @@ async function emitirTokenSesion(usuarioId) {
 const fs = require('fs');
 let devicesCache = null;
 
+// === CANDADO DE LANZAMIENTO DE AMBICION ===
+// Ambicion (software/ambicion) ya no tiene login propio: solo abre si BlackHouse OS
+// lo lanza con un token firmado. Así, abrir ambicion.exe directo desde la carpeta
+// (sin sesión iniciada en BlackHouse) queda bloqueado.
+// El secreto debe coincidir EXACTAMENTE con LaunchSecret en App.xaml.cs de Ambicion.
+const AMBICION_LAUNCH_SECRET = 'BlackHouseOS::Ambicion::LaunchGate::v1::9f3Kx7Qp2mZr8sT1';
+
+function escribirTokenLanzamientoAmbicion() {
+    const baseLocal = process.env.LOCALAPPDATA || path.join(require('os').homedir(), 'AppData', 'Local');
+    const dir = path.join(baseLocal, 'ambicion');
+    fs.mkdirSync(dir, { recursive: true });
+    const ts = Date.now().toString();
+    const nonce = crypto.randomBytes(8).toString('hex');
+    const payload = ts + ':' + nonce;
+    const sig = crypto.createHmac('sha256', AMBICION_LAUNCH_SECRET).update(payload).digest('hex');
+    fs.writeFileSync(path.join(dir, 'launch.token'), payload + ':' + sig, 'utf8');
+}
+
 // Los modelos agregados por el usuario se guardan en userData (fuera de la carpeta
 // de instalación) para que sobrevivan a actualizaciones y reinstalaciones del programa.
 function rutaDevicesCacheUsuario() {
@@ -2809,7 +2827,15 @@ async function copiarCarpetaRecursivo(src, dest) {
     }
 }
 
-ipcMain.on('abrir-ambicion', async (event) => {
+ipcMain.on('abrir-ambicion', async (event, data) => {
+    // Candado: solo se permite abrir Ambicion si hay una sesión iniciada en BlackHouse.
+    // Sin sesión (p.ej. alguien intentando lanzarlo aparte) queda bloqueado aquí.
+    const usuario = data && data.usuario ? String(data.usuario).trim() : '';
+    if (!usuario) {
+        console.error("Intento de abrir Ambicion sin sesión iniciada. Bloqueado.");
+        event.reply && event.reply('ambicion-bloqueado', { msg: 'Debes iniciar sesión en BlackHouse para abrir este software.' });
+        return;
+    }
     // Log de diagnóstico EXHAUSTIVO: se escribe en la carpeta de datos del usuario para que el
     // dueño pueda enviárnoslo si algo falla. Ruta: %APPDATA%\<app>\bh_ambicion_diag.log
     const diagPath = path.join(app.getPath('userData'), 'bh_ambicion_diag.log');
@@ -2871,6 +2897,11 @@ ipcMain.on('abrir-ambicion', async (event) => {
         const cwd = usarCopia ? destDir : path.join(app.getPath('userData'), 'ambicion');
         if (!usarCopia) { try { fs.mkdirSync(cwd, { recursive: true }); } catch (e) {} }
         log(`Ejecutando: ${exePath} · cwd=${cwd} · desdeCopia=${usarCopia}`);
+
+        // Candado: emitir el token de lanzamiento firmado justo antes de abrir el exe.
+        // Ambicion lo valida al arrancar; sin él, se cierra con un aviso.
+        try { escribirTokenLanzamientoAmbicion(); log('Token de lanzamiento emitido.'); }
+        catch (e) { log('No se pudo emitir el token de lanzamiento: ' + e.message); }
 
         const { spawn } = require('child_process');
         let salida = '';

@@ -8468,9 +8468,21 @@
         }
 
         function abrirSoftwareAmbicion() {
+            const usuario = localStorage.getItem('usuarioLogin');
+            if (!usuario) {
+                showToast("Debes iniciar sesión para abrir el software.", "error");
+                return;
+            }
             showToast("Abriendo Ambición...", "info");
-            ipcRenderer.send('abrir-ambicion');
+            ipcRenderer.send('abrir-ambicion', {
+                usuario: usuario,
+                sessionToken: localStorage.getItem('sessionToken') || ''
+            });
         }
+
+        ipcRenderer.on('ambicion-bloqueado', (e, res) => {
+            showToast((res && res.msg) || "No autorizado para abrir el software.", "error");
+        });
 
         ipcRenderer.on('ambicion-resultado', (e, res) => {
             if (res && res.success) {
