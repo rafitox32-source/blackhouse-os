@@ -12073,8 +12073,8 @@
         /* Compuerta de donde sale el robot */
         #ayudante-casa {
             position: relative;
-            width: 96px;
-            height: 108px;
+            width: 74px;
+            height: 84px;
             border-radius: 14px 14px 8px 8px;
             background: linear-gradient(180deg, #14161d 0%, #0b0d12 100%);
             border: 2px solid #7c3aed;
@@ -12097,9 +12097,9 @@
         }
 
         #ayudante-robot {
-            width: 62px;
-            height: 70px;
-            transform: translateY(78px);
+            width: 48px;
+            height: 54px;
+            transform: translateY(62px);
             opacity: 0;
             transition: transform .55s cubic-bezier(.2, 1.4, .4, 1), opacity .3s ease;
         }
@@ -12236,11 +12236,11 @@
         /* Globo de diálogo */
         #ayudante-globo {
             position: relative;
-            max-width: 330px;
+            max-width: 262px;
             background: linear-gradient(180deg, #1b1f2a 0%, #12151c 100%);
             border: 1px solid #7c3aed;
-            border-radius: 14px;
-            padding: 14px 16px;
+            border-radius: 12px;
+            padding: 10px 12px;
             box-shadow: 0 12px 30px rgba(0, 0, 0, .6);
             opacity: 0;
             transform: translateY(10px) scale(.96);
@@ -12268,20 +12268,20 @@
 
         #ayudante-titulo {
             font-weight: 900;
-            font-size: 13px;
+            font-size: 11.5px;
             color: #a78bfa;
             margin-bottom: 5px;
             letter-spacing: .3px;
         }
 
         #ayudante-texto {
-            font-size: 13px;
-            line-height: 1.5;
+            font-size: 11.5px;
+            line-height: 1.45;
             color: #e5e7eb;
             /* Con textos largos (las métricas con todos sus consejos) el globo crecía
                hasta salirse de la pantalla: se limita y se desplaza por dentro,
                dejando siempre visibles el título, la caja de preguntas y los botones. */
-            max-height: 48vh;
+            max-height: 40vh;
             overflow-y: auto;
         }
 
@@ -12456,8 +12456,8 @@
         }
 
         #ayudante.posado #ayudante-casa {
-            width: 62px;
-            height: 56px;
+            width: 48px;
+            height: 44px;
             background: none;
             border: 0;
             box-shadow: none;
@@ -12475,7 +12475,7 @@
         }
 
         #ayudante.posado #ayudante-globo {
-            max-width: 300px;
+            max-width: 240px;
         }
 
         /* Si lo que explica está pegado a la izquierda, el globo pasa al otro lado
@@ -12644,6 +12644,43 @@
                 texto: 'Cuadra el día: lo que entró por reparaciones y ventas, los gastos y lo que queda. Incluye la nota con la comisión del técnico.',
                 consejo: 'Ciérrala todos los días. Si la dejas para después, no te acuerdas de los gastos chicos y tus números mienten.'
             },
+            // ---------- CADA MÉTRICA (se tocan las tarjetas de Reportes) ----------
+            {
+                id: 'm-ingresos', titulo: 'Ingresos Totales', vista: null, ancla: '#kpi-ingresos',
+                claves: ['ingresos', 'ingreso', 'entro', 'facturado', 'vendido'],
+                texto: 'Todo el dinero que entró: reparaciones cobradas más ventas de mostrador. Es lo que <b>entra</b>, no lo que ganas.',
+                consejo: 'No te emociones con esta cifra: de aquí todavía salen los repuestos y los gastos.'
+            },
+            {
+                id: 'm-repuestos', titulo: 'Costo de Repuestos (real)', vista: null, ancla: '#kpi-gastos',
+                claves: ['costo repuestos', 'costo de repuestos', 'repuestos', 'piezas', 'lo que me costo'],
+                texto: 'Lo que <b>te costaron a ti</b> las piezas que usaste, no lo que se las cobraste al cliente.',
+                consejo: 'Si esto pasa la mitad de tus ingresos, o compras caro o cobras barato.'
+            },
+            {
+                id: 'm-ganancia', titulo: 'Ganancia Neta (real)', vista: null, ancla: '#kpi-ganancias',
+                claves: ['ganancia', 'ganancia neta', 'utilidad', 'lo que gano', 'me queda', 'neta'],
+                texto: 'Lo que <b>de verdad te queda</b>: ingresos menos el costo de los repuestos menos los gastos operativos. Esta es la cifra que manda.',
+                consejo: 'Si sale en rojo estás trabajando para pagar gastos. Sube precios o recorta costos.'
+            },
+            {
+                id: 'm-ordenes', titulo: 'Órdenes', vista: null, ancla: '#kpi-ordenes',
+                claves: ['ordenes', 'cuantas ordenes', 'equipos que entraron'],
+                texto: 'Cuántos equipos entraron al taller en el período.',
+                consejo: 'Compáralo con "Reparados": la diferencia es lo que se te quedó sin terminar.'
+            },
+            {
+                id: 'm-reparados', titulo: 'Reparados', vista: null, ancla: '#kpi-reparados',
+                claves: ['reparados', 'terminados', 'arreglados', 'completados'],
+                texto: 'Cuántos equipos terminaste de reparar en el período.',
+                consejo: 'Si reparas menos del 60% de lo que entra, revisa qué se está atorando.'
+            },
+            {
+                id: 'm-ticket', titulo: 'Ticket Promedio', vista: null, ancla: '#kpi-ticket',
+                claves: ['ticket promedio', 'ticket', 'promedio por orden', 'cuanto cobro en promedio'],
+                texto: 'Cuánto cobras en promedio por cada orden: ingresos dividido entre número de órdenes.',
+                consejo: 'Subir el ticket promedio suele ser más fácil que conseguir más clientes: ofrece mica, funda o batería al entregar.'
+            },
             {
                 id: 'gastos', titulo: 'Gastos Operativos', vista: 'reportes', ancla: '#kpi-gastos-op',
                 claves: ['gastos', 'gasto', 'operativos', 'luz', 'alquiler', 'egresos'],
@@ -12774,12 +12811,17 @@
         // --- Detectar que tocaron un campo calculado (lo que el usuario pidió) ---
         document.addEventListener('click', (e) => {
             const el = e.target;
-            if (!el || !el.id) return;
-            if (el.tagName !== 'INPUT' && el.tagName !== 'BUTTON') return;
-            // ¿Hay un tema anclado justo a este elemento? Entonces lo explica,
-            // lo resalta y se posa encima.
-            const tema = AYU_TEMAS.find(t => t.ancla === '#' + el.id);
-            if (tema) explicarTema(tema, false);
+            if (!el || typeof el.closest !== 'function') return;
+            // No reaccionar a los clics dentro del propio globo ni en su interruptor.
+            if (el.closest('#ayudante') || el.closest('#btn-ayudante')) return;
+            // Se compara con contains() y no con closest(): en las métricas el id está
+            // en el <h2> que es HIJO de la tarjeta, así que buscando solo hacia arriba
+            // nunca se encontraba al tocar la tarjeta.
+            for (const tema of AYU_TEMAS) {
+                if (!tema.ancla) continue;
+                const obj = elementoObjetivo(tema.ancla);
+                if (obj && (obj === el || obj.contains(el))) { explicarTema(tema, false); return; }
+            }
         }, true);
 
         // --- Aviso cuando la mano de obra queda negativa (dato mal puesto) ---
@@ -12849,17 +12891,28 @@
             return mejorPunt >= 6 ? mejor : null;
         }
 
+        // Resuelve a qué elemento apuntar de verdad: en las métricas el ancla es el
+        // número suelto, pero lo que se ilumina (y donde se sienta) es la tarjeta.
+        function elementoObjetivo(sel) {
+            if (!sel) return null;
+            const el = document.querySelector(sel);
+            if (!el) return null;
+            return (el.closest && el.closest('.kpi-card')) || el;
+        }
+
         // ---------- Resaltar un elemento (se ilumina el contorno) ----------
         let _ayuResaltado = null;
         function resaltarElemento(sel) {
             quitarResaltado();
             if (!sel) return null;
-            const el = document.querySelector(sel);
-            if (!el) return null;
-            el.classList.add('ayu-resaltado');
-            _ayuResaltado = el;
-            try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { }
-            return el;
+            const objetivo = elementoObjetivo(sel);
+            if (!objetivo) return null;
+            objetivo.classList.add('ayu-resaltado');
+            _ayuResaltado = objetivo;
+            // Desplazamiento INSTANTÁNEO a propósito: con 'smooth' la página sigue
+            // moviéndose mientras se calcula dónde sentar al robot, y quedaba desfasado.
+            try { objetivo.scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (e) { }
+            return objetivo;
         }
 
         function quitarResaltado() {
@@ -12869,7 +12922,7 @@
         // ---------- El robot se posa encima del elemento que explica ----------
         function posarEnElemento(sel) {
             const cont = document.getElementById('ayudante');
-            const el = sel ? document.querySelector(sel) : null;
+            const el = elementoObjetivo(sel);
             if (!el || !cont) return false;
 
             const r = el.getBoundingClientRect();
@@ -12881,29 +12934,33 @@
 
             // Dónde queremos que quede EL ROBOT: centrado sobre el borde superior
             // del elemento (o debajo si arriba no cabe).
-            const destinoX = r.left + r.width / 2 - 31;   // el robot mide 62px
-            let destinoY = r.top - 58;
-            if (destinoY < 8) destinoY = r.bottom + 6;
+            const destinoX = r.left + r.width / 2 - 24;   // el robot mide 48px
+            let destinoY = r.top - 46;
+            if (destinoY < 8) destinoY = r.bottom + 4;
 
             // El globo va a la izquierda del robot; si el elemento está muy pegado al
             // borde izquierdo no cabe, así que lo mandamos al lado derecho.
-            cont.classList.toggle('globo-derecha', destinoX < 360);
+            cont.classList.toggle('globo-derecha', destinoX < 300);
 
             // El contenedor es una fila [globo][robot], así que fijar 'left' coloca el
             // GLOBO, no al robot. Colocamos, medimos dónde cayó el robot y corregimos.
             cont.style.left = destinoX + 'px';
             cont.style.top = destinoY + 'px';
 
-            const robot = document.getElementById('ayudante-robot');
-            if (robot) {
-                const rr = robot.getBoundingClientRect();
-                if (rr.width) {
-                    let izq = destinoX + (destinoX - rr.left);
-                    const arriba = destinoY + (destinoY - rr.top);
-                    // Que el globo no se salga por la izquierda ni el robot por la derecha.
+            // Se mide la COMPUERTA y no al robot: el robot tiene una transición de
+            // salida de 0.55s, así que recién colocado está a medio camino y el
+            // cálculo salía desviado. La compuerta no se transforma, es estable.
+            const casa = document.getElementById('ayudante-casa');
+            if (casa) {
+                const rc = casa.getBoundingClientRect();
+                if (rc.width) {
+                    let izq = destinoX + (destinoX - rc.left);
+                    let arriba = destinoY + (destinoY - rc.top);
+                    // Que no se salga de la pantalla por ningún lado.
                     izq = Math.max(8, Math.min(izq, window.innerWidth - 8 - cont.offsetWidth));
+                    arriba = Math.max(8, Math.min(arriba, window.innerHeight - 8 - cont.offsetHeight));
                     cont.style.left = izq + 'px';
-                    cont.style.top = Math.max(8, arriba) + 'px';
+                    cont.style.top = arriba + 'px';
                 }
             }
             return true;
