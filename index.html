@@ -13195,6 +13195,32 @@
                     'revisa el negocio', 'algo urgente', 'como vamos'],
                 accion: 'vigilar'
             },
+            // ---- Consultas sobre TUS datos ----
+            {
+                claves: ['cuanto vendi hoy', 'cuanto vendi', 'cuanto entro hoy', 'como voy hoy',
+                    'ventas de hoy', 'cuanto llevo hoy', 'lo de hoy', 'cuanto facture'],
+                accion: 'ventas-hoy'
+            },
+            {
+                claves: ['quien es mi mejor cliente', 'mejor cliente', 'mejores clientes',
+                    'quien me compra mas', 'cliente que mas gasta'],
+                accion: 'mejor-cliente'
+            },
+            {
+                claves: ['que reparo mas', 'que modelo reparo mas', 'equipos mas reparados',
+                    'que entra mas', 'modelo mas comun', 'que mas reparo'],
+                accion: 'modelos'
+            },
+            {
+                claves: ['cuanto le debo al tecnico', 'comision del tecnico', 'cuanto le pago al tecnico este mes',
+                    'cuanto es la comision', 'comisiones'],
+                accion: 'comision'
+            },
+            {
+                claves: ['cuanto me deben', 'quien me debe', 'por cobrar', 'saldos pendientes',
+                    'cuanto falta cobrar', 'deudas'],
+                accion: 'por-cobrar'
+            },
             {
                 claves: ['duermes', 'te cansas', 'descansas', 'tienes sueño'],
                 emocion: 'triste',
@@ -13247,6 +13273,11 @@
                 volverASuCasa(); quitarResaltado();
                 if (c.accion === 'autodestruccion') { autodestruccionJP(); return true; }
                 if (c.accion === 'vigilar') { vigilarNegocio(true); return true; }
+                if (c.accion === 'ventas-hoy') { jpVentasDeHoy(); return true; }
+                if (c.accion === 'mejor-cliente') { jpMejorCliente(); return true; }
+                if (c.accion === 'modelos') { jpModelosMasReparados(); return true; }
+                if (c.accion === 'comision') { jpComisionTecnico(); return true; }
+                if (c.accion === 'por-cobrar') { jpPorCobrar(); return true; }
                 const r = c.resp();
                 emocionJP(c.emocion || 'feliz', 6000);
                 hablarAyudante(r.titulo, r.texto, null, true);
@@ -13388,6 +13419,143 @@
             // Primera revisión al minuto de abrir (da tiempo a que carguen las órdenes).
             setTimeout(() => vigilarNegocio(false), 60000);
             JP_VIG.timer = setInterval(() => vigilarNegocio(false), JP_VIG.REVISAR_CADA);
+        }
+
+        // =============================================================
+        // J.P CONSULTA TUS DATOS: responde con cifras reales del taller,
+        // no con explicaciones genéricas.
+        // =============================================================
+        const esHoy = f => {
+            if (!f) return false;
+            const d = new Date(f);
+            const h = new Date();
+            return d.getDate() === h.getDate() && d.getMonth() === h.getMonth() && d.getFullYear() === h.getFullYear();
+        };
+        const ordenesJP = () => (typeof ordenesActuales !== 'undefined' && Array.isArray(ordenesActuales)) ? ordenesActuales : [];
+
+        function sinDatosJP() {
+            emocionJP('pensando', 5000);
+            hablarAyudante('Todavía no veo tus órdenes',
+                'Entra al <b>Taller</b> o al <b>Dashboard</b> para que se carguen y vuelve a preguntarme.',
+                null, true);
+            return true;
+        }
+
+        // Cuánto entró hoy (órdenes cobradas hoy + lo que ya pagaron)
+        function jpVentasDeHoy() {
+            const ord = ordenesJP();
+            if (!ord.length) return sinDatosJP();
+            const deHoy = ord.filter(r => esHoy(r.created_at));
+            const cobradoHoy = deHoy.reduce((s, r) => s + ((parseFloat(r.costo) || 0) - (parseFloat(r.saldo) || 0)), 0);
+            const facturadoHoy = deHoy.reduce((s, r) => s + (parseFloat(r.costo) || 0), 0);
+            const entregadosHoy = ord.filter(r => r.estado === 'Entregado' && esHoy(r.created_at)).length;
+
+            emocionJP(facturadoHoy > 0 ? 'feliz' : 'pensando', 6000);
+            hablarAyudante('Lo de hoy',
+                `<div class="ayu-metricas">
+                    <div class="ayu-m"><span>Órdenes de hoy</span><b>${deHoy.length}</b></div>
+                    <div class="ayu-m"><span>Facturado hoy</span><b style="color:#a78bfa">${soles(facturadoHoy)}</b></div>
+                    <div class="ayu-m"><span>Ya cobrado</span><b style="color:#34d399">${soles(cobradoHoy)}</b></div>
+                    <div class="ayu-m"><span>Por cobrar</span><b style="color:#fbbf24">${soles(facturadoHoy - cobradoHoy)}</b></div>
+                    <div class="ayu-m"><span>Entregados hoy</span><b>${entregadosHoy}</b></div>
+                 </div>` +
+                (deHoy.length === 0
+                    ? '<div class="ayu-consejo">💡 Todavía no entra nada hoy. Buen momento para llamar a los que tienen equipo listo.</div>'
+                    : `<div class="ayu-consejo">💡 ${facturadoHoy - cobradoHoy > 0 ? 'Tienes ' + soles(facturadoHoy - cobradoHoy) + ' sin cobrar de hoy. Cóbralo al entregar.' : '¡Todo lo de hoy está cobrado! 👏'}</div>`),
+                null, true);
+            return true;
+        }
+
+        // Quién es tu mejor cliente (por lo que te ha dejado)
+        function jpMejorCliente() {
+            const ord = ordenesJP();
+            if (!ord.length) return sinDatosJP();
+            const por = {};
+            ord.forEach(r => {
+                const c = String(r.cliente || '').trim();
+                if (!c) return;
+                if (!por[c]) por[c] = { veces: 0, total: 0 };
+                por[c].veces++;
+                por[c].total += (parseFloat(r.costo) || 0);
+            });
+            const top = Object.entries(por).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
+            if (!top.length) return sinDatosJP();
+
+            emocionJP('feliz', 6000);
+            hablarAyudante('Tus mejores clientes',
+                '<div class="ayu-metricas">' + top.map(([n, d], i) =>
+                    `<div class="ayu-m"><span>${i === 0 ? '🏆 ' : ''}${n} <small style="color:#64748b">(${d.veces}×)</small></span><b style="color:${i === 0 ? '#34d399' : '#e5e7eb'}">${soles(d.total)}</b></div>`
+                ).join('') + '</div>' +
+                `<div class="ayu-consejo">💡 <b>${top[0][0]}</b> es quien más te ha dejado. Trátalo bien: conseguir uno nuevo cuesta más que cuidar al que ya tienes.</div>`,
+                null, true);
+            return true;
+        }
+
+        // Qué equipos/modelos reparas más
+        function jpModelosMasReparados() {
+            const ord = ordenesJP();
+            if (!ord.length) return sinDatosJP();
+            const por = {};
+            ord.forEach(r => {
+                const m = String(r.modelo || '').trim();
+                if (!m) return;
+                por[m] = (por[m] || 0) + 1;
+            });
+            const top = Object.entries(por).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            if (!top.length) return sinDatosJP();
+
+            emocionJP('feliz', 6000);
+            hablarAyudante('Lo que más reparas',
+                '<div class="ayu-metricas">' + top.map(([m, n], i) =>
+                    `<div class="ayu-m"><span>${i === 0 ? '🥇 ' : ''}${m}</span><b>${n} ${n === 1 ? 'vez' : 'veces'}</b></div>`
+                ).join('') + '</div>' +
+                `<div class="ayu-consejo">💡 Ten siempre repuestos de <b>${top[0][0]}</b> en stock: es lo que más te entra y no querrás perder la venta por esperar al proveedor.</div>`,
+                null, true);
+            return true;
+        }
+
+        // Cuánto le debes al técnico (comisión = 50% de la mano de obra)
+        function jpComisionTecnico() {
+            const ord = ordenesJP();
+            if (!ord.length) return sinDatosJP();
+            const cerradas = ord.filter(r => r.estado === 'Completado' || r.estado === 'Entregado');
+            const manoObra = cerradas.reduce((s, r) => {
+                const mo = (parseFloat(r.precio_servicio) || 0) ||
+                    ((parseFloat(r.costo) || 0) - (parseFloat(r.precio_repuesto) || 0));
+                return s + Math.max(0, mo);
+            }, 0);
+            const comision = manoObra * 0.5;
+
+            emocionJP('pensando', 6000);
+            hablarAyudante('Comisión del técnico',
+                `<div class="ayu-metricas">
+                    <div class="ayu-m"><span>Órdenes terminadas</span><b>${cerradas.length}</b></div>
+                    <div class="ayu-m"><span>Mano de obra total</span><b style="color:#0ea5e9">${soles(manoObra)}</b></div>
+                    <div class="ayu-m"><span>Comisión (50%)</span><b style="color:#fbbf24">${soles(comision)}</b></div>
+                 </div>
+                 <div class="ayu-consejo">💡 Se calcula sobre la <b>mano de obra</b>, no sobre el total: el repuesto no es ganancia del técnico.</div>`,
+                null, true);
+            return true;
+        }
+
+        // Cuánto te deben en total
+        function jpPorCobrar() {
+            const ord = ordenesJP();
+            if (!ord.length) return sinDatosJP();
+            const deben = ord.filter(r => (parseFloat(r.saldo) || 0) > 0);
+            const total = deben.reduce((s, r) => s + (parseFloat(r.saldo) || 0), 0);
+
+            emocionJP(total > 0 ? 'alerta' : 'feliz', 6000);
+            hablarAyudante('Lo que te deben',
+                total === 0
+                    ? 'No te debe nadie. Todo cobrado. 👏'
+                    : `<b style="font-size:19px;color:#fbbf24">${soles(total)}</b> repartidos en <b>${deben.length} orden${deben.length > 1 ? 'es' : ''}</b>.` +
+                    '<div class="ayu-metricas">' + deben.slice(0, 6).map(r =>
+                        `<div class="ayu-m"><span>${r.cliente || 'Sin nombre'} <small style="color:#64748b">${r.modelo || ''}</small></span><b style="color:#fbbf24">${soles(r.saldo)}</b></div>`
+                    ).join('') + '</div>' +
+                    '<div class="ayu-consejo">💡 Cobra al entregar. Un saldo que sale por la puerta tarda mucho en volver.</div>',
+                null, true);
+            return true;
         }
 
         // ---------- Consejo en formato HTML ----------
