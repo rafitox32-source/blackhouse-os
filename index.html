@@ -5718,8 +5718,8 @@
 
             document.getElementById('pay-balance').value = balance.toFixed(2);
 
-            // El ayudante avisa si el repuesto salió más caro que el total.
-            if (serv < 0 && typeof revisarManoDeObraNegativa === 'function') revisarManoDeObraNegativa();
+            // J.P revisa la orden mientras la llenas (avisa al dejar de escribir).
+            if (typeof programarRevisionOrden === 'function') programarRevisionOrden();
         }
 
         let ordenTemporal = null;
@@ -12962,18 +12962,6 @@
             }
         }, true);
 
-        // --- Aviso cuando la mano de obra queda negativa (dato mal puesto) ---
-        function revisarManoDeObraNegativa() {
-            const s = document.getElementById('cost-service');
-            if (!s) return;
-            if ((parseFloat(s.value) || 0) < 0) {
-                emocionJP('alerta', 6000);
-                hablarAyudante('Eso te deja perdiendo',
-                    'El <b>repuesto</b> te está costando más que el <b>TOTAL</b> que cobras, por eso la mano de obra sale en rojo. Sube el total o revisa el precio del repuesto.',
-                    'mano-negativa');
-            }
-        }
-
         // --- Consejo al entrar a una sección: envolvemos showView sin romperla ---
         (function engancharVistas() {
             if (typeof window.showView !== 'function') return;
@@ -13558,6 +13546,87 @@
             return true;
         }
 
+        // =============================================================
+        // DETECTOR DE ERRORES AL VUELO
+        // Revisa la orden que estás llenando en Recepción y avisa en el
+        // momento, antes de guardarla.
+        // =============================================================
+        function revisarOrdenEnCurso() {
+            if (!AYU.activo) return;
+            const v = id => (document.getElementById(id) || {}).value || '';
+            const n = id => parseFloat(v(id)) || 0;
+
+            const total = n('cost-total');
+            const repuesto = n('cost-part');
+            const adelanto = n('pay-advance');
+            const telefono = v('tel').trim();
+            const imei = v('imei').trim();
+            const cliente = v('cli').trim();
+
+            // Solo molestamos cuando ya hay algo escrito de dinero.
+            if (!total && !repuesto) return;
+
+            let aviso = null;
+
+            // 1) Vas a perder plata
+            if (total > 0 && repuesto > total) {
+                aviso = {
+                    emocion: 'alerta', clave: 'err-perdida',
+                    titulo: '🚨 Vas a perder plata',
+                    texto: `El repuesto (<b>${soles(repuesto)}</b>) cuesta más que lo que le cobras (<b>${soles(total)}</b>).` +
+                        `<div class="ayu-consejo">💡 Sube el total o revisa el precio del repuesto. Así estás pagando por trabajar.</div>`
+                };
+            }
+            // 2) No cobras tu trabajo
+            else if (total > 0 && repuesto > 0 && (total - repuesto) === 0) {
+                aviso = {
+                    emocion: 'triste', clave: 'err-sin-mano-obra',
+                    titulo: '😐 Estás regalando tu trabajo',
+                    texto: `Cobras exactamente lo que cuesta el repuesto, así que tu <b>mano de obra es S/ 0.00</b>.` +
+                        `<div class="ayu-consejo">💡 El repuesto se paga solo; tu tiempo no. Súmale tu trabajo al total.</div>`
+                };
+            }
+            // 3) Reparación cara sin adelanto
+            else if (total >= 150 && adelanto === 0) {
+                aviso = {
+                    emocion: 'alerta', clave: 'err-sin-adelanto',
+                    titulo: '⚠️ Sin adelanto',
+                    texto: `Es una reparación de <b>${soles(total)}</b> y no estás pidiendo adelanto.` +
+                        `<div class="ayu-consejo">💡 Pide al menos lo que cuesta el repuesto (${soles(repuesto || total * 0.4)}). Si no vuelve, la pieza la pagas tú.</div>`
+                };
+            }
+            // 4) Falta el teléfono
+            else if (cliente && !telefono) {
+                aviso = {
+                    emocion: 'pensando', clave: 'err-sin-telefono',
+                    titulo: '📵 Falta el teléfono',
+                    texto: 'Sin número no vas a poder avisarle cuando esté listo.' +
+                        '<div class="ayu-consejo">💡 Así empiezan los equipos que se quedan meses en el taller.</div>'
+                };
+            }
+            // 5) Falta el IMEI en un equipo caro
+            else if (total >= 200 && !imei) {
+                aviso = {
+                    emocion: 'pensando', clave: 'err-sin-imei',
+                    titulo: '🔎 Sin IMEI',
+                    texto: 'Un equipo de <b>' + soles(total) + '</b> sin IMEI registrado.' +
+                        '<div class="ayu-consejo">💡 El IMEI es lo que identifica el equipo si hay una confusión o un reclamo.</div>'
+                };
+            }
+
+            if (!aviso) return;
+            volverASuCasa(); quitarResaltado();
+            emocionJP(aviso.emocion, 7000);
+            hablarAyudante(aviso.titulo, aviso.texto, aviso.clave, false);
+        }
+
+        // Se revisa con retardo: mientras escribes no molesta, avisa al parar.
+        let _timerRevisarOrden = null;
+        function programarRevisionOrden() {
+            clearTimeout(_timerRevisarOrden);
+            _timerRevisarOrden = setTimeout(revisarOrdenEnCurso, 1200);
+        }
+
         // ---------- Consejo en formato HTML ----------
         function consejoHtml(tema) {
             return tema && tema.consejo
@@ -13859,6 +13928,13 @@
                 caja.addEventListener('input', ocupado);   // cada tecla renueva la pausa
                 caja.addEventListener('blur', () => { AYU.interactuando = false; programarCierreAyudante(); });
             }
+
+            // Revisar la orden también al llenar cliente, teléfono o IMEI
+            // (los importes ya la disparan desde calcularTotal).
+            ['cli', 'tel', 'imei'].forEach(id => {
+                const campo = document.getElementById(id);
+                if (campo) campo.addEventListener('input', programarRevisionOrden);
+            });
 
             // J.P empieza a vigilar el negocio por su cuenta.
             iniciarVigilancia();
