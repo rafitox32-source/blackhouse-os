@@ -13218,6 +13218,11 @@
                 accion: 'por-cobrar'
             },
             {
+                claves: ['dame animo', 'animame', 'estoy cansado', 'estoy triste', 'mal dia', 'que dia malo',
+                    'no vendi nada', 'esta flojo', 'me rindo', 'estoy harto', 'que estres'],
+                accion: 'animo'
+            },
+            {
                 claves: ['habla', 'hablame', 'activa la voz', 'enciende la voz', 'quiero oirte', 'di algo en voz alta'],
                 accion: 'voz-on'
             },
@@ -13282,6 +13287,7 @@
                 if (c.accion === 'modelos') { jpModelosMasReparados(); return true; }
                 if (c.accion === 'comision') { jpComisionTecnico(); return true; }
                 if (c.accion === 'por-cobrar') { jpPorCobrar(); return true; }
+                if (c.accion === 'animo') { jpDameAnimo(); return true; }
                 if (c.accion === 'voz-on') { if (!JP_VOZ.activa) alternarVozJP(); else hablarAyudante('Ya estoy hablando', 'La voz ya está encendida. 🔊', null, true); return true; }
                 if (c.accion === 'voz-off') { if (JP_VOZ.activa) alternarVozJP(); else hablarAyudante('Ya estoy callado', 'La voz ya estaba apagada. 🔇', null, true); return true; }
                 const r = c.resp();
@@ -13891,6 +13897,59 @@
             volverASuCasa(); quitarResaltado();
             emocionJP(logro.emo, 7000);
             hablarAyudante(logro.titulo, logro.texto, null, true);
+        }
+
+        // =============================================================
+        // MODO ÁNIMO: J.P te levanta el ánimo, pero mirando tus números
+        // de verdad. No suelta frases genéricas de calendario.
+        // =============================================================
+        const JP_ANIMO_GENERICO = [
+            'Ningún taller bueno se hizo en un día tranquilo. 💪',
+            'La placa que hoy no sale, mañana sale. Y cobras igual. 🔧',
+            'Cada equipo que arreglas es un cliente que no fue a la competencia.',
+            'Un mal día de caja no borra un buen mes. Mira el mes, no el día. 📈',
+            'El que abre el taller todos los días ya le ganó al que solo habla de abrirlo. 🔑'
+        ];
+
+        function jpDameAnimo() {
+            const ord = ordenesJP();
+            const hoy = ord.filter(r => esHoy(r.created_at));
+            const entregadosHoy = ord.filter(r => r.estado === 'Entregado' && esHoy(r.created_at)).length;
+            const facturadoHoy = hoy.reduce((s, r) => s + (parseFloat(r.costo) || 0), 0);
+            const listos = ord.filter(r => r.estado === 'Completado').length;
+            const enProceso = ord.filter(r => r.estado === 'En Proceso').length;
+
+            let emo = 'feliz', titulo = '', texto = '';
+
+            // Día bueno: se lo reconoce con cifras.
+            if (facturadoHoy >= 500 || entregadosHoy >= 3) {
+                emo = 'risa';
+                titulo = '💪 Vas muy bien';
+                texto = `Hoy llevas <b>${soles(facturadoHoy)}</b> facturados` +
+                    (entregadosHoy ? ` y <b>${entregadosHoy} equipo${entregadosHoy > 1 ? 's' : ''} entregado${entregadosHoy > 1 ? 's' : ''}</b>` : '') +
+                    `.<div class="ayu-consejo">💡 No es suerte, es que estás trabajando bien. Sigue así.</div>`;
+            }
+            // Día flojo pero con trabajo en curso: hay de dónde sacar.
+            else if (listos > 0 || enProceso > 0) {
+                emo = 'pensando';
+                titulo = '🤝 Todavía hay de dónde';
+                texto = `Hoy va lento, pero tienes <b>${listos} equipo${listos !== 1 ? 's' : ''} listo${listos !== 1 ? 's' : ''}</b> y <b>${enProceso} en proceso</b>.` +
+                    `<div class="ayu-consejo">💡 ${listos > 0
+                        ? 'Llama a los que ya están listos: esa caja está hecha, solo falta cobrarla.'
+                        : 'Termina uno de los que tienes abiertos y el día cambia.'}</div>`;
+            }
+            // Sin nada: frase honesta, sin inventar cifras.
+            else {
+                emo = 'feliz';
+                titulo = '☕ Día tranquilo';
+                texto = azar(JP_ANIMO_GENERICO) +
+                    `<div class="ayu-consejo">💡 Aprovecha para ordenar el inventario o llamar a clientes viejos. El trabajo también se busca.</div>`;
+            }
+
+            volverASuCasa(); quitarResaltado();
+            emocionJP(emo, 7000);
+            hablarAyudante(titulo, texto, null, true);
+            return true;
         }
 
         // ---------- Consejo en formato HTML ----------
