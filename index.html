@@ -1896,6 +1896,13 @@
                     <button id="btn-cerrar-caja-side" onclick="abrirCierreDia()" title="Cerrar caja del día"
                         style="display:none; flex:1; background:var(--bh-input-bg); border:1px solid var(--bh-border); color:var(--text-main); padding:9px 6px; border-radius:10px; cursor:pointer; font-size:12px; font-weight:700;">🧾 Cerrar caja</button>
                 </div>
+                <!-- Interruptor del ayudante animado (siempre visible para cualquiera) -->
+                <div style="display:flex; gap:8px; justify-content:center; margin-bottom:10px;">
+                    <button id="btn-ayudante" onclick="alternarAyudante()"
+                        title="Activar o desactivar el ayudante que explica cómo funciona cada cosa"
+                        style="flex:1; background:var(--bh-input-bg); border:1px solid var(--bh-border); color:var(--text-main); padding:9px 6px; border-radius:10px; cursor:pointer; font-size:12px; font-weight:700;">🤖
+                        Ayudante</button>
+                </div>
                 <span id="app-version" style="color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 1px;">Cargando versión...</span>
             </div>
         </div>
@@ -5710,6 +5717,9 @@
             campoServ.style.color = serv < 0 ? 'var(--danger)' : '#0ea5e9';
 
             document.getElementById('pay-balance').value = balance.toFixed(2);
+
+            // El ayudante avisa si el repuesto salió más caro que el total.
+            if (serv < 0 && typeof revisarManoDeObraNegativa === 'function') revisarManoDeObraNegativa();
         }
 
         let ordenTemporal = null;
@@ -11986,6 +11996,477 @@
         ipcRenderer.on('actualizacion-no-disponible', () => {
             document.getElementById('banner-actualizacion').style.display = 'none';
         });
+    </script>
+
+    <!-- ================= AYUDANTE ANIMADO (robot con puerta) ================= -->
+    <!-- Sale de su compuerta cuando detecta que algo se está usando mal y explica
+         cómo funciona de verdad. Se enciende/apaga con el botón 🤖 de la barra lateral. -->
+    <div id="ayudante" aria-live="polite">
+        <div id="ayudante-globo">
+            <div id="ayudante-titulo"></div>
+            <div id="ayudante-texto"></div>
+            <button id="ayudante-cerrar" onclick="ocultarAyudante()" title="Entendido">Entendido</button>
+        </div>
+
+        <div id="ayudante-casa">
+            <!-- Marco y hueco de la puerta -->
+            <div id="ayudante-hueco">
+                <!-- El robot sube desde dentro del hueco -->
+                <svg id="ayudante-robot" viewBox="0 0 64 72" xmlns="http://www.w3.org/2000/svg">
+                    <!-- antena -->
+                    <line x1="32" y1="6" x2="32" y2="14" stroke="#7c3aed" stroke-width="3" stroke-linecap="round" />
+                    <circle id="rb-antena" cx="32" cy="5" r="4" fill="#a78bfa" />
+                    <!-- cabeza -->
+                    <rect x="12" y="14" width="40" height="30" rx="10" fill="#1f2937" stroke="#7c3aed"
+                        stroke-width="2.5" />
+                    <!-- visor -->
+                    <rect x="17" y="20" width="30" height="17" rx="8" fill="#0b1020" />
+                    <circle class="rb-ojo" cx="26" cy="28" r="3.6" fill="#22d3ee" />
+                    <circle class="rb-ojo" cx="38" cy="28" r="3.6" fill="#22d3ee" />
+                    <!-- boca -->
+                    <rect x="28" y="35" width="8" height="2" rx="1" fill="#22d3ee" opacity=".8" />
+                    <!-- orejas -->
+                    <rect x="7" y="24" width="5" height="10" rx="2.5" fill="#7c3aed" />
+                    <rect x="52" y="24" width="5" height="10" rx="2.5" fill="#7c3aed" />
+                    <!-- cuerpo -->
+                    <rect x="18" y="46" width="28" height="20" rx="7" fill="#1f2937" stroke="#7c3aed"
+                        stroke-width="2.5" />
+                    <circle cx="32" cy="55" r="3.5" fill="#22d3ee" opacity=".85" />
+                    <!-- brazo que saluda -->
+                    <rect id="rb-brazo" x="44" y="48" width="12" height="4.5" rx="2.2" fill="#7c3aed" />
+                </svg>
+            </div>
+            <!-- Hojas de la puerta -->
+            <div class="ayudante-hoja izq"></div>
+            <div class="ayudante-hoja der"></div>
+            <div id="ayudante-luz"></div>
+        </div>
+    </div>
+
+    <style>
+        /* ---------- Ayudante animado ---------- */
+        #ayudante {
+            position: fixed;
+            right: 22px;
+            bottom: 18px;
+            z-index: 9998;
+            display: none;
+            align-items: flex-end;
+            gap: 12px;
+            font-family: inherit;
+            pointer-events: none;
+        }
+
+        #ayudante.visible {
+            display: flex;
+        }
+
+        /* Compuerta de donde sale el robot */
+        #ayudante-casa {
+            position: relative;
+            width: 96px;
+            height: 108px;
+            border-radius: 14px 14px 8px 8px;
+            background: linear-gradient(180deg, #14161d 0%, #0b0d12 100%);
+            border: 2px solid #7c3aed;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, .55), 0 0 22px rgba(124, 58, 237, .35);
+            overflow: hidden;
+            flex: 0 0 auto;
+            pointer-events: auto;
+        }
+
+        #ayudante-hueco {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            top: 10px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        #ayudante-robot {
+            width: 62px;
+            height: 70px;
+            transform: translateY(78px);
+            opacity: 0;
+            transition: transform .55s cubic-bezier(.2, 1.4, .4, 1), opacity .3s ease;
+        }
+
+        #ayudante.fuera #ayudante-robot {
+            transform: translateY(6px);
+            opacity: 1;
+            animation: rbFlota 2.6s ease-in-out .6s infinite;
+        }
+
+        @keyframes rbFlota {
+
+            0%,
+            100% {
+                transform: translateY(6px);
+            }
+
+            50% {
+                transform: translateY(0px);
+            }
+        }
+
+        /* Hojas de la puerta que se abren hacia los lados */
+        .ayudante-hoja {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 50%;
+            background: linear-gradient(180deg, #232734 0%, #171a22 100%);
+            border-top: 2px solid rgba(124, 58, 237, .5);
+            transition: transform .5s cubic-bezier(.6, 0, .2, 1);
+            z-index: 2;
+        }
+
+        .ayudante-hoja.izq {
+            left: 0;
+            border-right: 1px solid rgba(124, 58, 237, .45);
+        }
+
+        .ayudante-hoja.der {
+            right: 0;
+            border-left: 1px solid rgba(124, 58, 237, .45);
+        }
+
+        /* Rayitas para que parezcan compuertas metálicas */
+        .ayudante-hoja::after {
+            content: "";
+            position: absolute;
+            inset: 12px 8px auto 8px;
+            height: 3px;
+            border-radius: 2px;
+            background: rgba(124, 58, 237, .35);
+            box-shadow: 0 10px 0 rgba(124, 58, 237, .22), 0 20px 0 rgba(124, 58, 237, .14);
+        }
+
+        #ayudante.fuera .ayudante-hoja.izq {
+            transform: translateX(-101%);
+        }
+
+        #ayudante.fuera .ayudante-hoja.der {
+            transform: translateX(101%);
+        }
+
+        /* Luz que se enciende cuando se abre */
+        #ayudante-luz {
+            position: absolute;
+            left: 50%;
+            top: 4px;
+            width: 8px;
+            height: 8px;
+            margin-left: -4px;
+            border-radius: 50%;
+            background: #ef4444;
+            box-shadow: 0 0 8px #ef4444;
+            z-index: 3;
+            transition: background .3s, box-shadow .3s;
+        }
+
+        #ayudante.fuera #ayudante-luz {
+            background: #22c55e;
+            box-shadow: 0 0 10px #22c55e;
+        }
+
+        .rb-ojo {
+            animation: rbParpadeo 4s infinite;
+        }
+
+        @keyframes rbParpadeo {
+
+            0%,
+            92%,
+            100% {
+                transform: scaleY(1);
+            }
+
+            95% {
+                transform: scaleY(.12);
+            }
+        }
+
+        #ayudante.fuera #rb-brazo {
+            transform-origin: 44px 50px;
+            animation: rbSaluda .6s ease-in-out 3;
+        }
+
+        @keyframes rbSaluda {
+
+            0%,
+            100% {
+                transform: rotate(0deg);
+            }
+
+            50% {
+                transform: rotate(-32deg);
+            }
+        }
+
+        #ayudante.fuera #rb-antena {
+            animation: rbPulso 1.4s ease-in-out infinite;
+        }
+
+        @keyframes rbPulso {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: .35;
+            }
+        }
+
+        /* Globo de diálogo */
+        #ayudante-globo {
+            position: relative;
+            max-width: 330px;
+            background: linear-gradient(180deg, #1b1f2a 0%, #12151c 100%);
+            border: 1px solid #7c3aed;
+            border-radius: 14px;
+            padding: 14px 16px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, .6);
+            opacity: 0;
+            transform: translateY(10px) scale(.96);
+            transition: opacity .3s ease, transform .3s ease;
+            pointer-events: auto;
+        }
+
+        #ayudante.hablando #ayudante-globo {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        /* Piquito del globo apuntando al robot */
+        #ayudante-globo::after {
+            content: "";
+            position: absolute;
+            right: -9px;
+            bottom: 26px;
+            width: 0;
+            height: 0;
+            border-top: 9px solid transparent;
+            border-bottom: 9px solid transparent;
+            border-left: 9px solid #7c3aed;
+        }
+
+        #ayudante-titulo {
+            font-weight: 900;
+            font-size: 13px;
+            color: #a78bfa;
+            margin-bottom: 5px;
+            letter-spacing: .3px;
+        }
+
+        #ayudante-texto {
+            font-size: 13px;
+            line-height: 1.5;
+            color: #e5e7eb;
+        }
+
+        #ayudante-texto b {
+            color: #22d3ee;
+        }
+
+        #ayudante-cerrar {
+            margin-top: 11px;
+            background: #7c3aed;
+            border: 0;
+            color: #fff;
+            font-weight: 800;
+            font-size: 12px;
+            padding: 7px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        #ayudante-cerrar:hover {
+            background: #6d28d9;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            #ayudante-robot,
+            .ayudante-hoja,
+            #ayudante-globo {
+                transition: none;
+            }
+
+            #ayudante.fuera #ayudante-robot,
+            #ayudante.fuera #rb-brazo,
+            #ayudante.fuera #rb-antena,
+            .rb-ojo {
+                animation: none;
+            }
+        }
+    </style>
+
+    <script>
+        // ===================================================================
+        // AYUDANTE ANIMADO
+        // Un robot que sale de su compuerta para avisar cuando algo se está
+        // usando mal y explicar cómo funciona de verdad. Se apaga/enciende con
+        // el botón 🤖 de la barra lateral (queda guardado).
+        // ===================================================================
+        const AYU = {
+            activo: true,
+            timerOcultar: null,
+            timerCerrar: null,
+            timerHablar: null,
+            ultimos: {},        // clave -> momento en que se dijo (para no repetir)
+            ESPERA_REPETIR: 90000  // 1.5 min antes de repetir el mismo consejo
+        };
+
+        // --- Consejos al tocar un campo que NO se escribe a mano ---
+        const AYU_CAMPOS = {
+            'cost-service': {
+                titulo: '¡Ojo! Ese no se escribe',
+                texto: 'La <b>Mano de Obra</b> la calculo yo sola. Tú pon el <b>Precio Repuesto</b> y el <b>TOTAL</b> que le cobras al cliente, y la mano de obra es lo que queda al restarlos.'
+            },
+            'pay-balance': {
+                titulo: 'Este sale solito',
+                texto: 'El <b>Saldo Pendiente</b> es el <b>TOTAL</b> menos lo que el cliente te dejó <b>A Cuenta</b>. Cambia esos dos y este se ajusta.'
+            },
+            'cost-total': {
+                titulo: 'Aquí va lo que cobras',
+                texto: 'Escribe el <b>TOTAL</b> que le cobras al cliente. Con el repuesto que pusiste arriba, saco tu <b>mano de obra</b> (y de ahí sale la comisión del técnico).'
+            }
+        };
+
+        // --- Consejos al entrar a cada sección ---
+        const AYU_VISTAS = {
+            recepcion: {
+                titulo: 'Nueva orden',
+                texto: 'Llena los datos del equipo y pon el <b>repuesto</b> y el <b>TOTAL</b>. La mano de obra y el saldo se calculan solos.'
+            },
+            laboratorio: {
+                titulo: 'Laboratorio',
+                texto: 'Aquí buscas una orden para trabajarla. Abajo tienes utilidades: <b>Software</b>, <b>Grabar Reparación</b>, calculadora de Ohm y los repositorios.'
+            },
+            inventario: {
+                titulo: 'Inventario',
+                texto: 'Cada repuesto que uses en una orden se descuenta del stock. Si un producto no tiene stock cargado, se vende igual sin descontar.'
+            },
+            ventas: {
+                titulo: 'Ventas',
+                texto: 'Venta rápida de mostrador, sin orden de taller. Se descuenta del inventario y entra al cierre del día igual que el resto.'
+            },
+            taller: {
+                titulo: 'Taller',
+                texto: 'El estado de cada equipo se ve aquí. Cuando termines una reparación, ciérrala para que entre a la caja del día.'
+            }
+        };
+
+        function alternarAyudante() {
+            AYU.activo = !AYU.activo;
+            localStorage.setItem('ayudanteActivo', AYU.activo ? '1' : '0');
+            actualizarBotonAyudante();
+            if (AYU.activo) {
+                hablarAyudante('¡Aquí estoy!', 'Te avisaré cuando algo no se use como debe y te explicaré para qué sirve cada cosa. Apágame cuando quieras con este mismo botón.', 'saludo', true);
+            } else {
+                ocultarAyudante();
+                if (typeof showToast === 'function') showToast('Ayudante desactivado 🤖', 'info');
+            }
+        }
+
+        function actualizarBotonAyudante() {
+            const b = document.getElementById('btn-ayudante');
+            if (!b) return;
+            b.innerHTML = AYU.activo ? '🤖 Ayudante' : '🤖 Ayudante: OFF';
+            b.style.opacity = AYU.activo ? '1' : '.55';
+            b.style.borderColor = AYU.activo ? '#7c3aed' : 'var(--bh-border)';
+        }
+
+        // Muestra el robot. 'clave' evita repetir el mismo consejo a cada rato.
+        function hablarAyudante(titulo, texto, clave, forzar) {
+            if (!AYU.activo && !forzar) return;
+            const cont = document.getElementById('ayudante');
+            if (!cont) return;
+
+            const ahora = Date.now();
+            if (clave && !forzar && AYU.ultimos[clave] && (ahora - AYU.ultimos[clave]) < AYU.ESPERA_REPETIR) return;
+            if (clave) AYU.ultimos[clave] = ahora;
+
+            clearTimeout(AYU.timerOcultar);
+            clearTimeout(AYU.timerCerrar);
+            clearTimeout(AYU.timerHablar);
+
+            document.getElementById('ayudante-titulo').innerHTML = titulo;
+            document.getElementById('ayudante-texto').innerHTML = texto;
+
+            cont.classList.add('visible');
+            // Forzamos un reflow para que el navegador registre el estado cerrado antes
+            // de animar. (Con requestAnimationFrame no servía: en ventanas en segundo
+            // plano no se ejecuta y el robot se quedaba sin salir.)
+            void cont.offsetWidth;
+            cont.classList.add('fuera');
+            AYU.timerHablar = setTimeout(() => cont.classList.add('hablando'), 260);
+
+            // Se guarda solo a los 11 segundos.
+            AYU.timerOcultar = setTimeout(ocultarAyudante, 11000);
+        }
+
+        function ocultarAyudante() {
+            const cont = document.getElementById('ayudante');
+            if (!cont) return;
+            // Cancelar lo que quedara pendiente de la salida, si no vuelve a aparecer solo.
+            clearTimeout(AYU.timerOcultar);
+            clearTimeout(AYU.timerHablar);
+            cont.classList.remove('hablando');
+            cont.classList.remove('fuera');
+            // Esperar a que termine de meterse antes de esconder la compuerta.
+            AYU.timerCerrar = setTimeout(() => cont.classList.remove('visible'), 620);
+        }
+
+        // --- Detectar que tocaron un campo calculado (lo que el usuario pidió) ---
+        document.addEventListener('click', (e) => {
+            const el = e.target;
+            if (!el || el.tagName !== 'INPUT') return;
+            const tip = AYU_CAMPOS[el.id];
+            if (!tip) return;
+            // Solo molestamos si el campo es de solo lectura (no se escribe a mano),
+            // o si hay un consejo explícito para él.
+            hablarAyudante(tip.titulo, tip.texto, 'campo-' + el.id);
+        }, true);
+
+        // --- Aviso cuando la mano de obra queda negativa (dato mal puesto) ---
+        function revisarManoDeObraNegativa() {
+            const s = document.getElementById('cost-service');
+            if (!s) return;
+            if ((parseFloat(s.value) || 0) < 0) {
+                hablarAyudante('Eso te deja perdiendo',
+                    'El <b>repuesto</b> te está costando más que el <b>TOTAL</b> que cobras, por eso la mano de obra sale en rojo. Sube el total o revisa el precio del repuesto.',
+                    'mano-negativa');
+            }
+        }
+
+        // --- Consejo al entrar a una sección: envolvemos showView sin romperla ---
+        (function engancharVistas() {
+            if (typeof window.showView !== 'function') return;
+            const original = window.showView;
+            window.showView = function (vista, el) {
+                const r = original.apply(this, arguments);
+                try {
+                    const tip = AYU_VISTAS[vista];
+                    if (tip) hablarAyudante(tip.titulo, tip.texto, 'vista-' + vista);
+                } catch (e) { }
+                return r;
+            };
+        })();
+
+        // --- Arranque ---
+        (function iniciarAyudante() {
+            const guardado = localStorage.getItem('ayudanteActivo');
+            AYU.activo = (guardado === null) ? true : (guardado === '1');
+            actualizarBotonAyudante();
+        })();
     </script>
 </body>
 
