@@ -12015,6 +12015,7 @@
                 <button onclick="explicarMetricas()">📊 Mis números</button>
                 <button onclick="sorprendemeJP()">🎲 Sorpréndeme</button>
                 <button onclick="vigilarNegocio(true)">🔍 Revisa mi taller</button>
+                <button id="ayudante-voz" onclick="alternarVozJP()" title="Que J.P hable en voz alta">🔇 Voz</button>
                 <button id="ayudante-cerrar" onclick="ocultarAyudante()">Entendido</button>
             </div>
         </div>
@@ -12919,6 +12920,7 @@
 
             // Se guarda solo a los 11 segundos.
             programarCierreAyudante();
+            if (typeof hablarEnVozAlta === 'function') hablarEnVozAlta(titulo, texto);
             return true; // habló: ya se puede medir y colocar sobre el elemento
         }
 
@@ -12940,6 +12942,8 @@
             if (typeof quitarResaltado === 'function') quitarResaltado();
             if (typeof volverASuCasa === 'function') volverASuCasa();
             if (typeof emocionJP === 'function') emocionJP(null);
+            // Si se cierra a media frase, que deje de hablar.
+            try { window.speechSynthesis.cancel(); } catch (e) { }
             cont.classList.remove('hablando');
             cont.classList.remove('fuera');
             // Esperar a que termine de meterse antes de esconder la compuerta.
@@ -13210,6 +13214,14 @@
                 accion: 'por-cobrar'
             },
             {
+                claves: ['habla', 'hablame', 'activa la voz', 'enciende la voz', 'quiero oirte', 'di algo en voz alta'],
+                accion: 'voz-on'
+            },
+            {
+                claves: ['callate', 'silencio', 'apaga la voz', 'no hables', 'quita la voz', 'mutea'],
+                accion: 'voz-off'
+            },
+            {
                 claves: ['duermes', 'te cansas', 'descansas', 'tienes sueño'],
                 emocion: 'triste',
                 resp: () => ({
@@ -13266,6 +13278,8 @@
                 if (c.accion === 'modelos') { jpModelosMasReparados(); return true; }
                 if (c.accion === 'comision') { jpComisionTecnico(); return true; }
                 if (c.accion === 'por-cobrar') { jpPorCobrar(); return true; }
+                if (c.accion === 'voz-on') { if (!JP_VOZ.activa) alternarVozJP(); else hablarAyudante('Ya estoy hablando', 'La voz ya está encendida. 🔊', null, true); return true; }
+                if (c.accion === 'voz-off') { if (JP_VOZ.activa) alternarVozJP(); else hablarAyudante('Ya estoy callado', 'La voz ya estaba apagada. 🔇', null, true); return true; }
                 const r = c.resp();
                 emocionJP(c.emocion || 'feliz', 6000);
                 hablarAyudante(r.titulo, r.texto, null, true);
@@ -13627,6 +13641,80 @@
             _timerRevisarOrden = setTimeout(revisarOrdenEnCurso, 1200);
         }
 
+        // =============================================================
+        // LA VOZ DE J.P (speechSynthesis: ya viene en Chromium)
+        // Apagada por defecto; se enciende desde el globo y queda guardada.
+        // =============================================================
+        const JP_VOZ = { activa: false, voz: null };
+
+        function cargarVozJP() {
+            try {
+                JP_VOZ.activa = localStorage.getItem('jpVoz') === '1';
+                const elegir = () => {
+                    const voces = window.speechSynthesis.getVoices() || [];
+                    // Preferimos una voz en español; si no hay, la que sea.
+                    JP_VOZ.voz = voces.find(v => /es[-_]/i.test(v.lang) && /Helena|Sabina|Laura|Google/i.test(v.name))
+                        || voces.find(v => /es[-_]/i.test(v.lang))
+                        || voces[0] || null;
+                };
+                elegir();
+                // Las voces suelen cargarse tarde.
+                window.speechSynthesis.onvoiceschanged = elegir;
+            } catch (e) { }
+        }
+
+        // Convierte el HTML del globo en algo pronunciable.
+        function textoParaVoz(html) {
+            return String(html || '')
+                .replace(/<br\s*\/?>/gi, '. ')
+                .replace(/<div class="ayu-consejo">/gi, '. Consejo: ')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/S\/\s*([\d.,]+)/g, '$1 soles')   // "S/ 350.00" -> "350.00 soles"
+                .replace(/[💡🏆🥇🚨⚠️😐📵🔎💰🐌📥✅💥🎲📚📊🔍🤖👋🎵🥹😔😄😉😌🙃✨❤️💾👨‍💻🌌🧮🛵⚡🔩🔌💸🔋🔥🤝📸🎥🔒👁️😴💪🧾]/gu, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 350);   // no leer parrafos enormes
+        }
+
+        function hablarEnVozAlta(titulo, texto) {
+            if (!JP_VOZ.activa) return;
+            try {
+                window.speechSynthesis.cancel();
+                const frase = textoParaVoz(titulo) + '. ' + textoParaVoz(texto);
+                const u = new SpeechSynthesisUtterance(frase);
+                if (JP_VOZ.voz) u.voice = JP_VOZ.voz;
+                u.lang = (JP_VOZ.voz && JP_VOZ.voz.lang) || 'es-ES';
+                u.rate = 1.05;
+                u.pitch = 1.15;   // un poco agudo, es un robot
+                window.speechSynthesis.speak(u);
+            } catch (e) { }
+        }
+
+        function alternarVozJP() {
+            JP_VOZ.activa = !JP_VOZ.activa;
+            localStorage.setItem('jpVoz', JP_VOZ.activa ? '1' : '0');
+            actualizarBotonVoz();
+            if (JP_VOZ.activa) {
+                emocionJP('feliz', 5000);
+                hablarAyudante('🔊 Voz activada',
+                    `Ahora te leo en voz alta lo que digo. Apágame la voz con el mismo botón cuando te canse.`,
+                    null, true);
+            } else {
+                try { window.speechSynthesis.cancel(); } catch (e) { }
+                emocionJP('triste', 3000);
+                hablarAyudante('🔇 Voz apagada', 'Vuelvo a hablar solo por escrito.', null, true);
+            }
+        }
+
+        function actualizarBotonVoz() {
+            const b = document.getElementById('ayudante-voz');
+            if (b) {
+                b.textContent = JP_VOZ.activa ? '🔊 Voz' : '🔇 Voz';
+                b.style.borderColor = JP_VOZ.activa ? '#7c3aed' : '#333a4d';
+                b.style.color = JP_VOZ.activa ? '#fff' : '#cbd5e1';
+            }
+        }
+
         // ---------- Consejo en formato HTML ----------
         function consejoHtml(tema) {
             return tema && tema.consejo
@@ -13935,6 +14023,9 @@
                 const campo = document.getElementById(id);
                 if (campo) campo.addEventListener('input', programarRevisionOrden);
             });
+
+            cargarVozJP();
+            actualizarBotonVoz();
 
             // J.P empieza a vigilar el negocio por su cuenta.
             iniciarVigilancia();
