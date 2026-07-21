@@ -12014,6 +12014,7 @@
                 <button onclick="mostrarIndiceAyudante()">📚 ¿Qué sabes?</button>
                 <button onclick="explicarMetricas()">📊 Mis números</button>
                 <button onclick="sorprendemeJP()">🎲 Sorpréndeme</button>
+                <button onclick="vigilarNegocio(true)">🔍 Revisa mi taller</button>
                 <button id="ayudante-cerrar" onclick="ocultarAyudante()">Entendido</button>
             </div>
         </div>
@@ -13190,6 +13191,11 @@
                 })
             },
             {
+                claves: ['revisa el taller', 'como va el taller', 'hay algo pendiente', 'que me falta',
+                    'revisa el negocio', 'algo urgente', 'como vamos'],
+                accion: 'vigilar'
+            },
+            {
                 claves: ['duermes', 'te cansas', 'descansas', 'tienes sueño'],
                 emocion: 'triste',
                 resp: () => ({
@@ -13240,6 +13246,7 @@
                 if (!c.claves.some(k => coincideFrase(q, k))) continue;
                 volverASuCasa(); quitarResaltado();
                 if (c.accion === 'autodestruccion') { autodestruccionJP(); return true; }
+                if (c.accion === 'vigilar') { vigilarNegocio(true); return true; }
                 const r = c.resp();
                 emocionJP(c.emocion || 'feliz', 6000);
                 hablarAyudante(r.titulo, r.texto, null, true);
@@ -13257,6 +13264,130 @@
                 emocionJP('feliz', 6000);
                 hablarAyudante('¿Sabías que...?', azar(JP_DATOS), null, true);
             }
+        }
+
+        // =============================================================
+        // J.P VIGILANTE: revisa el negocio y avisa por su cuenta.
+        // Se alimenta de 'ordenesActuales', las mismas órdenes que ya carga
+        // el taller, así que no consulta nada extra.
+        // =============================================================
+        const JP_VIG = {
+            timer: null,
+            avisado: {},            // clave -> día en que ya se avisó (1 vez por día)
+            REVISAR_CADA: 5 * 60 * 1000
+        };
+
+        const diasDesde = f => {
+            if (!f) return 0;
+            const d = (Date.now() - new Date(f).getTime()) / 86400000;
+            return isNaN(d) ? 0 : Math.floor(d);
+        };
+        const soles = v => 'S/ ' + (parseFloat(v) || 0).toFixed(2);
+        const hoyClave = () => new Date().toISOString().slice(0, 10);
+
+        // Devuelve la lista de avisos que ameritan salir, del más urgente al menos.
+        function revisarNegocio() {
+            const ord = (typeof ordenesActuales !== 'undefined' && Array.isArray(ordenesActuales)) ? ordenesActuales : [];
+            const avisos = [];
+            if (!ord.length) return avisos;
+
+            // 1) Equipos terminados que nadie ha entregado (plata hecha sin cobrar)
+            const listos = ord.filter(r => r.estado === 'Completado');
+            const listosViejos = listos.filter(r => diasDesde(r.created_at) >= 2);
+            if (listosViejos.length) {
+                const plata = listosViejos.reduce((s, r) => s + (parseFloat(r.saldo) || 0), 0);
+                avisos.push({
+                    clave: 'listos-sin-entregar', emocion: 'alerta',
+                    titulo: '💰 Plata lista sin cobrar',
+                    texto: `Tienes <b>${listosViejos.length} equipo${listosViejos.length > 1 ? 's' : ''} terminado${listosViejos.length > 1 ? 's' : ''}</b> hace 2 días o más que nadie ha entregado.` +
+                        (plata > 0 ? `<br><br>Son <b>${soles(plata)}</b> por cobrar esperando una llamada.` : '') +
+                        `<div class="ayu-consejo">💡 Avísales por WhatsApp desde el Taller. Un equipo entregado hoy es caja de hoy.</div>`
+                });
+            }
+
+            // 2) Órdenes atoradas en proceso
+            const atoradas = ord.filter(r => r.estado === 'En Proceso' && diasDesde(r.created_at) >= 5);
+            if (atoradas.length) {
+                avisos.push({
+                    clave: 'ordenes-atoradas', emocion: 'pensando',
+                    titulo: '🐌 Equipos atorados',
+                    texto: `Hay <b>${atoradas.length} equipo${atoradas.length > 1 ? 's' : ''}</b> en proceso desde hace 5 días o más.` +
+                        `<div class="ayu-consejo">💡 O falta un repuesto, o se complicó. Si no tiene arreglo, avísale al cliente antes de que él pregunte.</div>`
+                });
+            }
+
+            // 3) Cola en la entrada
+            const porAsignar = ord.filter(r => r.estado === 'Recibido');
+            if (porAsignar.length >= 5) {
+                avisos.push({
+                    clave: 'cola-entrada', emocion: 'alerta',
+                    titulo: '📥 Se acumula la entrada',
+                    texto: `Hay <b>${porAsignar.length} órdenes sin asignar</b>.` +
+                        `<div class="ayu-consejo">💡 Asígnalas para que no se te pierda ninguna en el camino.</div>`
+                });
+            }
+
+            // 4) Reparaciones caras sin adelanto (riesgo de quedarte con la pieza)
+            const sinAdelanto = ord.filter(r => (r.estado === 'Recibido' || r.estado === 'En Proceso') &&
+                (parseFloat(r.costo) || 0) >= 150 &&
+                (parseFloat(r.saldo) || 0) >= (parseFloat(r.costo) || 0));
+            if (sinAdelanto.length) {
+                avisos.push({
+                    clave: 'sin-adelanto', emocion: 'alerta',
+                    titulo: '⚠️ Reparación cara sin adelanto',
+                    texto: `<b>${sinAdelanto.length} orden${sinAdelanto.length > 1 ? 'es' : ''}</b> de más de S/ 150 no tiene${sinAdelanto.length > 1 ? 'n' : ''} ni un sol de adelanto.` +
+                        `<div class="ayu-consejo">💡 Si el cliente no vuelve, el repuesto lo pagas tú. Pide adelanto que cubra la pieza.</div>`
+                });
+            }
+
+            // 5) Órdenes sin teléfono: no hay cómo avisarle al cliente
+            const sinTelefono = ord.filter(r => r.estado !== 'Entregado' && !String(r.telefono || '').trim());
+            if (sinTelefono.length) {
+                avisos.push({
+                    clave: 'sin-telefono', emocion: 'pensando',
+                    titulo: '📵 Sin teléfono',
+                    texto: `<b>${sinTelefono.length} orden${sinTelefono.length > 1 ? 'es' : ''}</b> sin teléfono del cliente.` +
+                        `<div class="ayu-consejo">💡 Sin número no hay cómo avisarle cuando esté listo, y ahí empiezan los equipos abandonados.</div>`
+                });
+            }
+
+            return avisos;
+        }
+
+        // Saca el aviso más urgente que no se haya dado hoy.
+        function vigilarNegocio(forzar) {
+            if (!AYU.activo && !forzar) return false;
+            // No interrumpir si ya está hablando o si el técnico está escribiendo.
+            const cont = document.getElementById('ayudante');
+            if (!forzar && cont && (cont.classList.contains('visible') || AYU.interactuando)) return false;
+
+            const avisos = revisarNegocio();
+            const hoy = hoyClave();
+            for (const a of avisos) {
+                if (!forzar && JP_VIG.avisado[a.clave] === hoy) continue;  // uno por día
+                JP_VIG.avisado[a.clave] = hoy;
+                try { localStorage.setItem('jpAvisado', JSON.stringify(JP_VIG.avisado)); } catch (e) { }
+                volverASuCasa(); quitarResaltado();
+                emocionJP(a.emocion || 'alerta', 8000);
+                hablarAyudante(a.titulo, a.texto, null, true);
+                return true;
+            }
+            if (forzar) {
+                emocionJP('feliz', 5000);
+                hablarAyudante('Todo en orden ✅',
+                    'Revisé tu taller y no veo nada urgente: sin equipos olvidados, sin órdenes atoradas y sin cola en la entrada.' +
+                    '<div class="ayu-consejo">💡 Buen momento para cerrar la caja o adelantar trabajo.</div>',
+                    null, true);
+            }
+            return false;
+        }
+
+        function iniciarVigilancia() {
+            try { JP_VIG.avisado = JSON.parse(localStorage.getItem('jpAvisado') || '{}'); } catch (e) { JP_VIG.avisado = {}; }
+            clearInterval(JP_VIG.timer);
+            // Primera revisión al minuto de abrir (da tiempo a que carguen las órdenes).
+            setTimeout(() => vigilarNegocio(false), 60000);
+            JP_VIG.timer = setInterval(() => vigilarNegocio(false), JP_VIG.REVISAR_CADA);
         }
 
         // ---------- Consejo en formato HTML ----------
@@ -13560,6 +13691,9 @@
                 caja.addEventListener('input', ocupado);   // cada tecla renueva la pausa
                 caja.addEventListener('blur', () => { AYU.interactuando = false; programarCierreAyudante(); });
             }
+
+            // J.P empieza a vigilar el negocio por su cuenta.
+            iniciarVigilancia();
         })();
     </script>
 </body>
