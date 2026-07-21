@@ -2376,12 +2376,16 @@
                             </div>
                             <div class="input-group"><label>Precio Repuesto (S/)</label><input type="number"
                                     id="cost-part" class="bh-input" placeholder="0.00" oninput="calcularTotal()"></div>
-                            <div class="input-group"><label>Mano de Obra (S/)</label><input type="number"
-                                    id="cost-service" class="bh-input" placeholder="0.00" oninput="calcularTotal()">
+                            <!-- La mano de obra ya no se escribe: sale de restarle el repuesto al total. -->
+                            <div class="input-group"><label style="color:#0ea5e9;">Mano de Obra (S/)
+                                    <span style="font-size:10px; color:#64748b; font-weight:normal;">· automático</span></label>
+                                <input type="number" id="cost-service" class="bh-input"
+                                    style="font-weight:bold; color:#0ea5e9;" readonly value="0.00">
                             </div>
                             <div class="input-group"><label style="color:var(--success); font-weight:bold;">TOTAL
                                     (S/)</label><input type="number" id="cost-total" class="bh-input"
-                                    style="font-weight:bold; color:var(--success);" readonly value="0.00"></div>
+                                    style="font-weight:bold; color:var(--success);" placeholder="0.00"
+                                    oninput="calcularTotal()"></div>
                             <div class="input-group"><label style="color:#d8b4fe;">A Cuenta / Adelanto
                                     (S/)</label><input type="number" id="pay-advance" class="bh-input"
                                     placeholder="0.00" oninput="calcularTotal()" style="border-color:#d8b4fe;"></div>
@@ -5685,13 +5689,26 @@
             element.classList.add('active');
         }
 
+        // Se escribe el precio del repuesto y el TOTAL que se le cobra al cliente;
+        // la mano de obra es lo que queda al restarlos (es la base de la comisión del técnico).
         function calcularTotal() {
+            const campoTotal = document.getElementById('cost-total');
             const part = parseFloat(document.getElementById('cost-part').value) || 0;
-            const serv = parseFloat(document.getElementById('cost-service').value) || 0;
-            const total = part + serv;
+            const total = parseFloat(campoTotal.value) || 0;
             const advance = parseFloat(document.getElementById('pay-advance').value) || 0;
             const balance = total - advance;
-            document.getElementById('cost-total').value = total.toFixed(2);
+
+            // Mientras el TOTAL siga vacío no hay nada que repartir: se deja en 0 y sin
+            // alarma, porque lo normal es escribir primero el repuesto y luego el total.
+            const totalVacio = campoTotal.value.trim() === '';
+            const serv = totalVacio ? 0 : total - part;
+
+            const campoServ = document.getElementById('cost-service');
+            campoServ.value = serv.toFixed(2);
+            // Si el repuesto cuesta más que el total, la mano de obra sale negativa:
+            // se marca en rojo para que salte a la vista que hay un dato mal puesto.
+            campoServ.style.color = serv < 0 ? 'var(--danger)' : '#0ea5e9';
+
             document.getElementById('pay-balance').value = balance.toFixed(2);
         }
 
@@ -5782,7 +5799,7 @@
                 document.getElementById('mod').value = ''; document.getElementById('imei').value = '';
                 document.getElementById('fal').value = ''; document.getElementById('cost-part').value = '';
                 if (document.getElementById('clave-equipo')) document.getElementById('clave-equipo').value = '';
-                document.getElementById('cost-service').value = ''; document.getElementById('cost-total').value = '0.00';
+                document.getElementById('cost-service').value = '0.00'; document.getElementById('cost-total').value = '';
                 document.getElementById('pay-advance').value = ''; document.getElementById('pay-balance').value = '0.00';
                 limpiarFirma();
                 if (typeof retomarFoto === 'function') retomarFoto();
