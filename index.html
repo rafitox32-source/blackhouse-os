@@ -627,6 +627,8 @@
         .bento-tile:hover { transform:translateY(-3px); border-color:rgba(124,58,237,.45); box-shadow:0 16px 34px rgba(0,0,0,.45); }
         .bento-2 { grid-column:span 2; }
         @keyframes tileIn { from { opacity:0; transform:translateY(16px);} to { opacity:1; transform:translateY(0);} }
+        /* Punto rojo parpadeante del indicador de grabación */
+        @keyframes parpadeoRec { 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
         .bento-titulo { color:#9aa0ab; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; display:flex; align-items:center; gap:6px; }
 
         .pipe-col { text-align:center; padding:14px 8px 12px; border-radius:12px; background:rgba(255,255,255,0.025); border:1px solid transparent; cursor:pointer; transition:.2s; }
@@ -2248,6 +2250,9 @@
                                 <button class="bh-btn-white" style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
                                     onclick="abrirSoftwareAmbicion()"><i class='bx bx-laptop'></i>
                                     Software</button>
+                                <button class="bh-btn-white" style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
+                                    onclick="abrirEstudioGrabacion()"><i class='bx bx-video-recording'></i>
+                                    Grabar Reparación</button>
                                 <button id="btn-abrir-chat" class="bh-btn-purple"
                                     style="width:100%;margin-bottom:15px;text-align:left;padding:12px;background:linear-gradient(135deg,#10b981 0%,#047857 100%);position:relative;"
                                     onclick="toggleChat(); limpiarBadgeChat()">
@@ -4275,6 +4280,101 @@
                 <button class="bh-btn-purple" style="background:var(--success);" onclick="agregarDiagnosticoBitacora()" id="btn-add-bitacora" disabled>
                     <i class='bx bx-message-square-add'></i> Añadir a Bitácora
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ESTUDIO DE GRABACIÓN DE REPARACIONES ===== -->
+    <!-- Compone microscopio + pantalla + cámara frontal sobre un canvas con el tema OWN3D
+         y lo graba a un archivo .webm en la carpeta de Videos. -->
+    <div id="modal-grabacion" class="modal-overlay">
+        <div class="modal-content" style="width: 1080px; max-width: 96vw; max-height: 94vh; overflow-y: auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <h2 style="margin:0; color: var(--info);"><i class='bx bx-video-recording'></i> Estudio de Grabación</h2>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <span id="grab-tiempo" style="display:none; font-weight:900; color:#ef4444; font-size:15px;">
+                        <i class='bx bxs-circle' style="animation: parpadeoRec 1s infinite;"></i> 00:00
+                    </span>
+                    <button class="bh-btn-white" style="padding:6px 12px;" onclick="cerrarEstudioGrabacion()">
+                        <i class='bx bx-x'></i> Cerrar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Vista previa: lo que se ve aquí es exactamente lo que se graba -->
+            <div style="position:relative; background:#000; border-radius:10px; overflow:hidden; border:1px solid #333;">
+                <canvas id="grab-canvas" width="1920" height="1080" style="width:100%; display:block;"></canvas>
+                <div id="grab-aviso"
+                    style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:#aaa; font-size:14px; padding:20px; background:rgba(0,0,0,.75);">
+                    Elige tus fuentes abajo y pulsa <b style="color:#fff;">&nbsp;Encender&nbsp;</b> para ver la vista previa.
+                </div>
+            </div>
+
+            <!-- Escenas -->
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin:14px 0;">
+                <button class="bh-btn-white grab-escena" data-escena="microscopio" style="flex:1; padding:10px;"
+                    onclick="cambiarEscena('microscopio')"><i class='bx bx-search-alt'></i> Microscopio</button>
+                <button class="bh-btn-white grab-escena" data-escena="pantalla" style="flex:1; padding:10px;"
+                    onclick="cambiarEscena('pantalla')"><i class='bx bx-desktop'></i> Pantalla</button>
+                <button class="bh-btn-white grab-escena" data-escena="cara" style="flex:1; padding:10px;"
+                    onclick="cambiarEscena('cara')"><i class='bx bx-user'></i> Tu cámara</button>
+                <button class="bh-btn-white grab-escena" data-escena="mosaico" style="flex:1; padding:10px;"
+                    onclick="cambiarEscena('mosaico')"><i class='bx bx-grid-alt'></i> Todo a la vez</button>
+            </div>
+
+            <!-- Configuración de fuentes -->
+            <div class="bh-card" style="padding:16px; margin-bottom:14px;">
+                <h3 style="margin-top:0; font-size:13px; text-transform:uppercase; color:#aaa;">
+                    <i class='bx bx-slider'></i> Fuentes y opciones
+                </h3>
+                <div class="grid-inputs" style="grid-template-columns: 1fr 1fr;">
+                    <div class="input-group">
+                        <label>Cámara del microscopio</label>
+                        <select id="grab-cam-micro" class="bh-input" onchange="guardarConfigGrabacion()"></select>
+                    </div>
+                    <div class="input-group">
+                        <label>Tu cámara (rostro)</label>
+                        <select id="grab-cam-cara" class="bh-input" onchange="guardarConfigGrabacion()"></select>
+                    </div>
+                    <div class="input-group">
+                        <label>Pantalla a capturar</label>
+                        <select id="grab-pantalla" class="bh-input" onchange="guardarConfigGrabacion()"></select>
+                    </div>
+                    <div class="input-group">
+                        <label>Micrófono (para narrar)</label>
+                        <select id="grab-mic" class="bh-input" onchange="guardarConfigGrabacion()"></select>
+                    </div>
+                </div>
+                <div style="display:flex; gap:18px; flex-wrap:wrap; margin-top:6px; font-size:13px;">
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="grab-op-marco" checked onchange="guardarConfigGrabacion()">
+                        Marco en tu cámara
+                    </label>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="grab-op-barra" checked onchange="guardarConfigGrabacion()">
+                        Barra del tema
+                    </label>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="grab-op-camara" checked onchange="guardarConfigGrabacion()">
+                        Mostrar tu cámara
+                    </label>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="grab-op-transicion" checked onchange="guardarConfigGrabacion()">
+                        Transición al cambiar
+                    </label>
+                </div>
+            </div>
+
+            <!-- Controles -->
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button id="grab-btn-encender" class="bh-btn-white" style="flex:1; padding:12px;"
+                    onclick="encenderEstudio()"><i class='bx bx-power-off'></i> Encender</button>
+                <button id="grab-btn-rec" class="bh-btn-purple" disabled
+                    style="flex:1; padding:12px; background:linear-gradient(135deg,#ef4444 0%,#991b1b 100%);"
+                    onclick="alternarGrabacion()"><i class='bx bxs-circle'></i> Grabar</button>
+                <button class="bh-btn-white" style="flex:1; padding:12px;"
+                    onclick="ipcRenderer.send('abrir-carpeta-grabaciones')"><i class='bx bx-folder-open'></i>
+                    Ver grabaciones</button>
             </div>
         </div>
     </div>
@@ -8483,6 +8583,343 @@
         ipcRenderer.on('ambicion-bloqueado', (e, res) => {
             showToast((res && res.msg) || "No autorizado para abrir el software.", "error");
         });
+
+        // ===================================================================
+        // ESTUDIO DE GRABACIÓN DE REPARACIONES
+        // Compone microscopio + pantalla + cámara frontal en un canvas 1920x1080
+        // con el tema OWN3D encima, y graba ese canvas a un .webm.
+        // ===================================================================
+        const GRAB = {
+            encendido: false,
+            escena: 'microscopio',
+            streams: { micro: null, cara: null, pantalla: null, mic: null },
+            videos: { micro: null, cara: null, pantalla: null },
+            tema: { marco: null, barra: null, transicion: null },
+            rafId: null,
+            grabador: null,
+            trozos: [],
+            inicioRec: 0,
+            timerRec: null,
+            transicionHasta: 0
+        };
+
+        function abrirEstudioGrabacion() {
+            document.getElementById('modal-grabacion').style.display = 'flex';
+            cargarConfigGrabacion();
+            listarDispositivosGrabacion();
+            marcarEscenaActiva();
+        }
+
+        function cerrarEstudioGrabacion() {
+            if (GRAB.grabador && GRAB.grabador.state !== 'inactive') {
+                if (!confirm("Hay una grabación en curso. ¿Detenerla y cerrar?")) return;
+                alternarGrabacion();
+            }
+            apagarEstudio();
+            document.getElementById('modal-grabacion').style.display = 'none';
+        }
+
+        // Enumera cámaras y micrófonos. Pedimos permiso antes para que Windows
+        // devuelva los NOMBRES de los dispositivos (si no, salen vacíos).
+        async function listarDispositivosGrabacion() {
+            try {
+                const permiso = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                permiso.getTracks().forEach(t => t.stop());
+            } catch (e) { /* sin permiso igual listamos, pero sin nombres */ }
+
+            let disp = [];
+            try { disp = await navigator.mediaDevices.enumerateDevices(); } catch (e) { disp = []; }
+            const cams = disp.filter(d => d.kind === 'videoinput');
+            const mics = disp.filter(d => d.kind === 'audioinput');
+
+            const opciones = (lista, vacio) => `<option value="">${vacio}</option>` +
+                lista.map((d, i) => `<option value="${d.deviceId}">${d.label || ('Dispositivo ' + (i + 1))}</option>`).join('');
+
+            document.getElementById('grab-cam-micro').innerHTML = opciones(cams, '— Ninguna —');
+            document.getElementById('grab-cam-cara').innerHTML = opciones(cams, '— Ninguna —');
+            document.getElementById('grab-mic').innerHTML = opciones(mics, '— Sin audio —');
+
+            // Pantallas / ventanas disponibles
+            try {
+                const fuentes = await ipcRenderer.invoke('listar-fuentes-pantalla');
+                document.getElementById('grab-pantalla').innerHTML = '<option value="">— Ninguna —</option>' +
+                    (fuentes || []).map(f => `<option value="${f.id}">${f.esPantalla ? '🖥️ ' : '🪟 '}${f.nombre}</option>`).join('');
+            } catch (e) {
+                document.getElementById('grab-pantalla').innerHTML = '<option value="">— Ninguna —</option>';
+            }
+
+            aplicarConfigGuardada();
+        }
+
+        function guardarConfigGrabacion() {
+            const cfg = {
+                micro: document.getElementById('grab-cam-micro').value,
+                cara: document.getElementById('grab-cam-cara').value,
+                pantalla: document.getElementById('grab-pantalla').value,
+                mic: document.getElementById('grab-mic').value,
+                marco: document.getElementById('grab-op-marco').checked,
+                barra: document.getElementById('grab-op-barra').checked,
+                camara: document.getElementById('grab-op-camara').checked,
+                transicion: document.getElementById('grab-op-transicion').checked
+            };
+            localStorage.setItem('cfgGrabacion', JSON.stringify(cfg));
+        }
+
+        function cargarConfigGrabacion() { /* se aplica tras poblar los selects */ }
+
+        function aplicarConfigGuardada() {
+            let cfg = {};
+            try { cfg = JSON.parse(localStorage.getItem('cfgGrabacion') || '{}'); } catch (e) { cfg = {}; }
+            const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined && [...el.options].some(o => o.value === val)) el.value = val; };
+            set('grab-cam-micro', cfg.micro);
+            set('grab-cam-cara', cfg.cara);
+            set('grab-pantalla', cfg.pantalla);
+            set('grab-mic', cfg.mic);
+            if (cfg.marco !== undefined) document.getElementById('grab-op-marco').checked = cfg.marco;
+            if (cfg.barra !== undefined) document.getElementById('grab-op-barra').checked = cfg.barra;
+            if (cfg.camara !== undefined) document.getElementById('grab-op-camara').checked = cfg.camara;
+            if (cfg.transicion !== undefined) document.getElementById('grab-op-transicion').checked = cfg.transicion;
+        }
+
+        // Crea un <video> oculto que reproduce un stream (fuera del DOM visible).
+        function videoDeStream(stream) {
+            const v = document.createElement('video');
+            v.srcObject = stream;
+            v.muted = true;
+            v.playsInline = true;
+            v.play().catch(() => { });
+            return v;
+        }
+
+        function videoDeArchivo(ruta, loop) {
+            const v = document.createElement('video');
+            v.src = ruta;
+            v.muted = true;
+            v.loop = !!loop;
+            v.playsInline = true;
+            if (loop) v.play().catch(() => { });
+            return v;
+        }
+
+        async function encenderEstudio() {
+            if (GRAB.encendido) { apagarEstudio(); return; }
+
+            const idMicro = document.getElementById('grab-cam-micro').value;
+            const idCara = document.getElementById('grab-cam-cara').value;
+            const idPant = document.getElementById('grab-pantalla').value;
+            const idMic = document.getElementById('grab-mic').value;
+
+            if (!idMicro && !idCara && !idPant) {
+                showToast("Elige al menos una cámara o una pantalla.", "error");
+                return;
+            }
+
+            try {
+                if (idMicro) {
+                    GRAB.streams.micro = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: idMicro }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+                    GRAB.videos.micro = videoDeStream(GRAB.streams.micro);
+                }
+                if (idCara) {
+                    GRAB.streams.cara = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: idCara }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+                    GRAB.videos.cara = videoDeStream(GRAB.streams.cara);
+                }
+                if (idPant) {
+                    ipcRenderer.send('elegir-fuente-pantalla', idPant);
+                    // Pequeña espera para que main.js registre la fuente elegida.
+                    await new Promise(r => setTimeout(r, 150));
+                    GRAB.streams.pantalla = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+                    GRAB.videos.pantalla = videoDeStream(GRAB.streams.pantalla);
+                }
+                if (idMic) {
+                    GRAB.streams.mic = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: idMic } } });
+                }
+            } catch (e) {
+                showToast("No se pudo abrir una fuente: " + e.message, "error");
+                apagarEstudio();
+                return;
+            }
+
+            // Tema OWN3D (webm con transparencia real)
+            GRAB.tema.marco = videoDeArchivo('assets/stream-theme/webcam-frame.webm', true);
+            GRAB.tema.barra = videoDeArchivo('assets/stream-theme/overlay.webm', true);
+            GRAB.tema.transicion = videoDeArchivo('assets/stream-theme/transition.webm', false);
+
+            GRAB.encendido = true;
+            document.getElementById('grab-aviso').style.display = 'none';
+            document.getElementById('grab-btn-encender').innerHTML = "<i class='bx bx-power-off'></i> Apagar";
+            document.getElementById('grab-btn-rec').disabled = false;
+            dibujarBucle();
+        }
+
+        function apagarEstudio() {
+            GRAB.encendido = false;
+            if (GRAB.rafId) cancelAnimationFrame(GRAB.rafId);
+            GRAB.rafId = null;
+            Object.values(GRAB.streams).forEach(s => { if (s) s.getTracks().forEach(t => t.stop()); });
+            GRAB.streams = { micro: null, cara: null, pantalla: null, mic: null };
+            GRAB.videos = { micro: null, cara: null, pantalla: null };
+            GRAB.tema = { marco: null, barra: null, transicion: null };
+            const c = document.getElementById('grab-canvas');
+            if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
+            const aviso = document.getElementById('grab-aviso');
+            if (aviso) aviso.style.display = 'flex';
+            const btnE = document.getElementById('grab-btn-encender');
+            if (btnE) btnE.innerHTML = "<i class='bx bx-power-off'></i> Encender";
+            const btnR = document.getElementById('grab-btn-rec');
+            if (btnR) btnR.disabled = true;
+        }
+
+        function cambiarEscena(nombre) {
+            if (GRAB.escena === nombre) return;
+            GRAB.escena = nombre;
+            marcarEscenaActiva();
+            // Transición animada del tema (si está activada y el estudio encendido)
+            if (GRAB.encendido && document.getElementById('grab-op-transicion').checked && GRAB.tema.transicion) {
+                try {
+                    GRAB.tema.transicion.currentTime = 0;
+                    GRAB.tema.transicion.play().catch(() => { });
+                    GRAB.transicionHasta = performance.now() + 1200;
+                } catch (e) { }
+            }
+        }
+
+        function marcarEscenaActiva() {
+            document.querySelectorAll('.grab-escena').forEach(b => {
+                const activa = b.dataset.escena === GRAB.escena;
+                b.style.outline = activa ? '2px solid var(--bh-purple)' : 'none';
+                b.style.opacity = activa ? '1' : '.7';
+            });
+        }
+
+        // Dibuja un video recortado para LLENAR el rectángulo sin deformarlo.
+        function dibujarCover(ctx, v, x, y, w, h) {
+            if (!v || !v.videoWidth) return;
+            const escala = Math.max(w / v.videoWidth, h / v.videoHeight);
+            const nw = v.videoWidth * escala, nh = v.videoHeight * escala;
+            ctx.drawImage(v, x + (w - nw) / 2, y + (h - nh) / 2, nw, nh);
+        }
+
+        // Dibuja un video COMPLETO dentro del rectángulo (sin recortar, con bandas).
+        function dibujarContain(ctx, v, x, y, w, h) {
+            if (!v || !v.videoWidth) return;
+            const escala = Math.min(w / v.videoWidth, h / v.videoHeight);
+            const nw = v.videoWidth * escala, nh = v.videoHeight * escala;
+            ctx.drawImage(v, x + (w - nw) / 2, y + (h - nh) / 2, nw, nh);
+        }
+
+        // Dibuja la cámara del rostro con su marco del tema.
+        function dibujarCamaraConMarco(ctx, x, y, w, h) {
+            if (!GRAB.videos.cara) return;
+            dibujarCover(ctx, GRAB.videos.cara, x, y, w, h);
+            if (document.getElementById('grab-op-marco').checked && GRAB.tema.marco && GRAB.tema.marco.videoWidth) {
+                ctx.drawImage(GRAB.tema.marco, x, y, w, h);
+            }
+        }
+
+        function dibujarBucle() {
+            if (!GRAB.encendido) return;
+            const c = document.getElementById('grab-canvas');
+            const ctx = c.getContext('2d');
+            const W = c.width, H = c.height;
+            const verCam = document.getElementById('grab-op-camara').checked && GRAB.videos.cara;
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, W, H);
+
+            if (GRAB.escena === 'mosaico') {
+                // Microscopio y pantalla arriba, cámara del rostro abajo al centro.
+                const mitad = W / 2, altoArriba = H * 0.58;
+                if (GRAB.videos.micro) dibujarContain(ctx, GRAB.videos.micro, 0, 0, mitad, altoArriba);
+                if (GRAB.videos.pantalla) dibujarContain(ctx, GRAB.videos.pantalla, mitad, 0, mitad, altoArriba);
+                if (verCam) {
+                    const cw = 560, ch = 420;
+                    dibujarCamaraConMarco(ctx, (W - cw) / 2, altoArriba + 10, cw, ch);
+                }
+            } else {
+                // Escena con una fuente principal a pantalla completa.
+                const principal = GRAB.escena === 'microscopio' ? GRAB.videos.micro
+                    : GRAB.escena === 'pantalla' ? GRAB.videos.pantalla
+                        : GRAB.videos.cara;
+                if (principal) {
+                    // La pantalla se dibuja completa (contain) para no cortar información.
+                    if (GRAB.escena === 'pantalla') dibujarContain(ctx, principal, 0, 0, W, H);
+                    else dibujarCover(ctx, principal, 0, 0, W, H);
+                }
+                // Cámara del rostro como recuadro, salvo que ya sea la principal.
+                if (verCam && GRAB.escena !== 'cara') {
+                    const cw = 480, ch = 360, m = 40;
+                    dibujarCamaraConMarco(ctx, W - cw - m, H - ch - m - 120, cw, ch);
+                }
+            }
+
+            // Barra del tema (1920x200) abajo
+            if (document.getElementById('grab-op-barra').checked && GRAB.tema.barra && GRAB.tema.barra.videoWidth) {
+                ctx.drawImage(GRAB.tema.barra, 0, H - 200, W, 200);
+            }
+
+            // Transición encima de todo mientras dure
+            if (performance.now() < GRAB.transicionHasta && GRAB.tema.transicion && GRAB.tema.transicion.videoWidth) {
+                ctx.drawImage(GRAB.tema.transicion, 0, 0, W, H);
+            }
+
+            GRAB.rafId = requestAnimationFrame(dibujarBucle);
+        }
+
+        function alternarGrabacion() {
+            const btn = document.getElementById('grab-btn-rec');
+            // ---- Detener ----
+            if (GRAB.grabador && GRAB.grabador.state !== 'inactive') {
+                GRAB.grabador.stop();
+                clearInterval(GRAB.timerRec);
+                document.getElementById('grab-tiempo').style.display = 'none';
+                btn.innerHTML = "<i class='bx bxs-circle'></i> Grabar";
+                return;
+            }
+            // ---- Iniciar ----
+            if (!GRAB.encendido) { showToast("Primero enciende el estudio.", "error"); return; }
+            try {
+                const canvas = document.getElementById('grab-canvas');
+                const stream = canvas.captureStream(30);
+                if (GRAB.streams.mic) GRAB.streams.mic.getAudioTracks().forEach(t => stream.addTrack(t));
+
+                let mime = 'video/webm;codecs=vp9,opus';
+                if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8,opus';
+                if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+
+                GRAB.trozos = [];
+                GRAB.grabador = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6000000 });
+                GRAB.grabador.ondataavailable = e => { if (e.data && e.data.size) GRAB.trozos.push(e.data); };
+                GRAB.grabador.onstop = async () => {
+                    try {
+                        const blob = new Blob(GRAB.trozos, { type: 'video/webm' });
+                        const buf = new Uint8Array(await blob.arrayBuffer());
+                        const res = await ipcRenderer.invoke('guardar-grabacion', buf);
+                        if (res && res.success) {
+                            showToast("Grabación guardada ✅", "success");
+                        } else {
+                            showToast("No se pudo guardar: " + ((res && res.msg) || 'error'), "danger");
+                        }
+                    } catch (e) {
+                        showToast("Error al guardar la grabación: " + e.message, "danger");
+                    }
+                };
+                GRAB.grabador.start(1000);
+
+                GRAB.inicioRec = Date.now();
+                document.getElementById('grab-tiempo').style.display = 'inline';
+                GRAB.timerRec = setInterval(() => {
+                    const s = Math.floor((Date.now() - GRAB.inicioRec) / 1000);
+                    const txt = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+                    document.getElementById('grab-tiempo').innerHTML =
+                        "<i class='bx bxs-circle' style=\"animation: parpadeoRec 1s infinite;\"></i> " + txt;
+                }, 500);
+
+                btn.innerHTML = "<i class='bx bx-stop'></i> Detener";
+                showToast("Grabando...", "info");
+            } catch (e) {
+                showToast("No se pudo iniciar la grabación: " + e.message, "danger");
+            }
+        }
 
         ipcRenderer.on('ambicion-resultado', (e, res) => {
             if (res && res.success) {

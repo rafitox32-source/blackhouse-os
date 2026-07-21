@@ -125,6 +125,22 @@ function createWindow() {
     });
 
     mainWindow.loadFile('index.html');
+
+    // === CAPTURA DE PANTALLA PARA GRABAR REPARACIONES ===
+    // Con contextIsolation activo, el renderer pide la pantalla con getDisplayMedia() y
+    // Electron nos delega aquí qué fuente entregar. Usamos la que el técnico eligió en la
+    // pantalla de grabación; si no eligió ninguna, la pantalla principal.
+    try {
+        const { session, desktopCapturer } = require('electron');
+        session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+            desktopCapturer.getSources({ types: ['screen', 'window'] }).then(sources => {
+                const elegida = sources.find(s => s.id === fuentePantallaElegida) || sources[0];
+                callback({ video: elegida, audio: 'loopback' });
+            }).catch(() => callback({}));
+        }, { useSystemPicker: false });
+    } catch (e) {
+        console.error('No se pudo configurar la captura de pantalla:', e.message);
+    }
 }
 
 app.whenReady().then(() => {
@@ -204,6 +220,59 @@ ipcMain.on('abrir-carpeta', (event, tipo) => {
         : path.join(app.getPath('userData'), 'Dump');
     if (!fs.existsSync(carpeta)) fs.mkdirSync(carpeta, { recursive: true });
     shell.openPath(carpeta);
+});
+
+// === GRABACIÓN DE REPARACIONES (pestaña Laboratorio) ===
+// El video se compone en el renderer (cámaras + pantalla + tema OWN3D sobre un canvas)
+// y aquí solo listamos las pantallas disponibles y guardamos el archivo final.
+let fuentePantallaElegida = null;
+
+function carpetaGrabaciones() {
+    const dir = path.join(app.getPath('videos'), 'BlackHouse-Reparaciones');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+}
+
+// Lista de pantallas/ventanas que se pueden capturar, con miniatura para elegir.
+ipcMain.handle('listar-fuentes-pantalla', async () => {
+    try {
+        const { desktopCapturer } = require('electron');
+        const sources = await desktopCapturer.getSources({
+            types: ['screen', 'window'],
+            thumbnailSize: { width: 160, height: 90 }
+        });
+        return sources.map(s => ({
+            id: s.id,
+            nombre: s.name,
+            esPantalla: s.id.startsWith('screen'),
+            thumb: s.thumbnail.toDataURL()
+        }));
+    } catch (e) {
+        console.error('No se pudieron listar las fuentes de pantalla:', e.message);
+        return [];
+    }
+});
+
+// El técnico elige qué pantalla/ventana capturar antes de pedir getDisplayMedia().
+ipcMain.on('elegir-fuente-pantalla', (event, id) => { fuentePantallaElegida = id || null; });
+
+// Guarda el video ya grabado. Llega como ArrayBuffer desde el renderer.
+ipcMain.handle('guardar-grabacion', async (event, datos) => {
+    try {
+        const dir = carpetaGrabaciones();
+        const ahora = new Date();
+        const sello = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}_${String(ahora.getHours()).padStart(2, '0')}-${String(ahora.getMinutes()).padStart(2, '0')}-${String(ahora.getSeconds()).padStart(2, '0')}`;
+        const archivo = path.join(dir, `reparacion_${sello}.webm`);
+        fs.writeFileSync(archivo, Buffer.from(datos));
+        return { success: true, archivo };
+    } catch (e) {
+        console.error('Error guardando la grabación:', e.message);
+        return { success: false, msg: e.message };
+    }
+});
+
+ipcMain.on('abrir-carpeta-grabaciones', () => {
+    try { shell.openPath(carpetaGrabaciones()); } catch (e) { console.error(e.message); }
 });
 
 // === ABRIR CARPETA DE PLANTILLAS DE INVENTARIO (Excel para carga masiva) ===
