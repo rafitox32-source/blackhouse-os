@@ -12608,6 +12608,42 @@
             100% { transform: translate(2px, 4px) rotate(3deg); }
         }
 
+        /* Modo fiesta: el robot brinca y su compuerta cambia de color */
+        #ayudante.fiesta #ayudante-robot {
+            animation: jpBrinco .45s ease-in-out infinite !important;
+        }
+
+        @keyframes jpBrinco {
+
+            0%,
+            100% {
+                transform: translateY(6px) rotate(-8deg);
+            }
+
+            50% {
+                transform: translateY(-8px) rotate(8deg);
+            }
+        }
+
+        #ayudante.fiesta #ayudante-casa {
+            animation: jpColores 1s linear infinite;
+        }
+
+        @keyframes jpColores {
+            0% { border-color: #7c3aed; box-shadow: 0 0 22px rgba(124, 58, 237, .7); }
+            33% { border-color: #22d3ee; box-shadow: 0 0 22px rgba(34, 211, 238, .7); }
+            66% { border-color: #fbbf24; box-shadow: 0 0 22px rgba(251, 191, 36, .7); }
+            100% { border-color: #7c3aed; box-shadow: 0 0 22px rgba(124, 58, 237, .7); }
+        }
+
+        /* Confeti */
+        @keyframes jpConfeti {
+            to {
+                transform: translateY(105vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
         /* Si lo que explica está pegado a la izquierda, el globo pasa al otro lado
            del robot para que quepa y el robot pueda sentarse justo encima. */
         #ayudante.globo-derecha {
@@ -13193,7 +13229,8 @@
             },
             // ---- Consultas sobre TUS datos ----
             {
-                claves: ['cuanto vendi hoy', 'cuanto vendi', 'cuanto entro hoy', 'como voy hoy',
+                // Ojo: "como voy hoy" es del resumen del día, no de esto.
+                claves: ['cuanto vendi hoy', 'cuanto vendi', 'cuanto entro hoy',
                     'ventas de hoy', 'cuanto llevo hoy', 'lo de hoy', 'cuanto facture'],
                 accion: 'ventas-hoy'
             },
@@ -13216,6 +13253,22 @@
                 claves: ['cuanto me deben', 'quien me debe', 'por cobrar', 'saldos pendientes',
                     'cuanto falta cobrar', 'deudas'],
                 accion: 'por-cobrar'
+            },
+            {
+                claves: ['modo fiesta', 'fiesta', 'celebremos', 'a celebrar', 'lo logramos', 'cerre el dia'],
+                accion: 'fiesta'
+            },
+            {
+                claves: ['como voy hoy', 'como va mi dia', 'resumen del dia', 'como va el dia', 'como estamos hoy'],
+                accion: 'como-voy'
+            },
+            {
+                claves: ['adivina un numero', 'dame un numero', 'numero al azar', 'piensa un numero', 'sortea'],
+                accion: 'numero'
+            },
+            {
+                claves: ['cara o sello', 'lanza una moneda', 'tira la moneda', 'cara o cruz'],
+                accion: 'moneda'
             },
             {
                 claves: ['dame animo', 'animame', 'estoy cansado', 'estoy triste', 'mal dia', 'que dia malo',
@@ -13288,6 +13341,10 @@
                 if (c.accion === 'comision') { jpComisionTecnico(); return true; }
                 if (c.accion === 'por-cobrar') { jpPorCobrar(); return true; }
                 if (c.accion === 'animo') { jpDameAnimo(); return true; }
+                if (c.accion === 'fiesta') { modoFiestaJP(); return true; }
+                if (c.accion === 'como-voy') { jpComoVoyHoy(); return true; }
+                if (c.accion === 'numero') { jpAdivinaNumero(); return true; }
+                if (c.accion === 'moneda') { jpCaraOSello(); return true; }
                 if (c.accion === 'voz-on') { if (!JP_VOZ.activa) alternarVozJP(); else hablarAyudante('Ya estoy hablando', 'La voz ya está encendida. 🔊', null, true); return true; }
                 if (c.accion === 'voz-off') { if (JP_VOZ.activa) alternarVozJP(); else hablarAyudante('Ya estoy callado', 'La voz ya estaba apagada. 🔇', null, true); return true; }
                 const r = c.resp();
@@ -13949,6 +14006,88 @@
             volverASuCasa(); quitarResaltado();
             emocionJP(emo, 7000);
             hablarAyudante(titulo, texto, null, true);
+            return true;
+        }
+
+        // =============================================================
+        // MODO FIESTA y otros extras
+        // =============================================================
+        function modoFiestaJP() {
+            const cont = document.getElementById('ayudante');
+            if (!cont) return true;
+            volverASuCasa(); quitarResaltado();
+            emocionJP('risa', 9000);
+            hablarAyudante('🎉 ¡MODO FIESTA!',
+                'Se cerró el día, se cobró la caja y el taller quedó limpio.<br>Por hoy, ya está. 🕺💃',
+                null, true);
+            cont.classList.add('fiesta');
+            lanzarConfeti();
+            setTimeout(() => cont.classList.remove('fiesta'), 9000);
+            return true;
+        }
+
+        // Confeti hecho a mano (sin librerías): cuadritos que caen y se borran solos.
+        function lanzarConfeti() {
+            const colores = ['#7c3aed', '#22d3ee', '#34d399', '#fbbf24', '#ef4444', '#a78bfa'];
+            const capa = document.createElement('div');
+            capa.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:99999;overflow:hidden';
+            document.body.appendChild(capa);
+            for (let i = 0; i < 70; i++) {
+                const p = document.createElement('div');
+                const tam = 6 + Math.random() * 7;
+                p.style.cssText = `position:absolute;top:-20px;left:${Math.random() * 100}%;
+                    width:${tam}px;height:${tam * 0.6}px;background:${colores[i % colores.length]};
+                    opacity:${0.7 + Math.random() * 0.3};border-radius:2px;
+                    animation:jpConfeti ${2.2 + Math.random() * 2}s linear ${Math.random() * 1.2}s forwards`;
+                capa.appendChild(p);
+            }
+            setTimeout(() => capa.remove(), 6000);
+        }
+
+        // Cómo va el día en una línea
+        function jpComoVoyHoy() {
+            const ord = ordenesJP();
+            if (!ord.length) return sinDatosJP();
+            const hoy = ord.filter(r => esHoy(r.created_at));
+            const facturado = hoy.reduce((s, r) => s + (parseFloat(r.costo) || 0), 0);
+            const entregados = ord.filter(r => r.estado === 'Entregado' && esHoy(r.created_at)).length;
+            const listos = ord.filter(r => r.estado === 'Completado').length;
+            const enProceso = ord.filter(r => r.estado === 'En Proceso').length;
+
+            emocionJP(facturado >= 300 ? 'feliz' : 'pensando', 6000);
+            hablarAyudante('Cómo va tu día',
+                `<div class="ayu-metricas">
+                    <div class="ayu-m"><span>Entraron hoy</span><b>${hoy.length}</b></div>
+                    <div class="ayu-m"><span>Facturado</span><b style="color:#a78bfa">${soles(facturado)}</b></div>
+                    <div class="ayu-m"><span>Entregados</span><b style="color:#34d399">${entregados}</b></div>
+                    <div class="ayu-m"><span>Listos por entregar</span><b style="color:#fbbf24">${listos}</b></div>
+                    <div class="ayu-m"><span>En proceso</span><b>${enProceso}</b></div>
+                 </div>` +
+                `<div class="ayu-consejo">💡 ${listos > 0
+                    ? 'Tienes ' + listos + ' equipo' + (listos > 1 ? 's' : '') + ' listo' + (listos > 1 ? 's' : '') + ' para cobrar hoy mismo.'
+                    : 'Nada pendiente de entrega. Todo al día. 👌'}</div>`,
+                null, true);
+            return true;
+        }
+
+        // Un número al azar (para sorteos, rifas o decidir quién invita el almuerzo)
+        function jpAdivinaNumero() {
+            const n = Math.floor(Math.random() * 100) + 1;
+            emocionJP('sorpresa', 5000);
+            hablarAyudante('🎲 Tu número es...',
+                `<div style="font-size:38px;font-weight:900;text-align:center;color:#22d3ee;margin:4px 0">${n}</div>` +
+                'Del 1 al 100. Sin trampa: yo no sé hacer trampa. 🤖',
+                null, true);
+            return true;
+        }
+
+        // Cara o sello
+        function jpCaraOSello() {
+            const cara = Math.random() < 0.5;
+            emocionJP('risa', 5000);
+            hablarAyudante(cara ? '🪙 ¡Cara!' : '🪙 ¡Sello!',
+                'Ya está decidido. No se repite, que después dicen que hago trampa. 😄',
+                null, true);
             return true;
         }
 
