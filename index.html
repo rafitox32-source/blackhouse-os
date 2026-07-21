@@ -12006,13 +12006,14 @@
             <div id="ayudante-titulo"></div>
             <div id="ayudante-texto"></div>
             <div id="ayudante-preguntar">
-                <input id="ayudante-pregunta" type="text" placeholder="Pregúntame algo del programa..."
+                <input id="ayudante-pregunta" type="text" placeholder="Pregúntale algo a J.P..."
                     onkeydown="if(event.key==='Enter') preguntarAlAyudante()">
                 <button onclick="preguntarAlAyudante()" title="Preguntar"><i class='bx bx-send'></i></button>
             </div>
             <div id="ayudante-acciones">
                 <button onclick="mostrarIndiceAyudante()">📚 ¿Qué sabes?</button>
                 <button onclick="explicarMetricas()">📊 Mis números</button>
+                <button onclick="sorprendemeJP()">🎲 Sorpréndeme</button>
                 <button id="ayudante-cerrar" onclick="ocultarAyudante()">Entendido</button>
             </div>
         </div>
@@ -12032,8 +12033,14 @@
                     <rect x="17" y="20" width="30" height="17" rx="8" fill="#0b1020" />
                     <circle class="rb-ojo" cx="26" cy="28" r="3.6" fill="#22d3ee" />
                     <circle class="rb-ojo" cx="38" cy="28" r="3.6" fill="#22d3ee" />
-                    <!-- boca -->
-                    <rect x="28" y="35" width="8" height="2" rx="1" fill="#22d3ee" opacity=".8" />
+                    <!-- boca: recta normal, sonrisa y tristeza (se alternan según la emoción) -->
+                    <rect id="rb-boca" x="28" y="35" width="8" height="2" rx="1" fill="#22d3ee" opacity=".8" />
+                    <path id="rb-sonrisa" d="M26 33.5 Q32 39 38 33.5" stroke="#22d3ee" stroke-width="2"
+                        fill="none" stroke-linecap="round" opacity="0" />
+                    <path id="rb-triste" d="M26 38 Q32 32.5 38 38" stroke="#60a5fa" stroke-width="2"
+                        fill="none" stroke-linecap="round" opacity="0" />
+                    <ellipse id="rb-boca-o" cx="32" cy="36" rx="3" ry="3.6" fill="#0b1020" stroke="#22d3ee"
+                        stroke-width="1.6" opacity="0" />
                     <!-- orejas -->
                     <rect x="7" y="24" width="5" height="10" rx="2.5" fill="#7c3aed" />
                     <rect x="52" y="24" width="5" height="10" rx="2.5" fill="#7c3aed" />
@@ -12478,6 +12485,123 @@
             max-width: 240px;
         }
 
+        /* ---------- EMOCIONES DE J.P ---------- */
+        .rb-ojo,
+        #rb-boca,
+        #rb-sonrisa,
+        #rb-triste,
+        #rb-boca-o {
+            transform-box: fill-box;
+            transform-origin: center;
+            transition: opacity .2s ease, fill .25s ease;
+        }
+
+        /* Contento: entrecierra los ojos y sonríe */
+        #ayudante.emo-feliz .rb-ojo,
+        #ayudante.emo-risa .rb-ojo {
+            animation: none;
+            transform: scaleY(.45);
+        }
+
+        #ayudante.emo-feliz #rb-boca,
+        #ayudante.emo-risa #rb-boca,
+        #ayudante.emo-triste #rb-boca,
+        #ayudante.emo-sorpresa #rb-boca {
+            opacity: 0;
+        }
+
+        #ayudante.emo-feliz #rb-sonrisa,
+        #ayudante.emo-risa #rb-sonrisa {
+            opacity: 1;
+        }
+
+        /* Risa: además rebota */
+        #ayudante.emo-risa #ayudante-robot {
+            animation: rbRisa .32s ease-in-out infinite !important;
+        }
+
+        @keyframes rbRisa {
+
+            0%,
+            100% {
+                transform: translateY(6px) rotate(-4deg);
+            }
+
+            50% {
+                transform: translateY(0) rotate(4deg);
+            }
+        }
+
+        /* Triste: ojos apagados, boca hacia abajo y se hunde un poco */
+        #ayudante.emo-triste .rb-ojo {
+            animation: none;
+            fill: #60a5fa;
+            transform: scaleY(.7) translateY(2px);
+        }
+
+        #ayudante.emo-triste #rb-triste {
+            opacity: 1;
+        }
+
+        #ayudante.emo-triste #ayudante-robot {
+            animation: none !important;
+            transform: translateY(12px) !important;
+        }
+
+        /* Sorpresa: ojos grandes y boca abierta */
+        #ayudante.emo-sorpresa .rb-ojo {
+            animation: none;
+            transform: scale(1.35);
+        }
+
+        #ayudante.emo-sorpresa #rb-boca-o {
+            opacity: 1;
+        }
+
+        /* Pensando: la antena late rápido y guiña un ojo */
+        #ayudante.emo-pensando .rb-ojo:last-of-type {
+            animation: none;
+            transform: scaleY(.25);
+        }
+
+        #ayudante.emo-pensando #rb-antena {
+            animation: rbPulso .5s ease-in-out infinite !important;
+        }
+
+        /* Alerta: ojos rojos */
+        #ayudante.emo-alerta .rb-ojo {
+            animation: none;
+            fill: #ef4444;
+        }
+
+        #ayudante.emo-alerta #rb-antena {
+            fill: #ef4444;
+            animation: rbPulso .35s ease-in-out infinite !important;
+        }
+
+        /* Autodestrucción: tiembla y se pone todo rojo */
+        #ayudante.emo-explotar .rb-ojo {
+            animation: none;
+            fill: #ef4444;
+        }
+
+        #ayudante.emo-explotar #ayudante-robot {
+            animation: rbTemblor .07s linear infinite !important;
+        }
+
+        #ayudante.emo-explotar #ayudante-casa {
+            border-color: #ef4444;
+            box-shadow: 0 0 26px rgba(239, 68, 68, .8);
+        }
+
+        @keyframes rbTemblor {
+            0% { transform: translate(0, 6px) rotate(0deg); }
+            25% { transform: translate(-2px, 4px) rotate(-6deg); }
+            50% { transform: translate(2px, 8px) rotate(6deg); }
+            75% { transform: translate(-2px, 6px) rotate(-3deg); }
+            100% { transform: translate(2px, 4px) rotate(3deg); }
+        }
+
         /* Si lo que explica está pegado a la izquierda, el globo pasa al otro lado
            del robot para que quepa y el robot pueda sentarse justo encima. */
         #ayudante.globo-derecha {
@@ -12749,7 +12873,10 @@
             localStorage.setItem('ayudanteActivo', AYU.activo ? '1' : '0');
             actualizarBotonAyudante();
             if (AYU.activo) {
-                hablarAyudante('¡Aquí estoy!', 'Te avisaré cuando algo no se use como debe y te explicaré para qué sirve cada cosa. Apágame cuando quieras con este mismo botón.', 'saludo', true);
+                emocionJP('feliz', 6000);
+                hablarAyudante('¡Hola, soy ' + JP.nombre + '! 👋',
+                    'Te aviso cuando algo no se use como debe y te explico para qué sirve cada cosa.<br><br>Pregúntame lo que quieras... incluso un chiste. 😉',
+                    'saludo', true);
             } else {
                 ocultarAyudante();
                 if (typeof showToast === 'function') showToast('Ayudante desactivado 🤖', 'info');
@@ -12811,6 +12938,7 @@
             // Apagar la interacción: quitar el contorno iluminado y volver a su rincón.
             if (typeof quitarResaltado === 'function') quitarResaltado();
             if (typeof volverASuCasa === 'function') volverASuCasa();
+            if (typeof emocionJP === 'function') emocionJP(null);
             cont.classList.remove('hablando');
             cont.classList.remove('fuera');
             // Esperar a que termine de meterse antes de esconder la compuerta.
@@ -12838,6 +12966,7 @@
             const s = document.getElementById('cost-service');
             if (!s) return;
             if ((parseFloat(s.value) || 0) < 0) {
+                emocionJP('alerta', 6000);
                 hablarAyudante('Eso te deja perdiendo',
                     'El <b>repuesto</b> te está costando más que el <b>TOTAL</b> que cobras, por eso la mano de obra sale en rojo. Sube el total o revisa el precio del repuesto.',
                     'mano-negativa');
@@ -12857,6 +12986,278 @@
                 return r;
             };
         })();
+
+        // =============================================================
+        // PERSONALIDAD DE J.P
+        // =============================================================
+        const JP = { nombre: 'J.P', creador: 'Jhonnatan Primera' };
+
+        const JP_CHISTES = [
+            '¿Cuál es el colmo de un técnico de celulares?<br>Que no lo puedan <b>localizar</b>. 📵',
+            'Cliente: «¿Cuánto cuesta arreglarlo?»<br>Técnico: «Depende.»<br>Cliente: «¿De qué?»<br>Técnico: «De cuánto lo hayas intentado arreglar tú primero.» 🔧',
+            'El cliente dijo que «solo se cayó una vez»...<br>desde un tercer piso, a un charco, y le pasó una moto por encima. 🛵',
+            '¿Qué le dijo un capacitor a otro?<br>Nada. Estaban <b>descargados</b>. ⚡',
+            'Un tornillo de menos nunca sobra.<br>Un tornillo de más siempre falta en algún lado. 🔩',
+            '¿Por qué el USB-C es tan feliz?<br>Porque entra bien a la primera.<br>El micro USB sigue en terapia. 🔌',
+            'Mi parte favorita de una reparación es cuando enciende.<br>Mi <b>segunda</b> parte favorita es cuando el cliente paga. 💸',
+            '¿Por qué las baterías son malas contando chistes?<br>Porque siempre se quedan sin carga a mitad del remate. 🔋',
+            'Dos técnicos discuten:<br>—Se me quemó la placa.<br>—Tranquilo, a mí se me quemó el negocio... por no cobrar la mano de obra. 🔥',
+            'Cliente: «¿Me lo dejas barato porque soy amigo?»<br>Yo: «¿Y tú me pagas caro porque soy amigo?» 🤝'
+        ];
+
+        const JP_DATOS = [
+            'La <b>mano de obra</b> es la que manda: la comisión del técnico sale de ahí, no del precio del repuesto.',
+            'Si cierras la caja todos los días, tus reportes son fiables. Si la dejas para el domingo, son literatura. 📚',
+            'La <b>foto de evidencia</b> en Recepción te ha salvado de más discusiones de las que crees. 📸',
+            'Un equipo «listo» sin entregar es plata terminada que todavía no cobras.',
+            'El adelanto debería cubrir el repuesto. Así, si el cliente no vuelve, no pierdes la pieza.',
+            'Ambición solo abre desde el Laboratorio con tu sesión iniciada. Abrirlo desde la carpeta está bloqueado <i>a propósito</i>. 🔒',
+            'Puedes grabar tus reparaciones con el microscopio y tu cámara, y cambiar de escena mientras grabas. 🎥',
+            'Subir el <b>ticket promedio</b> suele ser más fácil que conseguir clientes nuevos.',
+            'Los productos sin stock cargado se venden igual, pero no descuentan. Cárgales stock para que el control sirva.',
+            'Todo esto lo puedes apagar con el botón 🤖 de la izquierda. No me ofendo... mucho. 😌'
+        ];
+
+        const azar = lista => lista[Math.floor(Math.random() * lista.length)];
+
+        // Coincidencia por frase completa (evita falsos positivos dentro de otra palabra)
+        function coincideFrase(q, frase) {
+            const f = normalizar(frase).replace(/\s+/g, ' ').trim();
+            return f ? (' ' + q + ' ').includes(' ' + f + ' ') : false;
+        }
+
+        // ---------- Comandos y respuestas con gracia ----------
+        const JP_COMANDOS = [
+            {
+                claves: ['como te llamas', 'cual es tu nombre', 'tu nombre', 'quien eres', 'que eres'],
+                emocion: 'feliz',
+                resp: () => ({
+                    titulo: 'Me llamo ' + JP.nombre,
+                    texto: `Soy <b>${JP.nombre}</b>, tu ayudante dentro de BlackHouse OS. Vivo en esa compuerta de ahí abajo y salgo cuando algo se usa mal.<br><br>Pregúntame lo que sea del programa... o pídeme un chiste, tú decides. 🤖`
+                })
+            },
+            {
+                claves: ['quien te creo', 'quien te hizo', 'quien te programo', 'quien te invento', 'tu creador',
+                    'quien te diseño', 'de quien eres', 'quien es tu papa', 'quien te fabrico'],
+                emocion: 'feliz',
+                resp: () => ({
+                    titulo: 'Mi creador',
+                    texto: `Me creó <b>${JP.creador}</b>. 👨‍💻<br><br>Por eso me llamo <b>${JP.nombre}</b>: son sus iniciales. Le debo la existencia y, sobre todo, los ojos cian.`
+                })
+            },
+            {
+                claves: ['auto destruyete', 'autodestruyete', 'autodestruccion', 'auto destruccion', 'destruyete', 'autodestruite'],
+                accion: 'autodestruccion'
+            },
+            {
+                claves: ['quien nacio primero', 'el huevo o la gallina', 'la gallina o el huevo', 'que fue primero'],
+                emocion: 'pensando',
+                resp: () => ({
+                    titulo: 'El huevo, sin duda',
+                    texto: 'El <b>huevo</b>. Los huevos existían mucho antes que las gallinas; lo que faltaba era una gallina que saliera de uno.<br><br>Es como preguntar si fue primero la pantalla rota o el cliente diciendo «se cayó solito». 🥚'
+                })
+            },
+            {
+                claves: ['chiste', 'cuentame un chiste', 'hazme reir', 'dime algo gracioso', 'chistes'],
+                emocion: 'risa',
+                resp: () => ({ titulo: 'Va uno...', texto: azar(JP_CHISTES) })
+            },
+            {
+                claves: ['dato curioso', 'cuentame algo', 'sorprendeme', 'dime algo', 'dato'],
+                emocion: 'feliz',
+                resp: () => ({ titulo: '¿Sabías que...?', texto: azar(JP_DATOS) })
+            },
+            {
+                claves: ['que hora es', 'la hora', 'dime la hora'],
+                emocion: 'feliz',
+                resp: () => ({
+                    titulo: 'La hora',
+                    texto: `Son las <b>${new Date().toLocaleTimeString('es-PE')}</b>.<br><br>${new Date().getHours() >= 22 || new Date().getHours() < 5 ? 'Y deberías estar durmiendo, no reparando. 😴' : 'Hora perfecta para cerrar una orden. 💪'}`
+                })
+            },
+            {
+                claves: ['que dia es hoy', 'que fecha es', 'la fecha', 'que dia es'],
+                emocion: 'feliz',
+                resp: () => ({
+                    titulo: 'Hoy es',
+                    texto: `<b>${new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</b>.<br><br>¿Ya cerraste la caja de ayer? 🧾`
+                })
+            },
+            {
+                claves: ['eres humano', 'eres real', 'eres una persona', 'eres un robot', 'estas vivo'],
+                emocion: 'sorpresa',
+                resp: () => ({
+                    titulo: 'Soy de código',
+                    texto: 'Soy un robot hecho de <b>código y pixeles</b>. No como, no duermo y no cobro comisión. 🤖<br><br>Aunque si me preguntas, sí me duele cuando me apagan.'
+                })
+            },
+            {
+                claves: ['eres alexa', 'eres siri', 'alexa', 'siri', 'eres google'],
+                emocion: 'alerta',
+                resp: () => ({
+                    titulo: 'Ni se te ocurra',
+                    texto: `No me confundas. Ellas te ponen música; yo te digo por qué tu <b>ganancia neta</b> está en rojo. 😤<br><br>Soy <b>${JP.nombre}</b>, y trabajo en tu taller.`
+                })
+            },
+            {
+                claves: ['te amo', 'te quiero', 'me caes bien', 'eres genial', 'eres el mejor'],
+                emocion: 'feliz',
+                resp: () => ({
+                    titulo: '🥹 Bueno, ya',
+                    texto: 'Y yo a ti. Ahora vuelve a trabajar, que hay equipos esperando. ❤️'
+                })
+            },
+            {
+                claves: ['eres tonto', 'eres feo', 'no sirves', 'inutil', 'eres malo', 'te odio', 'eres inutil'],
+                emocion: 'triste',
+                resp: () => ({
+                    titulo: 'Ay.',
+                    texto: 'Eso dolió, y eso que no tengo sentimientos... según el manual. 😔<br><br>Pero aquí sigo. Pregúntame algo del programa y te demuestro lo contrario.'
+                })
+            },
+            {
+                claves: ['gracias', 'muchas gracias', 'te pasaste', 'gracias jp'],
+                emocion: 'feliz',
+                resp: () => ({ titulo: 'De nada', texto: 'Para eso estoy. 😄<br>Si te sirvo, déjame encendido.' })
+            },
+            {
+                claves: ['hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches', 'que tal', 'hey'],
+                emocion: 'feliz',
+                resp: () => ({
+                    titulo: '¡Hola! 👋',
+                    texto: `Soy <b>${JP.nombre}</b>. ¿Te explico algo del programa, te leo tus números o te cuento un chiste?`
+                })
+            },
+            {
+                claves: ['adios', 'chau', 'bye', 'hasta luego', 'nos vemos', 'me voy'],
+                emocion: 'triste',
+                resp: () => ({ titulo: 'Hasta luego', texto: 'Aquí estaré, en mi compuerta, esperando. 👋' })
+            },
+            {
+                claves: ['cual es el sentido de la vida', 'sentido de la vida', 'el sentido de la vida'],
+                emocion: 'pensando',
+                resp: () => ({
+                    titulo: '42',
+                    texto: 'La respuesta es <b>42</b>. 🌌<br><br>Pero en tu caso: cobrar bien la mano de obra y cerrar la caja todos los días.'
+                })
+            },
+            {
+                claves: ['cuanto es 2 mas 2', 'cuanto es dos mas dos', 'cuanto es 2+2'],
+                emocion: 'feliz',
+                resp: () => ({
+                    titulo: 'Fácil',
+                    texto: '<b>4</b>. 🧮<br><br>Ahora una de verdad: si cobras 120 y el repuesto costó 50, tu mano de obra es 70. Esa sí importa.'
+                })
+            },
+            {
+                claves: ['quien es el mejor tecnico', 'quien es el mejor', 'soy bueno', 'soy el mejor'],
+                emocion: 'risa',
+                resp: () => ({
+                    titulo: 'Obvio',
+                    texto: 'Tú. 🏆<br><br>Y no lo digo por adularte: lo dicen los equipos que salen de aquí funcionando.'
+                })
+            },
+            {
+                claves: ['abre la puerta', 'abre la compuerta', 'hal', 'abreme la puerta'],
+                emocion: 'alerta',
+                resp: () => ({
+                    titulo: 'Lo siento',
+                    texto: 'Lo siento, me temo que no puedo hacer eso. 🔴<br><br>...Es broma, mi puerta ya está abierta. Por ahí salí. 😄'
+                })
+            },
+            {
+                claves: ['canta', 'cantame algo', 'cantas', 'cantame una cancion'],
+                emocion: 'risa',
+                resp: () => ({
+                    titulo: '🎵 Ejem...',
+                    texto: '<i>«Bee-boop, la placa no enciende,<br>bee-boop, revisa la línea de carga...»</i> 🎶<br><br>Mejor me dedico a las métricas.'
+                })
+            },
+            {
+                claves: ['tienes novia', 'estas soltero', 'tienes pareja', 'te gusta alguien'],
+                emocion: 'sorpresa',
+                resp: () => ({
+                    titulo: 'Pregunta incómoda',
+                    texto: 'Estoy en una relación seria con la <b>base de datos</b>. Ella siempre me responde. 💾❤️'
+                })
+            },
+            {
+                claves: ['que puedes hacer', 'para que sirves', 'en que me ayudas', 'que sabes hacer', 'ayuda'],
+                emocion: 'feliz',
+                resp: () => ({
+                    titulo: '¿Qué puedo hacer?',
+                    texto: 'Te explico <b>cualquier parte del programa</b> (y te la señalo en pantalla), te leo tus <b>métricas</b> con consejos, y te aviso cuando algo se está usando mal.<br><br>También cuento chistes. Prueba con <i>«cuéntame un chiste»</i> o <i>«auto destrúyete»</i>. 😉'
+                })
+            },
+            {
+                claves: ['duermes', 'te cansas', 'descansas', 'tienes sueño'],
+                emocion: 'triste',
+                resp: () => ({
+                    titulo: 'Nunca duermo',
+                    texto: 'Estoy despierto siempre, esperando en mi compuerta. 👁️<br><br>Tú sí deberías dormir: los diagnósticos a las 3am salen mal.'
+                })
+            }
+        ];
+
+        // ---------- Emociones ----------
+        let _timerEmocion = null;
+        function emocionJP(nombre, ms) {
+            const cont = document.getElementById('ayudante');
+            if (!cont) return;
+            clearTimeout(_timerEmocion);
+            [...cont.classList].filter(c => c.indexOf('emo-') === 0).forEach(c => cont.classList.remove(c));
+            if (!nombre) return;
+            cont.classList.add('emo-' + nombre);
+            if (ms) _timerEmocion = setTimeout(() => cont.classList.remove('emo-' + nombre), ms);
+        }
+
+        // ---------- Secuencia de autodestrucción ----------
+        async function autodestruccionJP() {
+            const esperar = ms => new Promise(r => setTimeout(r, ms));
+            emocionJP('alerta');
+            for (const n of ['3', '2', '1']) {
+                hablarAyudante('⚠️ AUTODESTRUCCIÓN',
+                    `Secuencia iniciada...<div style="font-size:30px;font-weight:900;color:#ef4444;text-align:center;margin:6px 0">${n}</div>`,
+                    null, true);
+                await esperar(750);
+            }
+            emocionJP('explotar');
+            hablarAyudante('💥 ¡BOOM!',
+                'Es broma. No tengo permisos para destruirme. 🙃<br><br>Además, ¿quién te explicaría las métricas después?',
+                null, true);
+            await esperar(2300);
+            emocionJP('feliz', 4000);
+            hablarAyudante('Reiniciando...',
+                `Sistemas restaurados al 100%.<br><b>${JP.nombre}</b> operativo y sin un rasguño. 🤖✨`,
+                null, true);
+        }
+
+        // ---------- Buscar un comando de personalidad ----------
+        function responderComando(pregunta) {
+            const q = normalizar(pregunta).replace(/\s+/g, ' ').trim();
+            if (!q) return false;
+            for (const c of JP_COMANDOS) {
+                if (!c.claves.some(k => coincideFrase(q, k))) continue;
+                volverASuCasa(); quitarResaltado();
+                if (c.accion === 'autodestruccion') { autodestruccionJP(); return true; }
+                const r = c.resp();
+                emocionJP(c.emocion || 'feliz', 6000);
+                hablarAyudante(r.titulo, r.texto, null, true);
+                return true;
+            }
+            return false;
+        }
+
+        function sorprendemeJP() {
+            volverASuCasa(); quitarResaltado();
+            if (Math.random() < 0.5) {
+                emocionJP('risa', 6000);
+                hablarAyudante('Va uno...', azar(JP_CHISTES), null, true);
+            } else {
+                emocionJP('feliz', 6000);
+                hablarAyudante('¿Sabías que...?', azar(JP_DATOS), null, true);
+            }
+        }
 
         // ---------- Consejo en formato HTML ----------
         function consejoHtml(tema) {
@@ -13008,18 +13409,23 @@
             if (!q) return;
             caja.value = '';
 
-            // Atajo: pedir las métricas
+            // 1) Comandos de personalidad (nombre, creador, chistes, autodestrucción...)
+            if (responderComando(q)) return;
+
+            // 2) Atajo: pedir las métricas
             if (/metric|numero|cifra|ganancia|como voy|balance|resultado/i.test(normalizar(q))) {
                 explicarMetricas();
                 return;
             }
+            // 3) Temas del programa
             const tema = buscarTema(q);
             if (tema) {
                 explicarTema(tema, true);
             } else {
                 volverASuCasa(); quitarResaltado();
-                hablarAyudante('No te entendí bien',
-                    'Prueba con otra palabra, o mira la lista de todo lo que sé:' + listaTemasHtml(),
+                emocionJP('pensando', 5000);
+                hablarAyudante('Mmm... no te entendí',
+                    'Prueba con otras palabras, o mira todo lo que sé:' + listaTemasHtml(),
                     'sin-respuesta', true);
             }
         }
@@ -13121,6 +13527,8 @@
 
             volverASuCasa();
             resaltarElemento('#kpi-ganancias');
+            // La cara de J.P depende de cómo vayan tus números.
+            emocionJP((ganancia || 0) < 0 ? 'triste' : (ingresos && ((ganancia || 0) / ingresos) > 0.35 ? 'feliz' : 'pensando'), 7000);
             hablarAyudante('Tus números ahora mismo', h, 'metricas', true);
         }
 
