@@ -2458,7 +2458,8 @@
                             </div>
                         </div>
                         <div style="text-align:right; margin-top:20px;">
-                            <button class="bh-btn-purple" style="padding: 15px 40px; font-size:16px;"
+                            <button id="btn-generar-orden" class="bh-btn-purple"
+                                style="padding: 15px 40px; font-size:16px;"
                                 onclick="guardarOrden()">Generar Orden</button>
                         </div>
                     </div>
@@ -12015,6 +12016,7 @@
                 <button onclick="preguntarAlAyudante()" title="Preguntar"><i class='bx bx-send'></i></button>
             </div>
             <div id="ayudante-acciones">
+                <button onclick="menuTutoriales()">📘 Enséñame</button>
                 <button onclick="mostrarIndiceAyudante()">📚 ¿Qué sabes?</button>
                 <button onclick="explicarMetricas()">📊 Mis números</button>
                 <button onclick="sorprendemeJP()">🎲 Sorpréndeme</button>
@@ -12608,6 +12610,29 @@
             100% { transform: translate(2px, 4px) rotate(3deg); }
         }
 
+        /* Botones del tutorial guiado */
+        .jp-tut-btn {
+            background: #232838;
+            border: 1px solid #333a4d;
+            color: #cbd5e1;
+            font-weight: 700;
+            font-size: 11px;
+            padding: 5px 9px;
+            border-radius: 7px;
+            cursor: pointer;
+        }
+
+        .jp-tut-btn:hover {
+            border-color: #22d3ee;
+            color: #fff;
+        }
+
+        .jp-tut-btn.jp-tut-sig {
+            background: #7c3aed;
+            border-color: #7c3aed;
+            color: #fff;
+        }
+
         /* Modo fiesta: el robot brinca y su compuerta cambia de color */
         #ayudante.fiesta #ayudante-robot {
             animation: jpBrinco .45s ease-in-out infinite !important;
@@ -12982,6 +13007,11 @@
             if (typeof quitarResaltado === 'function') quitarResaltado();
             if (typeof volverASuCasa === 'function') volverASuCasa();
             if (typeof emocionJP === 'function') emocionJP(null);
+            // Si cierras a mitad del tutorial, se corta el tutorial y se libera la
+            // pausa del cierre automático (si no, quedaba trabada en "interactuando").
+            if (typeof JP_TUT !== 'undefined' && JP_TUT.activo) {
+                JP_TUT.activo = null; JP_TUT.paso = 0; AYU.interactuando = false;
+            }
             // Si se cierra a media frase, que deje de hablar.
             try { window.speechSynthesis.cancel(); } catch (e) { }
             cont.classList.remove('hablando');
@@ -13255,6 +13285,11 @@
                 accion: 'por-cobrar'
             },
             {
+                claves: ['enseñame', 'ensename', 'tutorial', 'guiame', 'soy nuevo', 'como se usa esto',
+                    'no se usar esto', 'explicame paso a paso', 'aprender'],
+                accion: 'tutorial'
+            },
+            {
                 claves: ['modo fiesta', 'fiesta', 'celebremos', 'a celebrar', 'lo logramos', 'cerre el dia'],
                 accion: 'fiesta'
             },
@@ -13341,6 +13376,7 @@
                 if (c.accion === 'comision') { jpComisionTecnico(); return true; }
                 if (c.accion === 'por-cobrar') { jpPorCobrar(); return true; }
                 if (c.accion === 'animo') { jpDameAnimo(); return true; }
+                if (c.accion === 'tutorial') { menuTutoriales(); return true; }
                 if (c.accion === 'fiesta') { modoFiestaJP(); return true; }
                 if (c.accion === 'como-voy') { jpComoVoyHoy(); return true; }
                 if (c.accion === 'numero') { jpAdivinaNumero(); return true; }
@@ -14091,6 +14127,130 @@
             return true;
         }
 
+        // =============================================================
+        // MODO TUTORIAL: J.P lleva de la mano paso a paso, señalando
+        // cada campo. Pensado para enseñarle a alguien nuevo.
+        // =============================================================
+        const JP_TUTORIALES = {
+            recepcion: {
+                nombre: 'Recibir un equipo',
+                vista: 'recepcion',
+                pasos: [
+                    { ancla: '#cli', titulo: 'El cliente', texto: 'Escribe aquí el nombre. Si ya vino antes, aparece en la lista y te completa el teléfono solo.' },
+                    { ancla: '#tel', titulo: 'El teléfono', texto: 'Es lo más importante de la ficha: sin número no hay cómo avisarle cuando el equipo esté listo.' },
+                    { ancla: '#mod', titulo: 'El equipo', texto: 'Marca y modelo. Sirve para saber qué repuestos necesitas tener en stock.' },
+                    { ancla: '#imei', titulo: 'El IMEI', texto: 'Identifica el equipo. Si algún día hay una confusión o un reclamo, esto es lo que lo aclara.' },
+                    { ancla: '#fal', titulo: 'La falla', texto: 'Qué dice el cliente que le pasa. Escríbelo con sus palabras: después te sirve para comparar con lo que encontraste.' },
+                    { ancla: '#cost-part', titulo: 'Precio del repuesto', texto: 'Lo que te cuesta a ti la pieza.' },
+                    { ancla: '#cost-total', titulo: 'El TOTAL', texto: 'Lo que le cobras al cliente por todo. Con el repuesto de arriba, yo saco tu mano de obra sola.' },
+                    { ancla: '#cost-service', titulo: 'Mano de obra', texto: 'Este NO se escribe: es lo que queda al restar. Es tu trabajo, y de aquí sale la comisión del técnico.' },
+                    { ancla: '#pay-advance', titulo: 'El adelanto', texto: 'Pide siempre algo que cubra el repuesto. Si el cliente no vuelve, al menos no pierdes la pieza.' },
+                    { ancla: '#btn-cam', titulo: 'La foto', texto: 'Tómale foto al equipo como llegó. Te cubre si después reclaman un golpe o rayón que ya traía.' },
+                    { ancla: '#signature-pad', titulo: 'La firma', texto: 'Que el cliente firme conforme. Es tu respaldo de que aceptó el precio y el estado del equipo.' },
+                    { ancla: '#btn-generar-orden', titulo: '¡Listo!', texto: 'Con esto se genera la orden y el equipo ya entra al taller. Ahí lo verás en la pestaña <b>Taller</b>.' }
+                ]
+            },
+            laboratorio: {
+                nombre: 'Trabajar una orden',
+                vista: 'laboratorio',
+                pasos: [
+                    { ancla: '#nav-lab', titulo: 'El Laboratorio', texto: 'Aquí es donde trabajas los equipos que ya entraron por Recepción.' },
+                    { ancla: '#btn-timer', titulo: 'El cronómetro', texto: 'Arráncalo al empezar. Saber cuánto te toma cada trabajo es lo que te dice si estás cobrando barato.' },
+                    { ancla: '#nav-inv', titulo: 'Los repuestos', texto: 'Cuando uses un repuesto, se descuenta del inventario y queda cargado a la orden.' },
+                    { ancla: '#nav-taller', titulo: 'Cerrar la orden', texto: 'Al terminar, marca el equipo como listo desde el Taller. Eso es lo que mete el dinero a la caja del día.' }
+                ]
+            },
+            dinero: {
+                nombre: 'Entender tu dinero',
+                vista: 'reportes',
+                pasos: [
+                    { ancla: '#kpi-ingresos', titulo: 'Ingresos', texto: 'Todo lo que entró. Ojo: es lo que <b>entra</b>, no lo que ganas.' },
+                    { ancla: '#kpi-gastos', titulo: 'Costo de repuestos', texto: 'Lo que te costaron a ti las piezas. Si esto pasa la mitad de tus ingresos, algo hay que ajustar.' },
+                    { ancla: '#kpi-gastos-op', titulo: 'Gastos operativos', texto: 'Alquiler, luz, transporte. Los gastos chicos son los que se comen la ganancia sin que te des cuenta.' },
+                    { ancla: '#kpi-ganancias', titulo: 'Ganancia neta', texto: 'Esta es <b>la cifra que manda</b>. Lo que de verdad te queda después de todo.' },
+                    { ancla: '#kpi-ticket', titulo: 'Ticket promedio', texto: 'Cuánto cobras por orden. Subirlo suele ser más fácil que conseguir clientes nuevos.' }
+                ]
+            }
+        };
+
+        const JP_TUT = { activo: null, paso: 0 };
+
+        function iniciarTutorial(nombre) {
+            const t = JP_TUTORIALES[nombre];
+            if (!t) return false;
+            JP_TUT.activo = nombre;
+            JP_TUT.paso = 0;
+            if (t.vista && typeof showView === 'function') {
+                try { showView(t.vista, document.getElementById('nav-' + t.vista.slice(0, 5))); } catch (e) { }
+            }
+            setTimeout(() => mostrarPasoTutorial(), 350);
+            return true;
+        }
+
+        function mostrarPasoTutorial() {
+            const t = JP_TUTORIALES[JP_TUT.activo];
+            if (!t) return;
+            const p = t.pasos[JP_TUT.paso];
+            if (!p) { terminarTutorial(); return; }
+
+            const total = t.pasos.length;
+            const barra = `<div style="display:flex;gap:3px;margin-bottom:8px">` +
+                t.pasos.map((_, i) => `<div style="flex:1;height:3px;border-radius:2px;background:${i <= JP_TUT.paso ? '#22d3ee' : '#333a4d'}"></div>`).join('') +
+                `</div>`;
+            const pie = `<div style="display:flex;gap:6px;margin-top:11px;align-items:center">
+                    <small style="color:#64748b">Paso ${JP_TUT.paso + 1} de ${total}</small>
+                    <div style="margin-left:auto;display:flex;gap:6px">
+                        ${JP_TUT.paso > 0 ? '<button class="jp-tut-btn" onclick="pasoTutorial(-1)">← Atrás</button>' : ''}
+                        <button class="jp-tut-btn jp-tut-sig" onclick="pasoTutorial(1)">${JP_TUT.paso === total - 1 ? 'Terminar ✓' : 'Siguiente →'}</button>
+                        <button class="jp-tut-btn" onclick="terminarTutorial()">Salir</button>
+                    </div>
+                 </div>`;
+
+            const el = resaltarElemento(p.ancla);
+            if (!el) volverASuCasa();
+            emocionJP('feliz', 4000);
+            hablarAyudante(`📘 ${p.titulo}`, barra + p.texto + pie, null, true);
+            if (el) posarEnElemento(p.ancla);
+            // Durante el tutorial mandas tú: no se cierra solo.
+            AYU.interactuando = true;
+            clearTimeout(AYU.timerOcultar);
+        }
+
+        function pasoTutorial(delta) {
+            const t = JP_TUTORIALES[JP_TUT.activo];
+            if (!t) return;
+            JP_TUT.paso += delta;
+            if (JP_TUT.paso >= t.pasos.length) { terminarTutorial(); return; }
+            if (JP_TUT.paso < 0) JP_TUT.paso = 0;
+            mostrarPasoTutorial();
+        }
+
+        function terminarTutorial() {
+            const habia = !!JP_TUT.activo;
+            JP_TUT.activo = null;
+            JP_TUT.paso = 0;
+            AYU.interactuando = false;
+            quitarResaltado(); volverASuCasa();
+            if (habia) {
+                emocionJP('risa', 5000);
+                hablarAyudante('¡Eso es todo! 🎓',
+                    'Ya sabes lo básico. Si algo se te olvida, tócalo y te lo explico, o pregúntame.' +
+                    '<div class="ayu-consejo">💡 Puedes repetir el tutorial cuando quieras diciéndome «enséñame».</div>',
+                    null, true);
+            }
+        }
+
+        function menuTutoriales() {
+            volverASuCasa(); quitarResaltado();
+            emocionJP('feliz', 6000);
+            hablarAyudante('¿Qué te enseño? 📘',
+                'Te llevo paso a paso, señalándote cada cosa en pantalla:' +
+                '<div class="ayu-lista">' + Object.entries(JP_TUTORIALES).map(([k, t]) =>
+                    `<button onclick="iniciarTutorial('${k}')">${t.nombre}</button>`).join('') + '</div>',
+                null, true);
+            return true;
+        }
+
         // ---------- Consejo en formato HTML ----------
         function consejoHtml(tema) {
             return tema && tema.consejo
@@ -14381,6 +14541,9 @@
             const libre = () => {
                 // Si sigue escribiendo, no se reactiva el cierre aunque saque el ratón.
                 if (caja && document.activeElement === caja) return;
+                // Durante el tutorial manda el tutorial: no se cierra solo aunque
+                // salgas del campo o del globo.
+                if (JP_TUT.activo) return;
                 AYU.interactuando = false;
                 programarCierreAyudante();
             };
@@ -14392,7 +14555,11 @@
             if (caja) {
                 caja.addEventListener('focus', ocupado);
                 caja.addEventListener('input', ocupado);   // cada tecla renueva la pausa
-                caja.addEventListener('blur', () => { AYU.interactuando = false; programarCierreAyudante(); });
+                caja.addEventListener('blur', () => {
+                    if (JP_TUT.activo) return;   // el tutorial manda mientras esté activo
+                    AYU.interactuando = false;
+                    programarCierreAyudante();
+                });
             }
 
             // Revisar la orden también al llenar cliente, teléfono o IMEI
