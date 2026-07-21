@@ -13715,6 +13715,102 @@
             }
         }
 
+        // =============================================================
+        // ARRASTRAR A J.P: se agarra de su compuerta y se lleva a donde
+        // quieras. El sitio queda guardado para la próxima vez.
+        // =============================================================
+        const JP_ARR = { arrastrando: false, dx: 0, dy: 0, movido: false };
+
+        function posicionGuardadaJP() {
+            try {
+                const p = JSON.parse(localStorage.getItem('jpPosicion') || 'null');
+                if (!p || typeof p.left !== 'number') return null;
+                // Si cambió el tamaño de la ventana, no lo dejes fuera de la pantalla.
+                return {
+                    left: Math.max(4, Math.min(p.left, window.innerWidth - 80)),
+                    top: Math.max(4, Math.min(p.top, window.innerHeight - 80))
+                };
+            } catch (e) { return null; }
+        }
+
+        function aplicarPosicionGuardadaJP() {
+            const p = posicionGuardadaJP();
+            const cont = document.getElementById('ayudante');
+            if (!p || !cont) return false;
+            cont.classList.add('movido');
+            cont.style.left = p.left + 'px';
+            cont.style.top = p.top + 'px';
+            cont.style.right = 'auto';
+            cont.style.bottom = 'auto';
+            return true;
+        }
+
+        function iniciarArrastreJP() {
+            const cont = document.getElementById('ayudante');
+            const casa = document.getElementById('ayudante-casa');
+            if (!cont || !casa) return;
+
+            casa.style.cursor = 'grab';
+            casa.title = 'Arrástrame a donde quieras (doble clic para volver a mi esquina)';
+
+            casa.addEventListener('mousedown', (e) => {
+                // Al arrastrar se sale del modo "posado sobre un elemento".
+                cont.classList.remove('posado');
+                cont.classList.remove('globo-derecha');
+                const r = cont.getBoundingClientRect();
+                JP_ARR.arrastrando = true;
+                JP_ARR.dx = e.clientX - r.left;
+                JP_ARR.dy = e.clientY - r.top;
+                casa.style.cursor = 'grabbing';
+                AYU.interactuando = true;          // no se cierre mientras lo mueves
+                clearTimeout(AYU.timerOcultar);
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!JP_ARR.arrastrando) return;
+                const cont = document.getElementById('ayudante');
+                let left = e.clientX - JP_ARR.dx;
+                let top = e.clientY - JP_ARR.dy;
+                left = Math.max(4, Math.min(left, window.innerWidth - 60));
+                top = Math.max(4, Math.min(top, window.innerHeight - 60));
+                cont.classList.add('movido');
+                cont.style.left = left + 'px';
+                cont.style.top = top + 'px';
+                cont.style.right = 'auto';
+                cont.style.bottom = 'auto';
+                JP_ARR.movido = true;
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (!JP_ARR.arrastrando) return;
+                JP_ARR.arrastrando = false;
+                casa.style.cursor = 'grab';
+                AYU.interactuando = false;
+                programarCierreAyudante();
+                if (JP_ARR.movido) {
+                    const cont = document.getElementById('ayudante');
+                    try {
+                        localStorage.setItem('jpPosicion', JSON.stringify({
+                            left: parseFloat(cont.style.left) || 0,
+                            top: parseFloat(cont.style.top) || 0
+                        }));
+                    } catch (e) { }
+                }
+            });
+
+            // Doble clic: vuelve a su esquina de siempre.
+            casa.addEventListener('dblclick', () => {
+                localStorage.removeItem('jpPosicion');
+                const cont = document.getElementById('ayudante');
+                cont.classList.remove('movido');
+                cont.style.left = ''; cont.style.top = '';
+                cont.style.right = ''; cont.style.bottom = '';
+                emocionJP('feliz', 3000);
+                hablarAyudante('Vuelvo a mi esquina', 'Listo, ya estoy donde siempre. 🏠', null, true);
+            });
+        }
+
         // ---------- Consejo en formato HTML ----------
         function consejoHtml(tema) {
             return tema && tema.consejo
@@ -13839,6 +13935,8 @@
             cont.classList.remove('globo-derecha');
             cont.style.left = ''; cont.style.top = '';
             cont.style.right = ''; cont.style.bottom = '';
+            // Si lo arrastraste a otro sitio, "su casa" pasa a ser ese sitio.
+            if (typeof aplicarPosicionGuardadaJP === 'function') aplicarPosicionGuardadaJP();
         }
 
         // ---------- Explicar un tema completo (con interacción) ----------
@@ -14026,6 +14124,8 @@
 
             cargarVozJP();
             actualizarBotonVoz();
+            iniciarArrastreJP();
+            aplicarPosicionGuardadaJP();
 
             // J.P empieza a vigilar el negocio por su cuenta.
             iniciarVigilancia();
