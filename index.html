@@ -5879,6 +5879,8 @@
         ipcRenderer.on('resultado-guardado', (e, datos) => {
             if (datos && datos.success === false) { showToast("Error al guardar la orden: " + datos.msg, 'danger'); return; }
             showToast('Orden creada exitosamente', 'success');
+            // J.P mira cómo quedó la orden y felicita (o avisa si el margen quedó flojo).
+            if (typeof celebrarOrdenGuardada === 'function') setTimeout(() => celebrarOrdenGuardada(ordenTemporal), 900);
             document.querySelectorAll('#recepcion input, #recepcion textarea').forEach(i => i.value = '');
             limpiarFirma(); document.getElementById('photo-preview').style.display = 'none';
 
@@ -5962,6 +5964,8 @@
         ipcRenderer.on('lista-de-ordenes', (e, rows) => {
             ordenesActuales = rows || [];
             renderOrdenesTaller(ordenesActuales);
+            // J.P revisa si hay algún hito del día que celebrar.
+            if (typeof revisarHitosDelDia === 'function') setTimeout(revisarHitosDelDia, 1500);
         });
 
         function renderOrdenesTaller(rows) {
@@ -13811,6 +13815,84 @@
             });
         }
 
+        // =============================================================
+        // J.P CELEBRA TUS LOGROS
+        // Sale a felicitarte cuando cierras una orden con buen margen o
+        // cuando llegas a un hito del día.
+        // =============================================================
+        const JP_LOGROS = { celebrado: {} };
+
+        function celebrarOrdenGuardada(orden) {
+            if (!AYU.activo || !orden) return;
+            const total = parseFloat(orden.costo) || 0;
+            const repuesto = parseFloat(orden.precio_repuesto) || 0;
+            const manoObra = (parseFloat(orden.precio_servicio) || 0) || (total - repuesto);
+            if (total <= 0) return;
+
+            const margen = (manoObra / total) * 100;
+            let titulo, texto, emo;
+
+            if (manoObra >= 150) {
+                emo = 'risa';
+                titulo = '🎉 ¡Esa sí valió!';
+                texto = `<b>${soles(manoObra)}</b> de mano de obra en una sola orden.` +
+                    `<div class="ayu-consejo">💡 Así se cobra un trabajo. Que no te dé pena poner ese precio.</div>`;
+            } else if (margen >= 60) {
+                emo = 'feliz';
+                titulo = '👏 Buen margen';
+                texto = `De los <b>${soles(total)}</b> que cobras, <b>${soles(manoObra)}</b> son tu trabajo (${margen.toFixed(0)}%).` +
+                    `<div class="ayu-consejo">💡 Ese es el tipo de orden que te conviene repetir.</div>`;
+            } else if (margen > 0 && margen < 25) {
+                emo = 'pensando';
+                titulo = '🤔 Margen apretado';
+                texto = `De <b>${soles(total)}</b> solo <b>${soles(manoObra)}</b> es tu trabajo (${margen.toFixed(0)}%). El resto se va en el repuesto.` +
+                    `<div class="ayu-consejo">💡 Revisa a qué precio compras esa pieza, o cobra un poco más de mano de obra.</div>`;
+            } else {
+                return; // Orden normal: no hay nada que celebrar ni corregir.
+            }
+
+            volverASuCasa(); quitarResaltado();
+            emocionJP(emo, 7000);
+            hablarAyudante(titulo, texto, null, true);
+        }
+
+        // Hitos del día: se revisan cuando llega la lista de órdenes.
+        function revisarHitosDelDia() {
+            if (!AYU.activo) return;
+            const ord = ordenesJP();
+            if (!ord.length) return;
+            const hoy = hoyClave();
+            const nuevasHoy = ord.filter(r => esHoy(r.created_at));
+            const entregadasHoy = ord.filter(r => r.estado === 'Entregado' && esHoy(r.created_at));
+            const facturadoHoy = nuevasHoy.reduce((s, r) => s + (parseFloat(r.costo) || 0), 0);
+
+            const yaCelebrado = k => JP_LOGROS.celebrado[k] === hoy;
+            const marcar = k => { JP_LOGROS.celebrado[k] = hoy; try { localStorage.setItem('jpLogros', JSON.stringify(JP_LOGROS.celebrado)); } catch (e) { } };
+
+            let logro = null;
+            if (nuevasHoy.length === 1 && !yaCelebrado('primera')) {
+                marcar('primera');
+                logro = { emo: 'feliz', titulo: '🌅 Primera del día', texto: 'Ya entró el primer equipo de hoy. Vamos con todo. 💪' };
+            } else if (entregadasHoy.length >= 5 && !yaCelebrado('cinco-entregas')) {
+                marcar('cinco-entregas');
+                logro = { emo: 'risa', titulo: '🔥 ¡5 entregados hoy!', texto: `Llevas <b>${entregadasHoy.length} equipos entregados</b> en el día. Eso es un buen día de taller.` };
+            } else if (facturadoHoy >= 1000 && !yaCelebrado('mil')) {
+                marcar('mil');
+                logro = { emo: 'risa', titulo: '🚀 ¡Pasaste los S/ 1000!', texto: `Llevas <b>${soles(facturadoHoy)}</b> facturados hoy.<div class="ayu-consejo">💡 Cierra la caja para que quede registrado.</div>` };
+            } else if (nuevasHoy.length >= 10 && !yaCelebrado('diez-ordenes')) {
+                marcar('diez-ordenes');
+                logro = { emo: 'sorpresa', titulo: '😮 ¡10 órdenes hoy!', texto: 'Diez equipos en un día. Ojo con no saturarte: revisa que no se te queden abiertos.' };
+            }
+
+            if (!logro) return;
+            // No pisar si está hablando o escribiendo.
+            const cont = document.getElementById('ayudante');
+            if (cont && (cont.classList.contains('visible') || AYU.interactuando)) return;
+            volverASuCasa(); quitarResaltado();
+            emocionJP(logro.emo, 7000);
+            hablarAyudante(logro.titulo, logro.texto, null, true);
+        }
+
         // ---------- Consejo en formato HTML ----------
         function consejoHtml(tema) {
             return tema && tema.consejo
@@ -14122,6 +14204,7 @@
                 if (campo) campo.addEventListener('input', programarRevisionOrden);
             });
 
+            try { JP_LOGROS.celebrado = JSON.parse(localStorage.getItem('jpLogros') || '{}'); } catch (e) { JP_LOGROS.celebrado = {}; }
             cargarVozJP();
             actualizarBotonVoz();
             iniciarArrastreJP();
