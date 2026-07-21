@@ -12005,7 +12005,16 @@
         <div id="ayudante-globo">
             <div id="ayudante-titulo"></div>
             <div id="ayudante-texto"></div>
-            <button id="ayudante-cerrar" onclick="ocultarAyudante()" title="Entendido">Entendido</button>
+            <div id="ayudante-preguntar">
+                <input id="ayudante-pregunta" type="text" placeholder="Pregúntame algo del programa..."
+                    onkeydown="if(event.key==='Enter') preguntarAlAyudante()">
+                <button onclick="preguntarAlAyudante()" title="Preguntar"><i class='bx bx-send'></i></button>
+            </div>
+            <div id="ayudante-acciones">
+                <button onclick="mostrarIndiceAyudante()">📚 ¿Qué sabes?</button>
+                <button onclick="explicarMetricas()">📊 Mis números</button>
+                <button id="ayudante-cerrar" onclick="ocultarAyudante()">Entendido</button>
+            </div>
         </div>
 
         <div id="ayudante-casa">
@@ -12269,6 +12278,11 @@
             font-size: 13px;
             line-height: 1.5;
             color: #e5e7eb;
+            /* Con textos largos (las métricas con todos sus consejos) el globo crecía
+               hasta salirse de la pantalla: se limita y se desplaza por dentro,
+               dejando siempre visibles el título, la caja de preguntas y los botones. */
+            max-height: 48vh;
+            overflow-y: auto;
         }
 
         #ayudante-texto b {
@@ -12289,6 +12303,192 @@
 
         #ayudante-cerrar:hover {
             background: #6d28d9;
+        }
+
+        /* Caja para preguntarle */
+        #ayudante-preguntar {
+            display: flex;
+            gap: 6px;
+            margin-top: 11px;
+        }
+
+        #ayudante-pregunta {
+            flex: 1;
+            min-width: 0;
+            background: #0d1017;
+            border: 1px solid #2b3040;
+            color: #e5e7eb;
+            border-radius: 8px;
+            padding: 7px 10px;
+            font-size: 12px;
+            outline: none;
+        }
+
+        #ayudante-pregunta:focus {
+            border-color: #7c3aed;
+        }
+
+        #ayudante-preguntar button {
+            background: #7c3aed;
+            border: 0;
+            color: #fff;
+            border-radius: 8px;
+            padding: 0 11px;
+            cursor: pointer;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        #ayudante-acciones {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 9px;
+        }
+
+        #ayudante-acciones button {
+            background: #232838;
+            border: 1px solid #333a4d;
+            color: #cbd5e1;
+            font-weight: 700;
+            font-size: 11px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        #ayudante-acciones button:hover {
+            border-color: #7c3aed;
+            color: #fff;
+        }
+
+        #ayudante-acciones #ayudante-cerrar {
+            margin-top: 0;
+            margin-left: auto;
+            background: #7c3aed;
+            border-color: #7c3aed;
+            color: #fff;
+        }
+
+        /* Consejos */
+        .ayu-consejo {
+            margin-top: 10px;
+            padding: 8px 10px;
+            background: rgba(124, 58, 237, .12);
+            border-left: 3px solid #7c3aed;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #d7dae2;
+            line-height: 1.5;
+        }
+
+        /* Índice de temas */
+        .ayu-lista {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 9px;
+            max-height: 190px;
+            overflow-y: auto;
+        }
+
+        .ayu-lista button {
+            background: #232838;
+            border: 1px solid #333a4d;
+            color: #cbd5e1;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 9px;
+            border-radius: 999px;
+            cursor: pointer;
+        }
+
+        .ayu-lista button:hover {
+            border-color: #22d3ee;
+            color: #fff;
+        }
+
+        /* Tabla de métricas */
+        .ayu-metricas {
+            margin-top: 8px;
+            border-top: 1px solid #2b3040;
+        }
+
+        .ayu-m {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 5px 0;
+            border-bottom: 1px dashed rgba(255, 255, 255, .07);
+            font-size: 12px;
+        }
+
+        .ayu-m span {
+            color: #9aa0ab;
+        }
+
+        /* Contorno iluminado del elemento que está explicando */
+        .ayu-resaltado {
+            position: relative;
+            outline: 2px solid #22d3ee !important;
+            outline-offset: 3px;
+            border-radius: 8px;
+            animation: ayuBrillo 1.4s ease-in-out infinite;
+            z-index: 9997;
+        }
+
+        @keyframes ayuBrillo {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(34, 211, 238, .55), 0 0 14px rgba(34, 211, 238, .35);
+            }
+
+            50% {
+                box-shadow: 0 0 0 7px rgba(34, 211, 238, 0), 0 0 22px rgba(34, 211, 238, .6);
+            }
+        }
+
+        /* Modo "posado": el robot se sienta sobre lo que explica (sin su compuerta) */
+        #ayudante.posado {
+            align-items: flex-start;
+        }
+
+        #ayudante.posado #ayudante-casa {
+            width: 62px;
+            height: 56px;
+            background: none;
+            border: 0;
+            box-shadow: none;
+            overflow: visible;
+        }
+
+        #ayudante.posado .ayudante-hoja,
+        #ayudante.posado #ayudante-luz {
+            display: none;
+        }
+
+        #ayudante.posado #ayudante-hueco {
+            top: 0;
+            overflow: visible;
+        }
+
+        #ayudante.posado #ayudante-globo {
+            max-width: 300px;
+        }
+
+        /* Si lo que explica está pegado a la izquierda, el globo pasa al otro lado
+           del robot para que quepa y el robot pueda sentarse justo encima. */
+        #ayudante.globo-derecha {
+            flex-direction: row-reverse;
+        }
+
+        #ayudante.globo-derecha #ayudante-globo::after {
+            right: auto;
+            left: -9px;
+            border-left: 0;
+            border-right: 9px solid #7c3aed;
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -12325,44 +12525,186 @@
         };
 
         // --- Consejos al tocar un campo que NO se escribe a mano ---
-        const AYU_CAMPOS = {
-            'cost-service': {
-                titulo: '¡Ojo! Ese no se escribe',
-                texto: 'La <b>Mano de Obra</b> la calculo yo sola. Tú pon el <b>Precio Repuesto</b> y el <b>TOTAL</b> que le cobras al cliente, y la mano de obra es lo que queda al restarlos.'
+        // =============================================================
+        // BASE DE CONOCIMIENTO: todo lo que el robot sabe del programa.
+        // 'vista'  -> sección a la que pertenece (para el consejo al entrar)
+        // 'ancla'  -> qué elemento resalta / dónde se posa a explicar
+        // 'claves' -> palabras con las que se le puede preguntar
+        // =============================================================
+        const AYU_TEMAS = [
+            // ---------- SECCIONES ----------
+            {
+                id: 'dashboard', titulo: 'Panel de Control', vista: 'dashboard', ancla: '#nav-dash',
+                claves: ['dashboard', 'panel', 'inicio', 'principal', 'resumen', 'flujo', 'control'],
+                texto: 'Es tu resumen del día. Arriba el <b>Flujo del Taller</b> (por asignar, en proceso y listos), luego <b>Hoy</b> con las órdenes nuevas y entregadas, los <b>Accesos Rápidos</b> y las <b>Órdenes Recientes</b>.',
+                consejo: 'Míralo al abrir el programa: si "Listos" tiene número alto, son equipos terminados que aún no cobras.'
             },
-            'pay-balance': {
-                titulo: 'Este sale solito',
-                texto: 'El <b>Saldo Pendiente</b> es el <b>TOTAL</b> menos lo que el cliente te dejó <b>A Cuenta</b>. Cambia esos dos y este se ajusta.'
+            {
+                id: 'recepcion', titulo: 'Recepción (Nueva Orden)', vista: 'recepcion', ancla: '#nav-recep',
+                claves: ['recepcion', 'recibir', 'nueva orden', 'orden', 'ingresar equipo', 'registrar equipo', 'cliente nuevo'],
+                texto: 'Aquí registras un equipo que entra. Pones cliente, teléfono, modelo, IMEI y la falla. Abajo va el dinero: <b>Precio Repuesto</b> y <b>TOTAL</b>; la mano de obra y el saldo se calculan solos. También puedes tomar <b>foto de evidencia</b> y la <b>firma</b> del cliente.',
+                consejo: 'Toma siempre la foto de evidencia: te cubre si el cliente reclama un golpe o rayón que ya traía.'
             },
-            'cost-total': {
-                titulo: 'Aquí va lo que cobras',
-                texto: 'Escribe el <b>TOTAL</b> que le cobras al cliente. Con el repuesto que pusiste arriba, saco tu <b>mano de obra</b> (y de ahí sale la comisión del técnico).'
-            }
-        };
+            {
+                id: 'taller', titulo: 'Taller', vista: 'taller', ancla: '#nav-taller',
+                claves: ['taller', 'estados', 'equipos', 'reparaciones', 'en proceso', 'pendientes', 'entregar'],
+                texto: 'La lista de todos los equipos con su estado: por asignar, en proceso, reparado o entregado. Desde aquí sigues cada reparación y la cierras cuando termina.',
+                consejo: 'Cerrar la orden es lo que mete el dinero a la caja del día. Si no la cierras, esa plata no aparece en tus reportes.'
+            },
+            {
+                id: 'laboratorio', titulo: 'Laboratorio', vista: 'laboratorio', ancla: '#nav-lab',
+                claves: ['laboratorio', 'lab', 'tecnico', 'reparar', 'trabajar', 'utilidades', 'herramientas'],
+                texto: 'Tu mesa de trabajo. Buscas una orden por número y anotas lo que hiciste. Abajo tienes las utilidades: <b>Software</b> (Ambición), <b>Grabar Reparación</b>, <b>Calculadora Ley de Ohm</b>, <b>Diagnóstico de Consumo</b> y los repositorios de Firmware y Dump.',
+                consejo: 'Usa el cronómetro para saber cuánto te toma cada trabajo: así sabrás si estás cobrando barato.'
+            },
+            {
+                id: 'clientes', titulo: 'Clientes', vista: 'clientes-view', ancla: '#nav-clientes',
+                claves: ['clientes', 'cliente', 'contactos', 'telefono', 'historial'],
+                texto: 'La lista de tus clientes con su historial de equipos. En Recepción, al escribir un nombre conocido, se autocompleta el teléfono solo.',
+                consejo: 'Un cliente que vuelve vale más que uno nuevo: revisa aquí quién te compra seguido.'
+            },
+            {
+                id: 'inventario', titulo: 'Inventario', vista: 'inventario', ancla: '#nav-inv',
+                claves: ['inventario', 'stock', 'repuestos', 'productos', 'existencias', 'almacen'],
+                texto: 'Tus repuestos y productos. Cada uno que uses en una orden o vendas se descuenta solo. Puedes cargar productos en masa con las plantillas de Excel y reponer stock.',
+                consejo: 'Si un producto tiene el stock vacío (sin cargar), se vende igual pero no descuenta. Cárgale stock para que el control sirva.'
+            },
+            {
+                id: 'ventas', titulo: 'Ventas (mostrador)', vista: 'ventas-view', ancla: '#nav-ventas',
+                claves: ['ventas', 'vender', 'mostrador', 'venta rapida', 'pos', 'accesorios'],
+                texto: 'Venta rápida sin orden de taller: accesorios, cargadores, micas. Descuenta del inventario y entra al cierre del día igual que las reparaciones.',
+                consejo: 'Los accesorios dejan margen fácil. Ofrécelos al entregar un equipo reparado.'
+            },
+            {
+                id: 'proveedores', titulo: 'Proveedores', vista: 'proveedores-view', ancla: '#nav-proveedores',
+                claves: ['proveedores', 'proveedor', 'compras', 'comprar'],
+                texto: 'A quién le compras los repuestos y qué le compraste. En Laboratorio tienes el reporte de <b>Compras del día</b>.',
+                consejo: 'Compara precios entre proveedores del mismo repuesto: ahí es donde de verdad subes tu ganancia.'
+            },
+            {
+                id: 'reportes', titulo: 'Reportes y Métricas', vista: 'reportes', ancla: '#nav-report',
+                claves: ['reportes', 'metricas', 'metrica', 'estadisticas', 'numeros', 'ganancia', 'ingresos', 'kpi', 'balance',
+                    'ticket promedio', 'ticket', 'margen', 'rentabilidad', 'utilidad'],
+                texto: 'Los números de tu taller: ingresos, costo real de repuestos, gastos operativos, ganancia neta, órdenes, reparados y ticket promedio. Pregúntame <b>"explícame las métricas"</b> y te leo los tuyos con consejos.',
+                consejo: 'La cifra que manda es la Ganancia Neta, no los ingresos. Vender mucho perdiendo no sirve.'
+            },
+            {
+                id: 'facturas', titulo: 'Comprobantes', vista: 'facturas-view', ancla: '#nav-facturas',
+                claves: ['facturas', 'factura', 'comprobantes', 'comprobante', 'boleta', 'recibo', 'imprimir'],
+                texto: 'Los comprobantes que emites al cliente. Se pueden imprimir o guardar en PDF.',
+                consejo: 'Entrega siempre comprobante: te evita discusiones sobre cuánto se pagó y qué se hizo.'
+            },
+            {
+                id: 'calendario', titulo: 'Agenda', vista: 'calendario', ancla: '#nav-cal',
+                claves: ['calendario', 'agenda', 'citas', 'eventos', 'recordatorio'],
+                texto: 'Tus citas y recordatorios: entregas prometidas, mantenimientos, pendientes.',
+                consejo: 'Apunta aquí la fecha que le prometiste al cliente. Cumplir la fecha es lo que hace que te recomienden.'
+            },
+            {
+                id: 'crm', titulo: 'CRM', vista: 'crm', ancla: '#nav-crm',
+                claves: ['crm', 'mensajes', 'whatsapp', 'seguimiento', 'campañas', 'avisar'],
+                texto: 'Para comunicarte con tus clientes: avisar que el equipo está listo, hacer seguimiento y mantener el contacto.',
+                consejo: 'Avisar por WhatsApp apenas el equipo está listo reduce los equipos abandonados en tu taller.'
+            },
+            {
+                id: 'config', titulo: 'Ajustes', vista: 'config', ancla: '#nav-config',
+                claves: ['ajustes', 'configuracion', 'config', 'opciones', 'empresa', 'usuarios', 'perfil'],
+                texto: 'Datos de tu negocio, usuarios, permisos y preferencias del sistema.',
+                consejo: 'Revisa que los datos de tu taller estén bien: salen impresos en los comprobantes del cliente.'
+            },
 
-        // --- Consejos al entrar a cada sección ---
-        const AYU_VISTAS = {
-            recepcion: {
-                titulo: 'Nueva orden',
-                texto: 'Llena los datos del equipo y pon el <b>repuesto</b> y el <b>TOTAL</b>. La mano de obra y el saldo se calculan solos.'
+            // ---------- DINERO / CAMPOS ----------
+            {
+                id: 'mano-obra', titulo: 'Mano de Obra', vista: 'recepcion', ancla: '#cost-service',
+                claves: ['mano de obra', 'manodeobra', 'trabajo', 'servicio', 'cuanto gano', 'mi trabajo'],
+                texto: 'No se escribe: es <b>TOTAL menos Precio Repuesto</b>. Es lo que cobras por tu trabajo, sin contar la pieza. De aquí sale la comisión del técnico.',
+                consejo: 'Si te sale muy baja, estás regalando tu trabajo: el repuesto se paga solo, tu tiempo no.'
             },
-            laboratorio: {
-                titulo: 'Laboratorio',
-                texto: 'Aquí buscas una orden para trabajarla. Abajo tienes utilidades: <b>Software</b>, <b>Grabar Reparación</b>, calculadora de Ohm y los repositorios.'
+            {
+                id: 'total', titulo: 'TOTAL', vista: 'recepcion', ancla: '#cost-total',
+                claves: ['total', 'cobrar', 'precio final', 'cuanto cobro'],
+                texto: 'Lo que le cobras al cliente por todo. Con el repuesto que pusiste arriba, de aquí sale tu mano de obra.',
+                consejo: 'Calcula el total como repuesto + tu tiempo + un margen. No solo el repuesto más una propina.'
             },
-            inventario: {
-                titulo: 'Inventario',
-                texto: 'Cada repuesto que uses en una orden se descuenta del stock. Si un producto no tiene stock cargado, se vende igual sin descontar.'
+            {
+                id: 'saldo', titulo: 'Saldo Pendiente', vista: 'recepcion', ancla: '#pay-balance',
+                claves: ['saldo', 'pendiente', 'debe', 'deuda', 'falta pagar', 'adelanto', 'a cuenta'],
+                texto: 'Es el <b>TOTAL menos lo que dejó A Cuenta</b>. Se calcula solo, no se escribe.',
+                consejo: 'Pide siempre adelanto que cubra el repuesto. Así, si no vuelve por el equipo, no pierdes la pieza.'
             },
-            ventas: {
-                titulo: 'Ventas',
-                texto: 'Venta rápida de mostrador, sin orden de taller. Se descuenta del inventario y entra al cierre del día igual que el resto.'
+            {
+                id: 'comision', titulo: 'Comisión del técnico', vista: 'taller', ancla: null,
+                claves: ['comision', 'comisiones', 'pago tecnico', 'cuanto le pago', 'porcentaje'],
+                texto: 'Se calcula sobre la <b>mano de obra</b> (no sobre el total), porque el repuesto no es ganancia del técnico. Aparece como nota aparte en el cierre.',
+                consejo: 'Que se calcule sobre la mano de obra es lo justo: el técnico cobra por su trabajo, no por el precio de la pieza.'
             },
-            taller: {
-                titulo: 'Taller',
-                texto: 'El estado de cada equipo se ve aquí. Cuando termines una reparación, ciérrala para que entre a la caja del día.'
+            {
+                id: 'cierre', titulo: 'Cierre de caja', vista: null, ancla: '#btn-cerrar-caja-side',
+                claves: ['cierre', 'cerrar caja', 'caja', 'cuadre', 'fin del dia', 'arqueo'],
+                texto: 'Cuadra el día: lo que entró por reparaciones y ventas, los gastos y lo que queda. Incluye la nota con la comisión del técnico.',
+                consejo: 'Ciérrala todos los días. Si la dejas para después, no te acuerdas de los gastos chicos y tus números mienten.'
+            },
+            {
+                id: 'gastos', titulo: 'Gastos Operativos', vista: 'reportes', ancla: '#kpi-gastos-op',
+                claves: ['gastos', 'gasto', 'operativos', 'luz', 'alquiler', 'egresos'],
+                texto: 'Lo que gastas que no es repuesto: alquiler, luz, internet, transporte, comida. Se restan para sacar tu ganancia real.',
+                consejo: 'Anota hasta los gastos chicos. Son los que se comen la ganancia sin que te des cuenta.'
+            },
+
+            // ---------- HERRAMIENTAS ----------
+            {
+                id: 'software', titulo: 'Software (Ambición)', vista: 'laboratorio', ancla: null,
+                claves: ['software', 'ambicion', 'programa', 'flasheo', 'frp', 'desbloqueo'],
+                texto: 'Abre Ambición, la herramienta de servicio para equipos. Solo abre desde aquí con tu sesión iniciada: si alguien intenta abrir el ejecutable desde la carpeta, se bloquea.',
+                consejo: 'Ábrelo siempre desde aquí. Abrirlo por fuera no funciona, es a propósito.'
+            },
+            {
+                id: 'grabar', titulo: 'Grabar Reparación', vista: 'laboratorio', ancla: null,
+                claves: ['grabar', 'grabacion', 'video', 'camara', 'microscopio', 'streaming', 'estudio'],
+                texto: 'Graba tus reparaciones combinando <b>microscopio</b>, <b>pantalla de la PC</b> y <b>tu cámara</b>, con el tema encima. Puedes cambiar de escena mientras grabas. Los videos van a Videos/BlackHouse-Reparaciones.',
+                consejo: 'Grabar la reparación te sirve de respaldo si el cliente reclama, y de material para mostrar tu trabajo.'
+            },
+            {
+                id: 'ohm', titulo: 'Calculadora Ley de Ohm', vista: 'laboratorio', ancla: null,
+                claves: ['ohm', 'ley de ohm', 'voltaje', 'corriente', 'resistencia', 'calculadora'],
+                texto: 'Pones dos valores (voltaje, corriente o resistencia) y saca el tercero.',
+                consejo: 'Útil para revisar líneas de alimentación cuando sospechas de un corto.'
+            },
+            {
+                id: 'consumo', titulo: 'Diagnóstico de Consumo', vista: 'laboratorio', ancla: null,
+                claves: ['consumo', 'amperaje', 'corto', 'diagnostico', 'amperios'],
+                texto: 'Te ayuda a interpretar cuánto consume una placa para orientar el diagnóstico.',
+                consejo: 'Un consumo alto en frío casi siempre es un corto; consumo cero, línea abierta.'
+            },
+            {
+                id: 'repositorios', titulo: 'Firmware y Dump', vista: 'laboratorio', ancla: null,
+                claves: ['firmware', 'dump', 'repositorio', 'archivos', 'carpeta'],
+                texto: 'Carpetas donde guardas tus firmwares y dumps. Viven fuera de la instalación, así que sobreviven a las actualizaciones del programa.',
+                consejo: 'Nombra los archivos con marca y modelo: en un año no te vas a acordar cuál era cuál.'
+            },
+            {
+                id: 'jornada', titulo: 'Iniciar Jornada', vista: null, ancla: null,
+                claves: ['jornada', 'iniciar jornada', 'entrada', 'asistencia', 'turno'],
+                texto: 'Marca el comienzo de tu día de trabajo, para llevar control de la jornada.',
+                consejo: 'Márcala al llegar: sirve para comparar horas trabajadas contra lo que produjo el día.'
+            },
+            {
+                id: 'tema', titulo: 'Tema de colores', vista: null, ancla: null,
+                claves: ['tema', 'color', 'colores', 'apariencia', 'oscuro', 'claro'],
+                texto: 'Cambia los colores del programa a tu gusto con el botón 🎨 Tema.',
+                consejo: 'Si trabajas de noche, un tema oscuro te cansa menos la vista.'
+            },
+            {
+                id: 'ayudante', titulo: 'Yo, tu ayudante', vista: null, ancla: '#btn-ayudante',
+                claves: ['ayudante', 'robot', 'ayuda', 'asistente', 'apagar', 'desactivar', 'quien eres'],
+                texto: 'Salgo cuando algo se usa mal y explico cómo funciona. Puedes <b>preguntarme</b> escribiendo, o pedirme <b>"explícame las métricas"</b>. Me apagas y enciendes con el botón 🤖 de la barra lateral.',
+                consejo: 'Si te estorbo, apágame sin culpa. Sigo aquí cuando me necesites.'
             }
-        };
+        ];
+
+        // Índice rápido: vista -> tema principal (para el consejo al entrar)
+        const AYU_POR_VISTA = {};
+        AYU_TEMAS.forEach(t => { if (t.vista && !AYU_POR_VISTA[t.vista]) AYU_POR_VISTA[t.vista] = t; });
 
         function alternarAyudante() {
             AYU.activo = !AYU.activo;
@@ -12386,12 +12728,12 @@
 
         // Muestra el robot. 'clave' evita repetir el mismo consejo a cada rato.
         function hablarAyudante(titulo, texto, clave, forzar) {
-            if (!AYU.activo && !forzar) return;
+            if (!AYU.activo && !forzar) return false;
             const cont = document.getElementById('ayudante');
-            if (!cont) return;
+            if (!cont) return false;
 
             const ahora = Date.now();
-            if (clave && !forzar && AYU.ultimos[clave] && (ahora - AYU.ultimos[clave]) < AYU.ESPERA_REPETIR) return;
+            if (clave && !forzar && AYU.ultimos[clave] && (ahora - AYU.ultimos[clave]) < AYU.ESPERA_REPETIR) return false;
             if (clave) AYU.ultimos[clave] = ahora;
 
             clearTimeout(AYU.timerOcultar);
@@ -12411,6 +12753,7 @@
 
             // Se guarda solo a los 11 segundos.
             AYU.timerOcultar = setTimeout(ocultarAyudante, 11000);
+            return true; // habló: ya se puede medir y colocar sobre el elemento
         }
 
         function ocultarAyudante() {
@@ -12419,6 +12762,9 @@
             // Cancelar lo que quedara pendiente de la salida, si no vuelve a aparecer solo.
             clearTimeout(AYU.timerOcultar);
             clearTimeout(AYU.timerHablar);
+            // Apagar la interacción: quitar el contorno iluminado y volver a su rincón.
+            if (typeof quitarResaltado === 'function') quitarResaltado();
+            if (typeof volverASuCasa === 'function') volverASuCasa();
             cont.classList.remove('hablando');
             cont.classList.remove('fuera');
             // Esperar a que termine de meterse antes de esconder la compuerta.
@@ -12428,12 +12774,12 @@
         // --- Detectar que tocaron un campo calculado (lo que el usuario pidió) ---
         document.addEventListener('click', (e) => {
             const el = e.target;
-            if (!el || el.tagName !== 'INPUT') return;
-            const tip = AYU_CAMPOS[el.id];
-            if (!tip) return;
-            // Solo molestamos si el campo es de solo lectura (no se escribe a mano),
-            // o si hay un consejo explícito para él.
-            hablarAyudante(tip.titulo, tip.texto, 'campo-' + el.id);
+            if (!el || !el.id) return;
+            if (el.tagName !== 'INPUT' && el.tagName !== 'BUTTON') return;
+            // ¿Hay un tema anclado justo a este elemento? Entonces lo explica,
+            // lo resalta y se posa encima.
+            const tema = AYU_TEMAS.find(t => t.ancla === '#' + el.id);
+            if (tema) explicarTema(tema, false);
         }, true);
 
         // --- Aviso cuando la mano de obra queda negativa (dato mal puesto) ---
@@ -12454,12 +12800,263 @@
             window.showView = function (vista, el) {
                 const r = original.apply(this, arguments);
                 try {
-                    const tip = AYU_VISTAS[vista];
-                    if (tip) hablarAyudante(tip.titulo, tip.texto, 'vista-' + vista);
+                    const tema = AYU_POR_VISTA[vista];
+                    if (tema) hablarAyudante(tema.titulo, tema.texto + consejoHtml(tema), 'vista-' + vista);
                 } catch (e) { }
                 return r;
             };
         })();
+
+        // ---------- Consejo en formato HTML ----------
+        function consejoHtml(tema) {
+            return tema && tema.consejo
+                ? `<div class="ayu-consejo">💡 <b>Consejo:</b> ${tema.consejo}</div>` : '';
+        }
+
+        // ---------- Buscar el tema que responde a una pregunta ----------
+        function normalizar(t) {
+            return (t || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes
+                .replace(/[^a-z0-9\s]/g, ' ');
+        }
+
+        function buscarTema(pregunta) {
+            const q = normalizar(pregunta).replace(/\s+/g, ' ').trim();
+            if (!q) return null;
+            const palabras = q.split(' ').filter(p => p.length > 2);
+            const setPalabras = new Set(palabras);
+            let mejor = null, mejorPunt = 0;
+
+            for (const tema of AYU_TEMAS) {
+                let punt = 0;
+                for (const clave of tema.claves) {
+                    const c = normalizar(clave).replace(/\s+/g, ' ').trim();
+                    const trozos = c.split(' ');
+                    if (trozos.length > 1) {
+                        // Frase completa: vale mucho, pero tiene que aparecer tal cual.
+                        if ((' ' + q + ' ').includes(' ' + c + ' ')) punt += trozos.length * 12;
+                    } else if (setPalabras.has(c)) {
+                        punt += 10; // palabra exacta
+                    } else if (c.length >= 5 && palabras.some(p => p.length >= 5 && (p.startsWith(c) || c.startsWith(p)))) {
+                        punt += 3;  // variante (plural, conjugación)
+                    }
+                    // Ojo: se compara por palabras completas a propósito. Con "incluye"
+                    // suelto, una clave corta como "lab" acertaba dentro de "blablabla".
+                }
+                if (normalizar(tema.titulo).split(/\s+/).some(p => p.length > 3 && setPalabras.has(p))) punt += 6;
+                if (punt > mejorPunt) { mejorPunt = punt; mejor = tema; }
+            }
+            return mejorPunt >= 6 ? mejor : null;
+        }
+
+        // ---------- Resaltar un elemento (se ilumina el contorno) ----------
+        let _ayuResaltado = null;
+        function resaltarElemento(sel) {
+            quitarResaltado();
+            if (!sel) return null;
+            const el = document.querySelector(sel);
+            if (!el) return null;
+            el.classList.add('ayu-resaltado');
+            _ayuResaltado = el;
+            try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { }
+            return el;
+        }
+
+        function quitarResaltado() {
+            if (_ayuResaltado) { _ayuResaltado.classList.remove('ayu-resaltado'); _ayuResaltado = null; }
+        }
+
+        // ---------- El robot se posa encima del elemento que explica ----------
+        function posarEnElemento(sel) {
+            const cont = document.getElementById('ayudante');
+            const el = sel ? document.querySelector(sel) : null;
+            if (!el || !cont) return false;
+
+            const r = el.getBoundingClientRect();
+            if (r.width === 0 || r.bottom < 0 || r.top > window.innerHeight) return false;
+
+            cont.classList.add('posado');
+            cont.style.right = 'auto';
+            cont.style.bottom = 'auto';
+
+            // Dónde queremos que quede EL ROBOT: centrado sobre el borde superior
+            // del elemento (o debajo si arriba no cabe).
+            const destinoX = r.left + r.width / 2 - 31;   // el robot mide 62px
+            let destinoY = r.top - 58;
+            if (destinoY < 8) destinoY = r.bottom + 6;
+
+            // El globo va a la izquierda del robot; si el elemento está muy pegado al
+            // borde izquierdo no cabe, así que lo mandamos al lado derecho.
+            cont.classList.toggle('globo-derecha', destinoX < 360);
+
+            // El contenedor es una fila [globo][robot], así que fijar 'left' coloca el
+            // GLOBO, no al robot. Colocamos, medimos dónde cayó el robot y corregimos.
+            cont.style.left = destinoX + 'px';
+            cont.style.top = destinoY + 'px';
+
+            const robot = document.getElementById('ayudante-robot');
+            if (robot) {
+                const rr = robot.getBoundingClientRect();
+                if (rr.width) {
+                    let izq = destinoX + (destinoX - rr.left);
+                    const arriba = destinoY + (destinoY - rr.top);
+                    // Que el globo no se salga por la izquierda ni el robot por la derecha.
+                    izq = Math.max(8, Math.min(izq, window.innerWidth - 8 - cont.offsetWidth));
+                    cont.style.left = izq + 'px';
+                    cont.style.top = Math.max(8, arriba) + 'px';
+                }
+            }
+            return true;
+        }
+
+        function volverASuCasa() {
+            const cont = document.getElementById('ayudante');
+            if (!cont) return;
+            cont.classList.remove('posado');
+            cont.classList.remove('globo-derecha');
+            cont.style.left = ''; cont.style.top = '';
+            cont.style.right = ''; cont.style.bottom = '';
+        }
+
+        // ---------- Explicar un tema completo (con interacción) ----------
+        function explicarTema(tema, forzar) {
+            if (!tema) return;
+            const el = resaltarElemento(tema.ancla);
+            if (!el) volverASuCasa();
+            // Primero hablar (eso lo hace visible) y DESPUÉS posarlo: un elemento
+            // oculto mide 0 y no se puede calcular dónde sentarlo.
+            const hablo = hablarAyudante(tema.titulo, tema.texto + consejoHtml(tema), 'tema-' + tema.id, forzar !== false);
+            if (!hablo) { quitarResaltado(); return; }
+            if (el) posarEnElemento(tema.ancla);
+        }
+
+        function explicarTemaPorId(id) {
+            explicarTema(AYU_TEMAS.find(t => t.id === id), true);
+        }
+
+        // ---------- Responder una pregunta escrita ----------
+        function preguntarAlAyudante() {
+            const caja = document.getElementById('ayudante-pregunta');
+            if (!caja) return;
+            const q = caja.value.trim();
+            if (!q) return;
+            caja.value = '';
+
+            // Atajo: pedir las métricas
+            if (/metric|numero|cifra|ganancia|como voy|balance|resultado/i.test(normalizar(q))) {
+                explicarMetricas();
+                return;
+            }
+            const tema = buscarTema(q);
+            if (tema) {
+                explicarTema(tema, true);
+            } else {
+                volverASuCasa(); quitarResaltado();
+                hablarAyudante('No te entendí bien',
+                    'Prueba con otra palabra, o mira la lista de todo lo que sé:' + listaTemasHtml(),
+                    'sin-respuesta', true);
+            }
+        }
+
+        function listaTemasHtml() {
+            return '<div class="ayu-lista">' + AYU_TEMAS.map(t =>
+                `<button onclick="explicarTemaPorId('${t.id}')">${t.titulo}</button>`).join('') + '</div>';
+        }
+
+        function mostrarIndiceAyudante() {
+            volverASuCasa(); quitarResaltado();
+            hablarAyudante('Todo lo que sé del programa',
+                'Toca un tema y te lo explico (y te lo señalo en pantalla):' + listaTemasHtml(),
+                'indice', true);
+        }
+
+        // ---------- MÉTRICAS: leer los valores reales y aconsejar ----------
+        function numDe(sel) {
+            const el = document.querySelector(sel);
+            if (!el) return null;
+            const limpio = (el.textContent || '').replace(/[^0-9,.-]/g, '').replace(/,/g, '');
+            const n = parseFloat(limpio);
+            return isNaN(n) ? null : n;
+        }
+
+        function explicarMetricas() {
+            const ingresos = numDe('#kpi-ingresos');
+            const repuestos = numDe('#kpi-gastos');
+            const gastosOp = numDe('#kpi-gastos-op');
+            const ganancia = numDe('#kpi-ganancias');
+            const ordenes = numDe('#kpi-ordenes');
+            const reparados = numDe('#kpi-reparados');
+            const ticket = numDe('#kpi-ticket');
+
+            const porAsignar = numDe('#dash-asignar');
+            const enProceso = numDe('#dash-proceso');
+            const listos = numDe('#dash-listos');
+
+            const s = v => 'S/ ' + (v || 0).toFixed(2);
+            const hayDatos = [ingresos, ganancia, ordenes].some(v => v !== null);
+
+            if (!hayDatos) {
+                volverASuCasa();
+                hablarAyudante('Métricas',
+                    'Todavía no puedo leer tus números. Entra a <b>Reportes</b> para que se carguen y vuelve a preguntarme.' +
+                    '<div class="ayu-consejo">💡 La cifra que manda es la <b>Ganancia Neta</b>, no los ingresos.</div>',
+                    'metricas-vacias', true);
+                return;
+            }
+
+            let h = '<div class="ayu-metricas">';
+            const fila = (etq, val, color) =>
+                `<div class="ayu-m"><span>${etq}</span><b style="color:${color || '#e5e7eb'}">${val}</b></div>`;
+
+            h += fila('Ingresos', s(ingresos), '#a78bfa');
+            h += fila('Costo de repuestos', s(repuestos), '#f87171');
+            h += fila('Gastos operativos', s(gastosOp), '#fbbf24');
+            h += fila('Ganancia neta', s(ganancia), (ganancia || 0) >= 0 ? '#34d399' : '#f87171');
+            if (ordenes !== null) h += fila('Órdenes', ordenes, '#e5e7eb');
+            if (reparados !== null) h += fila('Reparados', reparados, '#34d399');
+            if (ticket !== null) h += fila('Ticket promedio', s(ticket), '#22d3ee');
+            h += '</div>';
+
+            // ----- Lectura y consejos según los números reales -----
+            const consejos = [];
+            if (ingresos) {
+                const margen = ((ganancia || 0) / ingresos) * 100;
+                h += `<div style="margin-top:8px">De cada S/ 100 que entran, te quedan <b>S/ ${margen.toFixed(0)}</b> limpios.</div>`;
+                if ((ganancia || 0) < 0) {
+                    consejos.push('⚠️ Estás <b>perdiendo</b>: los repuestos y gastos superan lo que cobras. Sube precios o baja el costo de las piezas.');
+                } else if (margen < 20) {
+                    consejos.push('Tu margen está <b>bajo</b> (menos del 20%). Revisa a qué precio compras los repuestos y cuánto cobras de mano de obra.');
+                } else if (margen > 50) {
+                    consejos.push('Buen margen 👏. Mantén ese nivel de precios.');
+                }
+            }
+            if (repuestos && ingresos && (repuestos / ingresos) > 0.5) {
+                consejos.push('Los <b>repuestos se llevan más de la mitad</b> de tus ingresos. Busca mejor proveedor o sube el precio final.');
+            }
+            if (gastosOp && ganancia !== null && gastosOp > Math.abs(ganancia)) {
+                consejos.push('Tus <b>gastos operativos</b> superan tu ganancia. Mira qué gasto fijo puedes recortar.');
+            }
+            if (ordenes && reparados !== null && ordenes > 0) {
+                const tasa = (reparados / ordenes) * 100;
+                if (tasa < 60) consejos.push(`Solo reparas el <b>${tasa.toFixed(0)}%</b> de lo que entra. Revisa qué se te está quedando sin terminar.`);
+            }
+            if (listos && listos > 2) {
+                consejos.push(`Tienes <b>${listos} equipos listos sin entregar</b>. Avísales a esos clientes: es plata terminada que no has cobrado.`);
+            }
+            if (porAsignar && porAsignar > 4) {
+                consejos.push(`Hay <b>${porAsignar} órdenes por asignar</b>. Se te está haciendo cola en la entrada.`);
+            }
+            if (enProceso && enProceso > 6) {
+                consejos.push(`<b>${enProceso} equipos abiertos a la vez</b>. Cierra algunos antes de recibir más: así se pierden piezas.`);
+            }
+            if (!consejos.length) consejos.push('Tus números se ven sanos. Sigue cerrando la caja todos los días para que sigan siendo confiables.');
+
+            h += '<div class="ayu-consejo">💡 ' + consejos.join('<br><br>💡 ') + '</div>';
+
+            volverASuCasa();
+            resaltarElemento('#kpi-ganancias');
+            hablarAyudante('Tus números ahora mismo', h, 'metricas', true);
+        }
 
         // --- Arranque ---
         (function iniciarAyudante() {
