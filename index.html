@@ -12520,6 +12520,7 @@
             timerOcultar: null,
             timerCerrar: null,
             timerHablar: null,
+            interactuando: false,   // escribiendo o con el ratón sobre el globo
             ultimos: {},        // clave -> momento en que se dijo (para no repetir)
             ESPERA_REPETIR: 90000  // 1.5 min antes de repetir el mismo consejo
         };
@@ -12789,8 +12790,16 @@
             AYU.timerHablar = setTimeout(() => cont.classList.add('hablando'), 260);
 
             // Se guarda solo a los 11 segundos.
-            AYU.timerOcultar = setTimeout(ocultarAyudante, 11000);
+            programarCierreAyudante();
             return true; // habló: ya se puede medir y colocar sobre el elemento
+        }
+
+        // El robot se guarda solo a los 11 s, PERO nunca mientras lo estés usando
+        // (escribiendo una pregunta o con el ratón encima del globo).
+        function programarCierreAyudante() {
+            clearTimeout(AYU.timerOcultar);
+            if (AYU.interactuando) return;
+            AYU.timerOcultar = setTimeout(ocultarAyudante, 11000);
         }
 
         function ocultarAyudante() {
@@ -13120,6 +13129,29 @@
             const guardado = localStorage.getItem('ayudanteActivo');
             AYU.activo = (guardado === null) ? true : (guardado === '1');
             actualizarBotonAyudante();
+
+            // Mientras escribes una pregunta (o tienes el ratón encima del globo)
+            // se cancela el cierre automático: antes se cerraba a media frase.
+            const globo = document.getElementById('ayudante-globo');
+            const caja = document.getElementById('ayudante-pregunta');
+
+            const ocupado = () => { AYU.interactuando = true; clearTimeout(AYU.timerOcultar); };
+            const libre = () => {
+                // Si sigue escribiendo, no se reactiva el cierre aunque saque el ratón.
+                if (caja && document.activeElement === caja) return;
+                AYU.interactuando = false;
+                programarCierreAyudante();
+            };
+
+            if (globo) {
+                globo.addEventListener('mouseenter', ocupado);
+                globo.addEventListener('mouseleave', libre);
+            }
+            if (caja) {
+                caja.addEventListener('focus', ocupado);
+                caja.addEventListener('input', ocupado);   // cada tecla renueva la pausa
+                caja.addEventListener('blur', () => { AYU.interactuando = false; programarCierreAyudante(); });
+            }
         })();
     </script>
 </body>
