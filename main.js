@@ -751,6 +751,38 @@ ipcMain.on('eliminar-proveedor-db', async (event, data) => {
     }
 });
 
+// === SUBIR FOTO PRODUCTO ===
+ipcMain.handle('subir-foto-producto', async (event, { buf, ext }) => {
+    try {
+        const ahora = new Date();
+        const sello = `${ahora.getFullYear()}${String(ahora.getMonth() + 1).padStart(2, '0')}${String(ahora.getDate()).padStart(2, '0')}_${String(ahora.getHours()).padStart(2, '0')}${String(ahora.getMinutes()).padStart(2, '0')}${String(ahora.getSeconds()).padStart(2, '0')}`;
+        const nombreArchivo = `prod_${sello}.${ext}`;
+        
+        const buffer = Buffer.from(buf);
+        
+        const { data, error } = await supabase.storage
+            .from('productos_fotos')
+            .upload(nombreArchivo, buffer, {
+                contentType: `image/${ext}`,
+                upsert: true
+            });
+            
+        if (error) {
+            console.error("Error subiendo foto de producto a Supabase:", error.message);
+            return { success: false, msg: error.message };
+        }
+        
+        const { data: publicData } = supabase.storage
+            .from('productos_fotos')
+            .getPublicUrl(nombreArchivo);
+            
+        return { success: true, url: publicData.publicUrl };
+    } catch (e) {
+        console.error('Error en subir-foto-producto:', e.message);
+        return { success: false, msg: e.message };
+    }
+});
+
 // === 4. INVENTARIO (SOLO DE MI EMPRESA) ===
 ipcMain.on('nuevo-producto-sql', async (event, prod) => {
     try {
@@ -770,6 +802,10 @@ ipcMain.on('nuevo-producto-sql', async (event, prod) => {
         if (prod.modelo_compatible) insertData.modelo_compatible = prod.modelo_compatible;
         // Si el usuario aceptó la sugerencia de vincular el producto a un grupo de compatibilidad existente
         if (prod.grupo_compatibilidad_id) insertData.grupo_compatibilidad_id = prod.grupo_compatibilidad_id;
+        
+        // Nuevos campos para Tienda Virtual
+        if (prod.foto_url) insertData.foto_url = prod.foto_url;
+        if (prod.detalle) insertData.detalle = prod.detalle;
 
         const { error } = await supabase.from('productos').insert([insertData]);
         if (error) throw error;
