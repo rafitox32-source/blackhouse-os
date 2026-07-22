@@ -6614,10 +6614,23 @@
             else if (!res.cancelado) showToast(res.msg || 'Error al exportar', 'danger');
         });
 
-        // === EXPORTAR INVENTARIO COMPLETO (STOCK ACTUAL) A EXCEL ===
-        function exportarInventarioExcel() {
-            showToast('Generando Excel con el inventario actual…', 'info');
-            ipcRenderer.send('exportar-inventario-excel');
+        // === EXPORTAR INVENTARIO COMPLETO O POR CATEGORÍA A EXCEL (CON PESTAÑAS INDEPENDIENTES) ===
+        function exportarInventarioExcel(cat = null) {
+            let categoriaExportar = cat;
+            if (!categoriaExportar) {
+                const tabActiva = document.querySelector('.inv-tab.active');
+                if (tabActiva) {
+                    const txt = tabActiva.innerText.trim();
+                    if (txt.includes('Pantallas')) categoriaExportar = 'Pantallas';
+                    else if (txt.includes('Micas')) categoriaExportar = 'Micas';
+                    else if (txt.includes('Accesorios')) categoriaExportar = 'Accesorios';
+                    else if (txt.includes('Repuestos')) categoriaExportar = 'Repuestos';
+                    else if (txt.includes('Celulares')) categoriaExportar = 'Celulares';
+                    else categoriaExportar = 'Todos';
+                }
+            }
+            showToast('Generando Excel por pestañas independientes por categoría…', 'info');
+            ipcRenderer.send('exportar-inventario-excel', categoriaExportar);
         }
 
         ipcRenderer.on('exportar-inventario-excel-res', (e, res) => {

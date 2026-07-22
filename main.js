@@ -1794,9 +1794,10 @@ ipcMain.on('exportar-reporte-excel', async (event, periodo) => {
 });
 
 // === EXPORTAR INVENTARIO ACTUAL DE PRODUCTOS A EXCEL (.XLSX) ===
-ipcMain.on('exportar-inventario-excel', async (event) => {
+// Soporta pestañas independientes por cada categoría (Pantallas, Micas, etc.) o exportación filtrada por categoría.
+ipcMain.on('exportar-inventario-excel', async (event, categoriaFiltro) => {
     try {
-        const { data: productos, error } = await supabase.from('productos')
+        const { data: todosProductos, error } = await supabase.from('productos')
             .select('*')
             .eq('empresa_id', empresaActual)
             .order('categoria', { ascending: true })
@@ -1807,51 +1808,6 @@ ipcMain.on('exportar-inventario-excel', async (event) => {
 
         const ExcelJS = require('exceljs');
         const wb = new ExcelJS.Workbook();
-        const ws = wb.addWorksheet('Inventario Actual');
-
-        // Columnas alineadas con las plantillas e importador del sistema
-        ws.columns = [
-            { header: 'SKU / Código', key: 'sku', width: 15 },
-            { header: 'Categoría', key: 'categoria', width: 22 },
-            { header: 'Subcategoría', key: 'subcategoria', width: 22 },
-            { header: 'Nombre del Producto', key: 'nombre', width: 38 },
-            { header: 'Modelo Compatible', key: 'modelo', width: 25 },
-            { header: 'Stock / Cantidad', key: 'stock', width: 16 },
-            { header: 'Costo Unitario (S/)', key: 'costo', width: 18 },
-            { header: 'Precio Venta (S/)', key: 'precio', width: 18 },
-            { header: 'Precio Por Mayor (S/)', key: 'precio_mayor', width: 20 },
-            { header: 'Proveedor', key: 'proveedor', width: 22 },
-            { header: 'Notas / Observaciones', key: 'nota', width: 30 }
-        ];
-
-        // Encabezado estilizado morado
-        const headerRow = ws.getRow(1);
-        headerRow.font = { name: 'Calibri', bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
-        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C3AED' } };
-        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-        headerRow.height = 24;
-
-        (productos || []).forEach(p => {
-            const row = ws.addRow({
-                sku: p.sku || '',
-                categoria: p.categoria || '',
-                subcategoria: p.subcategoria || '',
-                nombre: p.nombre || '',
-                modelo: p.modelo || '',
-                stock: parseInt(p.stock) || 0,
-                costo: p.costo !== null && p.costo !== undefined ? parseFloat(p.costo) : 0,
-                precio: p.precio !== null && p.precio !== undefined ? parseFloat(p.precio) : 0,
-                precio_mayor: p.precio_mayor !== null && p.precio_mayor !== undefined ? parseFloat(p.precio_mayor) : 0,
-                proveedor: p.proveedor || '',
-                nota: p.nota || ''
-            });
-
-            row.alignment = { vertical: 'middle' };
-            row.getCell('stock').alignment = { vertical: 'middle', horizontal: 'right' };
-            row.getCell('costo').numFmt = '"S/"#,##0.00';
-            row.getCell('precio').numFmt = '"S/"#,##0.00';
-            row.getCell('precio_mayor').numFmt = '"S/"#,##0.00';
-        });
 
         const BORDE = {
             top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
@@ -1860,19 +1816,92 @@ ipcMain.on('exportar-inventario-excel', async (event) => {
             right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
         };
 
-        ws.eachRow((row, rowNumber) => {
-            if (rowNumber > 1) {
-                row.eachCell((cell) => {
-                    cell.border = BORDE;
+        function agregarHojaInventario(workbook, tituloHoja, listaProductos, colorHeader = 'FF7C3AED') {
+            if (!listaProductos || listaProductos.length === 0) return;
+            // Caracteres no permitidos en nombres de hoja de Excel
+            const nombreSeguro = (tituloHoja || 'Productos').replace(/[\\/?*:[\]]/g, '').trim().slice(0, 30);
+            const ws = workbook.addWorksheet(nombreSeguro);
+
+            ws.columns = [
+                { header: 'SKU / Código', key: 'sku', width: 15 },
+                { header: 'Categoría', key: 'categoria', width: 22 },
+                { header: 'Subcategoría', key: 'subcategoria', width: 22 },
+                { header: 'Nombre del Producto', key: 'nombre', width: 38 },
+                { header: 'Modelo Compatible', key: 'modelo', width: 25 },
+                { header: 'Stock / Cantidad', key: 'stock', width: 16 },
+                { header: 'Costo Unitario (S/)', key: 'costo', width: 18 },
+                { header: 'Precio Venta (S/)', key: 'precio', width: 18 },
+                { header: 'Precio Por Mayor (S/)', key: 'precio_mayor', width: 20 },
+                { header: 'Proveedor', key: 'proveedor', width: 22 },
+                { header: 'Notas / Observaciones', key: 'nota', width: 30 }
+            ];
+
+            const headerRow = ws.getRow(1);
+            headerRow.font = { name: 'Calibri', bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorHeader } };
+            headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+            headerRow.height = 24;
+
+            listaProductos.forEach(p => {
+                const row = ws.addRow({
+                    sku: p.sku || '',
+                    categoria: p.categoria || '',
+                    subcategoria: p.subcategoria || '',
+                    nombre: p.nombre || '',
+                    modelo: p.modelo || '',
+                    stock: parseInt(p.stock) || 0,
+                    costo: p.costo !== null && p.costo !== undefined ? parseFloat(p.costo) : 0,
+                    precio: p.precio !== null && p.precio !== undefined ? parseFloat(p.precio) : 0,
+                    precio_mayor: p.precio_mayor !== null && p.precio_mayor !== undefined ? parseFloat(p.precio_mayor) : 0,
+                    proveedor: p.proveedor || '',
+                    nota: p.nota || ''
                 });
-            }
-        });
+
+                row.alignment = { vertical: 'middle' };
+                row.getCell('stock').alignment = { vertical: 'middle', horizontal: 'right' };
+                row.getCell('costo').numFmt = '"S/"#,##0.00';
+                row.getCell('precio').numFmt = '"S/"#,##0.00';
+                row.getCell('precio_mayor').numFmt = '"S/"#,##0.00';
+            });
+
+            ws.eachRow((row, rowNumber) => {
+                if (rowNumber > 1) {
+                    row.eachCell((cell) => {
+                        cell.border = BORDE;
+                    });
+                }
+            });
+        }
+
+        const prods = todosProductos || [];
+
+        // Si el usuario especificó una categoría concreta (ej. "Pantallas" o "Micas")
+        if (categoriaFiltro && categoriaFiltro !== 'Todos' && categoriaFiltro !== 'TODOS') {
+            const filtrados = prods.filter(p => (p.categoria || '').toLowerCase().trim() === categoriaFiltro.toLowerCase().trim());
+            agregarHojaInventario(wb, categoriaFiltro, filtrados, 'FF0284C7');
+        } else {
+            // Generar PESTAÑAS INDEPENDIENTES por cada categoría para evitar mezclar productos
+            const categoriasSet = new Set(prods.map(p => (p.categoria || 'Sin Categoría').trim()));
+            const listaCategorias = Array.from(categoriasSet);
+            const paletaColores = ['FF0284C7', 'FF16A34A', 'FF7C3AED', 'FFEAB308', 'FFEC4899', 'FF0891B2'];
+
+            listaCategorias.forEach((cat, index) => {
+                const prodsDeCat = prods.filter(p => (p.categoria || 'Sin Categoría').trim() === cat);
+                const colorHex = paletaColores[index % paletaColores.length];
+                agregarHojaInventario(wb, cat, prodsDeCat, colorHex);
+            });
+
+            // Pestaña resumen final con todos los productos juntos
+            agregarHojaInventario(wb, 'RESUMEN COMPLETO', prods, 'FF334155');
+        }
 
         const buffer = await wb.xlsx.writeBuffer();
         const fechaStr = new Date().toISOString().slice(0, 10);
+        const tagNombre = (categoriaFiltro && categoriaFiltro !== 'Todos') ? `_${categoriaFiltro.replace(/\s+/g, '_')}` : '_Por_Categorias';
+        
         const destino = dialog.showSaveDialogSync({
-            title: 'Guardar Inventario Actual en Excel',
-            defaultPath: path.join(app.getPath('downloads'), `Inventario_Actual_${fechaStr}.xlsx`),
+            title: `Guardar Inventario ${categoriaFiltro || 'por Categorías'} en Excel`,
+            defaultPath: path.join(app.getPath('downloads'), `Inventario${tagNombre}_${fechaStr}.xlsx`),
             filters: [{ name: 'Archivos de Excel (*.xlsx)', extensions: ['xlsx'] }]
         });
 
@@ -1880,7 +1909,7 @@ ipcMain.on('exportar-inventario-excel', async (event) => {
 
         fs.writeFileSync(destino, Buffer.from(buffer));
         shell.openPath(destino);
-        event.reply('exportar-inventario-excel-res', { success: true, count: productos ? productos.length : 0 });
+        event.reply('exportar-inventario-excel-res', { success: true, count: prods.length });
     } catch (err) {
         console.error('Error al exportar inventario a Excel:', err);
         event.reply('exportar-inventario-excel-res', { success: false, msg: err.message });
