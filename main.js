@@ -1793,6 +1793,100 @@ ipcMain.on('exportar-reporte-excel', async (event, periodo) => {
     }
 });
 
+// === EXPORTAR INVENTARIO ACTUAL DE PRODUCTOS A EXCEL (.XLSX) ===
+ipcMain.on('exportar-inventario-excel', async (event) => {
+    try {
+        const { data: productos, error } = await supabase.from('productos')
+            .select('*')
+            .eq('empresa_id', empresaActual)
+            .order('categoria', { ascending: true })
+            .order('subcategoria', { ascending: true })
+            .order('nombre', { ascending: true });
+
+        if (error) throw error;
+
+        const ExcelJS = require('exceljs');
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('Inventario Actual');
+
+        // Columnas alineadas con las plantillas e importador del sistema
+        ws.columns = [
+            { header: 'SKU / Código', key: 'sku', width: 15 },
+            { header: 'Categoría', key: 'categoria', width: 22 },
+            { header: 'Subcategoría', key: 'subcategoria', width: 22 },
+            { header: 'Nombre del Producto', key: 'nombre', width: 38 },
+            { header: 'Modelo Compatible', key: 'modelo', width: 25 },
+            { header: 'Stock / Cantidad', key: 'stock', width: 16 },
+            { header: 'Costo Unitario (S/)', key: 'costo', width: 18 },
+            { header: 'Precio Venta (S/)', key: 'precio', width: 18 },
+            { header: 'Precio Por Mayor (S/)', key: 'precio_mayor', width: 20 },
+            { header: 'Proveedor', key: 'proveedor', width: 22 },
+            { header: 'Notas / Observaciones', key: 'nota', width: 30 }
+        ];
+
+        // Encabezado estilizado morado
+        const headerRow = ws.getRow(1);
+        headerRow.font = { name: 'Calibri', bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C3AED' } };
+        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+        headerRow.height = 24;
+
+        (productos || []).forEach(p => {
+            const row = ws.addRow({
+                sku: p.sku || '',
+                categoria: p.categoria || '',
+                subcategoria: p.subcategoria || '',
+                nombre: p.nombre || '',
+                modelo: p.modelo || '',
+                stock: parseInt(p.stock) || 0,
+                costo: p.costo !== null && p.costo !== undefined ? parseFloat(p.costo) : 0,
+                precio: p.precio !== null && p.precio !== undefined ? parseFloat(p.precio) : 0,
+                precio_mayor: p.precio_mayor !== null && p.precio_mayor !== undefined ? parseFloat(p.precio_mayor) : 0,
+                proveedor: p.proveedor || '',
+                nota: p.nota || ''
+            });
+
+            row.alignment = { vertical: 'middle' };
+            row.getCell('stock').alignment = { vertical: 'middle', horizontal: 'right' };
+            row.getCell('costo').numFmt = '"S/"#,##0.00';
+            row.getCell('precio').numFmt = '"S/"#,##0.00';
+            row.getCell('precio_mayor').numFmt = '"S/"#,##0.00';
+        });
+
+        const BORDE = {
+            top: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            left: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE0E0E0' } },
+            right: { style: 'thin', color: { argb: 'FFE0E0E0' } }
+        };
+
+        ws.eachRow((row, rowNumber) => {
+            if (rowNumber > 1) {
+                row.eachCell((cell) => {
+                    cell.border = BORDE;
+                });
+            }
+        });
+
+        const buffer = await wb.xlsx.writeBuffer();
+        const fechaStr = new Date().toISOString().slice(0, 10);
+        const destino = dialog.showSaveDialogSync({
+            title: 'Guardar Inventario Actual en Excel',
+            defaultPath: path.join(app.getPath('downloads'), `Inventario_Actual_${fechaStr}.xlsx`),
+            filters: [{ name: 'Archivos de Excel (*.xlsx)', extensions: ['xlsx'] }]
+        });
+
+        if (!destino) return event.reply('exportar-inventario-excel-res', { success: false, cancelado: true });
+
+        fs.writeFileSync(destino, Buffer.from(buffer));
+        shell.openPath(destino);
+        event.reply('exportar-inventario-excel-res', { success: true, count: productos ? productos.length : 0 });
+    } catch (err) {
+        console.error('Error al exportar inventario a Excel:', err);
+        event.reply('exportar-inventario-excel-res', { success: false, msg: err.message });
+    }
+});
+
 async function construirExcelReporte({ periodo, ventasRows, ordenesRows, gastosRows }) {
     const ExcelJS = require('exceljs');
     const wb = new ExcelJS.Workbook();

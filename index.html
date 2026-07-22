@@ -74,28 +74,33 @@
             --text-muted: #5b5b6b;
         }
 
-        /* ---- TEMA DOHA-CELL: colores de la marca (azul → verde), fondo claro ---- */
+        /* ---- TEMA DOHA-CELL: colores de la marca (azul → verde), fondo claro y lectura nítida ---- */
         body[data-theme="doha"] {
-            --bh-purple: #1c9fe0;        /* azul de la marca (acento principal) */
-            --bh-purple-dark: #0e6bb0;   /* azul profundo */
-            --bh-accent-2: #6dbe45;      /* verde de la marca (fin del degradado) */
-            --bh-purple-glow: rgba(28, 159, 224, 0.30);
-            --bh-bg-dark: #f3f8fc;
-            --bh-bg-gradient: radial-gradient(circle at top right, #e3f5e8 0%, #eaf4fc 55%, #f3f8fc 100%);
+            --bh-purple: #0284c7;        /* azul de la marca más nítido */
+            --bh-purple-dark: #0369a1;   /* azul profundo */
+            --bh-accent-2: #16a34a;      /* verde de la marca */
+            --bh-purple-glow: rgba(2, 132, 199, 0.30);
+            --bh-bg-dark: #f8fafc;
+            --bh-bg-gradient: radial-gradient(circle at top right, #f0fdf4 0%, #f0f9ff 55%, #f8fafc 100%);
             --bh-card-bg: #ffffff;
             --bh-surface: #ffffff;
-            --bh-surface-2: #eef5f9;
+            --bh-surface-2: #f1f5f9;
             --bh-input-bg: #ffffff;
-            --bh-border: rgba(14, 107, 176, 0.16);
-            --bh-scroll-thumb: #a9d3ec;
-            --text-main: #10344d;        /* azul muy oscuro para el texto */
-            --text-muted: #5a7688;
+            --bh-border: rgba(14, 116, 144, 0.25);
+            --bh-scroll-thumb: #94a3b8;
+            --text-main: #0f172a;        /* negro/slate ultra oscuro para máxima legibilidad */
+            --text-muted: #334155;       /* texto secundario nítido de alto contraste */
         }
 
         /* Retoques para TEMAS CLAROS (Blanco, Doha-cell…) en elementos con estilos en
            línea escritos directo en el HTML. body.tema-claro lo activa el JS para
            cualquier tema de fondo claro. Primero forzamos texto oscuro donde había
            texto claro, y luego re-forzamos texto blanco sobre fondos de acento. */
+        body.tema-claro,
+        body.tema-claro * {
+            color-scheme: light;
+        }
+
         body.tema-claro [style*="color:#fff"],
         body.tema-claro [style*="color: #fff"],
         body.tema-claro [style*="color:white"],
@@ -105,9 +110,35 @@
         body.tema-claro [style*="color:#eee"],
         body.tema-claro [style*="color: #eee"],
         body.tema-claro [style*="color:#e0e0e0"],
-        body.tema-claro [style*="color: #e0e0e0"] {
-            color: #1a1a2e !important;
+        body.tema-claro [style*="color: #e0e0e0"],
+        body.tema-claro [style*="color:#aaa"],
+        body.tema-claro [style*="color: #aaa"],
+        body.tema-claro [style*="color:#bbb"],
+        body.tema-claro [style*="color: #bbb"],
+        body.tema-claro [style*="color:#ccc"],
+        body.tema-claro [style*="color: #ccc"],
+        body.tema-claro [style*="color:#888"],
+        body.tema-claro [style*="color: #888"],
+        body.tema-claro [style*="color:#999"],
+        body.tema-claro [style*="color: #999"],
+        body.tema-claro [style*="color:#666"],
+        body.tema-claro [style*="color: #666"],
+        body.tema-claro [style*="color:#94a3b8"],
+        body.tema-claro [style*="color: #94a3b8"],
+        body.tema-claro [style*="color:#cbd5e1"],
+        body.tema-claro [style*="color: #cbd5e1"],
+        body.tema-claro [style*="color:rgba(255,255,255"],
+        body.tema-claro [style*="color: rgba(255,255,255"] {
+            color: #0f172a !important;
         }
+
+        /* Encabezados y textos secundarios en tablas/tarjetas */
+        body.tema-claro th {
+            color: #0f172a !important;
+            font-weight: 700 !important;
+            background-color: #e2e8f0 !important;
+        }
+
         /* Fondos oscuros puestos en línea → superficie clara */
         body.tema-claro [style*="background: rgba(0,0,0"],
         body.tema-claro [style*="background:rgba(0,0,0"],
@@ -116,9 +147,22 @@
         body.tema-claro [style*="background:#111"],
         body.tema-claro [style*="background: #111"],
         body.tema-claro [style*="background:#222"],
-        body.tema-claro [style*="background: #222"] {
+        body.tema-claro [style*="background: #222"],
+        body.tema-claro [style*="background:#18181b"],
+        body.tema-claro [style*="background: #18181b"] {
             background-color: var(--bh-surface-2) !important;
+            color: #0f172a !important;
         }
+
+        /* Inputs, selects y textareas en temas claros */
+        body.tema-claro input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
+        body.tema-claro select,
+        body.tema-claro textarea {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border-color: #cbd5e1 !important;
+        }
+
         /* Re-afirmar texto blanco donde el fondo es un acento sólido (botones, chips) */
         body.tema-claro .bh-btn-purple,
         body.tema-claro .bh-btn-purple *,
@@ -126,7 +170,8 @@
         body.tema-claro [style*="background: var(--bh-purple)"],
         body.tema-claro [style*="background:#7c3aed"],
         body.tema-claro [style*="background: #7c3aed"],
-        body.tema-claro [style*="background:linear-gradient"] {
+        body.tema-claro [style*="background:linear-gradient"],
+        body.tema-claro [style*="background: linear-gradient"] {
             color: #ffffff !important;
         }
 
@@ -2381,8 +2426,16 @@
                                     onkeyup="simularIA(this.value)"></textarea>
                                 <div id="ai-suggestion" class="ai-box"></div>
                             </div>
-                            <div class="input-group"><label>Precio Repuesto (S/)</label><input type="number"
-                                    id="cost-part" class="bh-input" placeholder="0.00" oninput="calcularTotal()"></div>
+                            <div class="input-group"><label>Precio Repuesto (S/)
+                                    <span style="font-size:10px; color:#64748b; font-weight:normal;">· lo que le cobras</span></label>
+                                <input type="number" id="cost-part" class="bh-input" placeholder="0.00"
+                                    oninput="calcularTotal()"></div>
+                            <!-- Costo REAL: lo que la pieza te costó a ti. Sin esto la ganancia
+                                 sale inflada cuando el repuesto no se registró por stock ni compra externa. -->
+                            <div class="input-group"><label style="color:#f0a0a0;">Costo real del repuesto (S/)
+                                    <span style="font-size:10px; color:#64748b; font-weight:normal;">· lo que te costó a ti</span></label>
+                                <input type="number" id="cost-part-real" class="bh-input" placeholder="0.00"
+                                    style="border-color:rgba(248,113,113,.35);" oninput="calcularTotal()"></div>
                             <!-- La mano de obra ya no se escribe: sale de restarle el repuesto al total. -->
                             <div class="input-group"><label style="color:#0ea5e9;">Mano de Obra (S/)
                                     <span style="font-size:10px; color:#64748b; font-weight:normal;">· automático</span></label>
@@ -2605,6 +2658,10 @@
                                     <input type="file" id="input-excel-inventario" accept=".xlsx, .xls, .csv" style="display:none;"
                                         onchange="document.getElementById('menu-agregar-inventario').style.display='none'; abrirModalCategoriaExcel(event)">
                                 </label>
+                                <a onclick="document.getElementById('menu-agregar-inventario').style.display='none'; exportarInventarioExcel()"
+                                    style="display:flex; align-items:center; gap:8px; padding:12px 16px; color:#38bdf8; cursor:pointer; font-size:13px;">
+                                    <i class='bx bx-export'></i> Exportar Stock Actual (Excel)
+                                </a>
                                 <label style="display:flex; align-items:center; gap:8px; padding:12px 16px; color:white; cursor:pointer; font-size:13px; margin:0;">
                                     <i class='bx bx-scan'></i> Escanear Lista
                                     <input type="file" id="upload-lista-inv" accept="image/*" style="display:none;"
@@ -6555,6 +6612,20 @@
         ipcRenderer.on('reporte-excel-generado', (e, res) => {
             if (res.success) showToast('Excel generado y abierto 📥', 'success');
             else if (!res.cancelado) showToast(res.msg || 'Error al exportar', 'danger');
+        });
+
+        // === EXPORTAR INVENTARIO COMPLETO (STOCK ACTUAL) A EXCEL ===
+        function exportarInventarioExcel() {
+            showToast('Generando Excel con el inventario actual…', 'info');
+            ipcRenderer.send('exportar-inventario-excel');
+        }
+
+        ipcRenderer.on('exportar-inventario-excel-res', (e, res) => {
+            if (res.success) {
+                showToast(`✅ Inventario exportado exitosamente (${res.count} productos) 📊`, 'success');
+            } else if (!res.cancelado) {
+                showToast('❌ Error al exportar inventario: ' + (res.msg || 'Error desconocido'), 'danger');
+            }
         });
 
         // === CIERRE DEL DÍA UNIFICADO (Fase 6: taller + POS − gastos − compras − devoluciones) ===
