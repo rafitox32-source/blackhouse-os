@@ -259,11 +259,56 @@ ipcMain.on('elegir-fuente-pantalla', (event, id) => { fuentePantallaElegida = id
 // Guarda el video ya grabado. Llega como ArrayBuffer desde el renderer.
 ipcMain.handle('guardar-grabacion', async (event, datos) => {
     try {
+        const bufferRaw = datos.buf || datos; // Compatibilidad por si acaso
+        const ordenId = datos.ordenId;
         const dir = carpetaGrabaciones();
         const ahora = new Date();
         const sello = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}_${String(ahora.getHours()).padStart(2, '0')}-${String(ahora.getMinutes()).padStart(2, '0')}-${String(ahora.getSeconds()).padStart(2, '0')}`;
-        const archivo = path.join(dir, `reparacion_${sello}.webm`);
-        fs.writeFileSync(archivo, Buffer.from(datos));
+        const nombreArchivo = `reparacion_${ordenId ? ordenId + '_' : ''}${sello}.webm`;
+        const archivo = path.join(dir, nombreArchivo);
+        const buffer = Buffer.from(bufferRaw);
+        
+        // 1. Guardar localmente
+        fs.writeFileSync(archivo, buffer);
+        
+        // 2. Si hay orden, subir a Supabase y actualizar BD
+        if (ordenId) {
+            const { data, error } = await supabase.storage
+                .from('grabaciones')
+                .upload(nombreArchivo, buffer, {
+                    contentType: 'video/webm',
+                    upsert: true
+                });
+            
+            if (error) {
+                console.error("Error subiendo a Supabase Storage:", error.message);
+                // No lanzamos el error para no romper el guardado local, solo lo reportamos.
+                return { success: true, archivo, msg: "Guardado local. Falló subida a nube: " + error.message };
+            }
+            
+            // Obtener URL Pública
+            const { data: publicData } = supabase.storage
+                .from('grabaciones')
+                .getPublicUrl(nombreArchivo);
+                
+            const videoUrl = publicData.publicUrl;
+            
+            // Actualizar la tabla ordenes
+            const { error: dbError } = await supabase
+                .from('ordenes')
+                .update({ 
+                    video_url: videoUrl,
+                    modo_transmision: 'Grabado'
+                })
+                .eq('id', ordenId);
+                
+            if (dbError) {
+                console.error("Error al vincular el video en la BD:", dbError.message);
+            }
+            
+            return { success: true, archivo, videoUrl };
+        }
+        
         return { success: true, archivo };
     } catch (e) {
         console.error('Error guardando la grabación:', e.message);
