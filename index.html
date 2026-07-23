@@ -2431,7 +2431,7 @@
                                     <strong id="venta-total" style="font-size:24px; color:var(--bh-purple);">S/ 0.00</strong>
                                 </div>
                                 <div style="display:flex; gap:10px; margin-bottom:8px;">
-                                    <button class="bh-btn-purple" style="flex:2;" onclick="cobrarVenta()">Cobrar</button>
+                                    <button class="bh-btn-purple" id="btn-cobrar-venta" style="flex:2;" onclick="cobrarVenta()">Cobrar</button>
                                     <button class="bh-btn-white" style="flex:1; border-color:var(--info); color:var(--info); padding:0; font-size:12px;" onclick="generarCotizacion()">📄 Cotizar</button>
                                 </div>
                                 <button class="bh-btn-white" style="width:100%;" onclick="vaciarVenta()">Vaciar</button>
@@ -4468,7 +4468,7 @@
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
                 <button class="bh-btn-white"
                     onclick="document.getElementById('modal-facturacion').style.display='none'">Cancelar</button>
-                <button class="bh-btn-purple" style="background: var(--info);" onclick="emitirFactura()">Generar
+                <button class="bh-btn-purple" id="btn-emitir-factura" style="background: var(--info);" onclick="emitirFactura()">Generar
                     Comprobante</button>
             </div>
         </div>
@@ -6656,6 +6656,11 @@
 
         function cobrarVenta() {
             if (!ventaCarrito.length) { showToast('La venta está vacía', 'warning'); return; }
+            // Guardia anti doble-clic: si ya se está cobrando, ignorar el clic (evita ventas dobles).
+            if (window._cobrandoVenta) return;
+            window._cobrandoVenta = true;
+            const btnCV = document.getElementById('btn-cobrar-venta');
+            if (btnCV) { btnCV.disabled = true; btnCV.textContent = 'Cobrando…'; }
             const medio = document.getElementById('venta-pago').value;
             const items = ventaCarrito.map(c => ({ origen: c.origen, producto_id: c.producto_id, nombre: c.nombre, precio: c.precio, cantidad: c.cantidad }));
             // Guardamos una foto de la venta para poder imprimir el ticket después de cobrar
@@ -6666,6 +6671,13 @@
                 total: totalVenta()
             };
             ipcRenderer.send('registrar-venta-desktop', { items, medio_pago: medio });
+        }
+
+        // Reactiva el botón de cobro (se llama al recibir la respuesta, con éxito o error).
+        function _finVentaEnCurso() {
+            window._cobrandoVenta = false;
+            const btnCV = document.getElementById('btn-cobrar-venta');
+            if (btnCV) { btnCV.disabled = false; btnCV.textContent = 'Cobrar'; }
         }
 
         function generarCotizacion() {
@@ -6761,6 +6773,7 @@
         }
 
         ipcRenderer.on('venta-desktop-resultado', (e, res) => {
+            _finVentaEnCurso();   // reactiva el botón "Cobrar" pase lo que pase
             if (res && res.success) {
                 const total = parseFloat(res.total) || 0;
                 showToast('✅ Venta registrada: S/ ' + total.toFixed(2), 'success');
@@ -8019,6 +8032,12 @@
             if (!nom) return showToast("Debes poner el Nombre o Razón Social", "warning");
             if (tipo === 'Factura' && !dir) return showToast("La dirección es obligatoria para Facturas", "warning");
 
+            // Guardia anti doble-clic: evita emitir dos comprobantes seguidos por un doble clic.
+            if (window._emitiendoFactura) return;
+            window._emitiendoFactura = true;
+            const btnF = document.getElementById('btn-emitir-factura');
+            if (btnF) { btnF.disabled = true; btnF.textContent = 'Generando…'; }
+
             ipcRenderer.send('emitir-factura-saas', {
                 ordenId: ordenAFacturar,
                 tipo: tipo,
@@ -8026,6 +8045,13 @@
                 nombre: nom,
                 total: total
             });
+        }
+
+        // Reactiva el botón de emisión (se llama al recibir la respuesta, éxito o error).
+        function _finEmisionFactura() {
+            window._emitiendoFactura = false;
+            const btnF = document.getElementById('btn-emitir-factura');
+            if (btnF) { btnF.disabled = false; btnF.textContent = 'Generar Comprobante'; }
         }
         // ====================================================================
         // MÓDULO DE CHAT PROFESIONAL CON CANALES — BlackHouse OS 2.0
@@ -8257,6 +8283,7 @@
         }
 
         ipcRenderer.on('factura-emitida-error', (e, res) => {
+            _finEmisionFactura();
             showToast('No se pudo generar el comprobante: ' + ((res && res.msg) || 'error'), 'danger');
         });
 
@@ -8388,6 +8415,7 @@
         }
 
         ipcRenderer.on('factura-emitida-exito', (e, res) => {
+          _finEmisionFactura();
           try {
             document.getElementById('modal-facturacion').style.display = 'none';
             renderComprobanteDoc({
