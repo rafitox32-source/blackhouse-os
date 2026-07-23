@@ -4698,7 +4698,7 @@
             </div>
             <div style="display:flex; justify-content:space-between; margin-top:20px;">
                 <button class="bh-btn-white" onclick="document.getElementById('modal-cobro-adicional').style.display='none'">Cancelar</button>
-                <button class="bh-btn-purple" style="background:var(--success);" onclick="guardarCobroAdicional()"><i class='bx bx-save'></i> Agregar cobro</button>
+                <button class="bh-btn-purple" id="btn-cobro-adicional" style="background:var(--success);" onclick="guardarCobroAdicional()"><i class='bx bx-save'></i> Agregar cobro</button>
             </div>
         </div>
     </div>
@@ -4795,7 +4795,7 @@
             </div>
             <div style="display:flex; justify-content:space-between; margin-top:20px;">
                 <button class="bh-btn-white" onclick="document.getElementById('modal-repuesto-externo').style.display='none'">Cancelar</button>
-                <button class="bh-btn-purple" onclick="registrarRepuestoExterno()"><i class='bx bx-save'></i> Guardar</button>
+                <button class="bh-btn-purple" id="btn-repuesto-externo" onclick="registrarRepuestoExterno()"><i class='bx bx-save'></i> Guardar</button>
             </div>
         </div>
     </div>
@@ -9032,6 +9032,11 @@
             const precio = precioInput ? parseFloat(precioInput.value) : NaN;
             if (!proveedor) return showToast("Escribe el proveedor", "warning");
             if (isNaN(costo) || costo < 0) return showToast("Escribe cuánto pagaste", "warning");
+            // Guardia anti doble-clic: si pones precio al cliente, cada clic lo suma al total.
+            if (window._repExtEnCurso) return;
+            window._repExtEnCurso = true;
+            const btnRE = document.getElementById('btn-repuesto-externo');
+            if (btnRE) { btnRE.disabled = true; btnRE.style.opacity = '0.7'; }
             ipcRenderer.send('registrar-repuesto-externo', {
                 ordenId: document.getElementById('rext-orden').value.trim().replace('#', '').replace(/^0+/, '') || null,
                 proveedor,
@@ -9044,6 +9049,9 @@
         }
 
         ipcRenderer.on('repuesto-externo-registrado', (e, res) => {
+            window._repExtEnCurso = false;
+            const btnRE = document.getElementById('btn-repuesto-externo');
+            if (btnRE) { btnRE.disabled = false; btnRE.style.opacity = '1'; }
             if (res.success) {
                 showToast(`Repuesto externo guardado (${res.proveedor}: S/ ${res.costo})`, "success");
                 document.getElementById('modal-repuesto-externo').style.display = 'none';
@@ -9071,10 +9079,18 @@
             const monto = parseFloat(document.getElementById('cadic-monto').value);
             if (!ordenId) return showToast("Escribe el número de la orden", "warning");
             if (isNaN(monto) || monto <= 0) return showToast("El monto debe ser mayor a 0", "warning");
+            // Guardia anti doble-clic: cada clic SUMA al total, así que un doble clic duplicaría el cobro.
+            if (window._cobroAdicEnCurso) return;
+            window._cobroAdicEnCurso = true;
+            const btnCA = document.getElementById('btn-cobro-adicional');
+            if (btnCA) { btnCA.disabled = true; btnCA.style.opacity = '0.7'; }
             ipcRenderer.send('agregar-cobro-adicional', { ordenId, tipo, detalle, monto });
         }
 
         ipcRenderer.on('cobro-adicional-agregado', (e, res) => {
+            window._cobroAdicEnCurso = false;
+            const btnCA = document.getElementById('btn-cobro-adicional');
+            if (btnCA) { btnCA.disabled = false; btnCA.style.opacity = '1'; }
             if (res && res.success) {
                 showToast(`Cobro adicional agregado (S/ ${parseFloat(res.monto).toFixed(2)}). Nuevo total: S/ ${parseFloat(res.nuevoCosto).toFixed(2)}`, "success");
                 document.getElementById('modal-cobro-adicional').style.display = 'none';
