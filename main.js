@@ -316,6 +316,25 @@ ipcMain.handle('guardar-grabacion', async (event, datos) => {
     }
 });
 
+// === TRANSMISION EN VIVO: marcar/desmarcar una orden como "En Vivo" ===
+// El renderer (index.html) intentaba hacer esto con la llave anon directamente
+// y fallaba en silencio: RLS bloquea escrituras anon en "ordenes" (probado:
+// "permission denied for table ordenes"). Por eso pasa por aqui, con la
+// llave de servicio, igual que el resto de escrituras a "ordenes".
+ipcMain.handle('actualizar-modo-transmision', async (event, { ordenId, modo }) => {
+    try {
+        const { error } = await supabase
+            .from('ordenes')
+            .update({ modo_transmision: modo })
+            .eq('id', ordenId)
+            .eq('empresa_id', empresaActual);
+        if (error) return { success: false, msg: error.message };
+        return { success: true };
+    } catch (e) {
+        return { success: false, msg: e.message };
+    }
+});
+
 ipcMain.on('abrir-carpeta-grabaciones', () => {
     try { shell.openPath(carpetaGrabaciones()); } catch (e) { console.error(e.message); }
 });
@@ -780,6 +799,425 @@ ipcMain.handle('subir-foto-producto', async (event, { buf, ext }) => {
     } catch (e) {
         console.error('Error en subir-foto-producto:', e.message);
         return { success: false, msg: e.message };
+    }
+});
+
+// === HOLOGRAMA 3D: fotos reales de piezas por modelo de celular ===
+// Librería COMPARTIDA entre todas las empresas que usan BlackHouse OS: la foto que
+// sube un técnico de una empresa queda disponible para todos (por eso no se filtra
+// por empresa_id al leer). modelo_normalizado usa la misma convención que
+// normalizarModeloCompat (grupos de compatibilidad) para que "iPhone 13 Pro" y
+// "iphone13pro" se traten como el mismo modelo.
+// Caja de 6 caras (no reconstrucción 3D real: son 6 fotos planas, una por lado).
+const HOLO_ANGULOS_VALIDOS = ['frente', 'atras', 'arriba', 'abajo', 'izquierda', 'derecha'];
+const HOLO_ETAPAS_VALIDAS = ['actual', 'antes', 'despues']; // 'antes'/'despues' = comparación de la reparación
+// Multi-ángulo: cada pieza puede tener foto/video de su cara de frente y de atrás.
+// El tipo (foto/video) se infiere de la extensión: jpg/png/webp = foto, webm/mp4 = video.
+const HOLO_EXT_A_TIPO = { jpg: 'foto', jpeg: 'foto', png: 'foto', webp: 'foto', webm: 'video', mp4: 'video' };
+const HOLO_MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', webm: 'video/webm', mp4: 'video/mp4' };
+
+// La pieza ya NO es una lista fija: el técnico nombra libremente cada pieza que va
+// escaneando durante el desarme (tapa, flex de carga, flex de volumen, placa de
+// carga, etc.). normalizarPiezaLibre es para BUSCAR/AGRUPAR (misma idea que
+// normalizarModeloCompat); piezaSlug es para nombres de archivo seguros.
+const normalizarPiezaLibre = (txt) => String(txt || '').replace(/\s+/g, ' ').trim().toUpperCase();
+const piezaSlug = (txt) => normalizarPiezaLibre(txt).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+// A diferencia de normalizarModeloCompat (que se usa para grupos de compatibilidad de
+// repuestos y no se toca acá), esta versión además le quita signos de puntuación
+// ("(Ejemplo)", guiones, etc.) para que el modelo del equipo escrito en la orden
+// coincida con lo que el técnico escriba a mano al buscar/subir una pieza, aunque no
+// sea carácter por carácter idéntico.
+const normalizarModeloHolo = (txt) => normalizarModeloCompat(txt).replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+const holoSlug = (modelo) => normalizarModeloHolo(modelo).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+ipcMain.handle('subir-foto-pieza', async (event, { modelo, pieza, angulo, etapa, buf, ext, empresaId, usuario, danado, cajaDanio, notas }) => {
+    try {
+        const piezaNorm = normalizarPiezaLibre(pieza);
+        if (!piezaNorm) return { success: false, msg: 'Falta el nombre de la pieza' };
+        const anguloVal = HOLO_ANGULOS_VALIDOS.includes(angulo) ? angulo : 'frente';
+        const etapaVal = HOLO_ETAPAS_VALIDAS.includes(etapa) ? etapa : 'actual';
+        const tipo = HOLO_EXT_A_TIPO[ext] || 'foto';
+        const modeloNorm = normalizarModeloHolo(modelo);
+        if (!modeloNorm) return { success: false, msg: 'Falta el modelo del equipo' };
+
+        const slug = holoSlug(modelo);
+        const pSlug = piezaSlug(pieza);
+        const sello = Date.now();
+        const nombreArchivo = `${slug}_${pSlug}_${anguloVal}_${etapaVal}_${sello}.${ext}`;
+
+        const buffer = Buffer.from(buf);
+        const { error: errorSubida } = await supabase.storage
+            .from('piezas_fotos')
+            .upload(nombreArchivo, buffer, { contentType: HOLO_MIME[ext] || `image/${ext}`, upsert: true });
+
+        if (errorSubida) {
+            console.error('Error subiendo foto/video de pieza:', errorSubida.message);
+            return { success: false, msg: errorSubida.message };
+        }
+
+        const { data: publicData } = supabase.storage.from('piezas_fotos').getPublicUrl(nombreArchivo);
+
+        const { error: errorUpsert } = await supabase
+            .from('piezas_fotos_modelos')
+            .upsert({
+                modelo_normalizado: modeloNorm,
+                modelo_original: modelo,
+                pieza: pieza.trim(),
+                pieza_normalizado: piezaNorm,
+                angulo: anguloVal,
+                etapa: etapaVal,
+                tipo,
+                foto_url: publicData.publicUrl,
+                empresa_id: empresaId ? String(empresaId) : null,
+                usuario: usuario || null,
+                danado: !!danado,
+                caja_danio: (tipo === 'foto' && cajaDanio) ? cajaDanio : null,
+                notas: notas || null,
+                creado_en: new Date().toISOString()
+            }, { onConflict: 'modelo_normalizado,pieza_normalizado,angulo,etapa' });
+
+        if (errorUpsert) {
+            console.error('Error guardando foto de pieza en BD:', errorUpsert.message);
+            return { success: false, msg: errorUpsert.message };
+        }
+
+        return { success: true, url: publicData.publicUrl, tipo };
+    } catch (e) {
+        console.error('Error en subir-foto-pieza:', e.message);
+        return { success: false, msg: e.message };
+    }
+});
+
+// Moderación básica: cualquier técnico puede "reportar" una foto mal subida o mal
+// etiquetada por otro taller. Con 2+ reportes, esa foto deja de aparecer en las
+// búsquedas de la librería compartida (no se borra, por si el reporte es un error).
+ipcMain.handle('reportar-pieza-modelo', async (event, { modelo, pieza, angulo, etapa }) => {
+    try {
+        const modeloNorm = normalizarModeloHolo(modelo);
+        const piezaNorm = normalizarPiezaLibre(pieza);
+        if (!modeloNorm || !piezaNorm) return { success: false, msg: 'Datos incompletos' };
+
+        const { data: fila } = await supabase
+            .from('piezas_fotos_modelos')
+            .select('id, reportes')
+            .eq('modelo_normalizado', modeloNorm)
+            .eq('pieza_normalizado', piezaNorm)
+            .eq('angulo', angulo || 'frente')
+            .eq('etapa', etapa || 'actual')
+            .maybeSingle();
+
+        if (!fila) return { success: false, msg: 'No se encontró la foto' };
+
+        const { error } = await supabase
+            .from('piezas_fotos_modelos')
+            .update({ reportes: (fila.reportes || 0) + 1 })
+            .eq('id', fila.id);
+
+        if (error) return { success: false, msg: error.message };
+        return { success: true };
+    } catch (e) {
+        console.error('Error en reportar-pieza-modelo:', e.message);
+        return { success: false, msg: e.message };
+    }
+});
+
+// Estadísticas COMUNITARIAS: de todo lo que subieron todos los talleres para este
+// modelo, ¿qué piezas se marcaron dañadas más seguido? Es una pista, no un
+// diagnóstico certero: solo cuenta capturas ya etiquetadas por técnicos reales.
+ipcMain.handle('estadisticas-fallas-modelo', async (event, { modelo }) => {
+    try {
+        const modeloNorm = normalizarModeloHolo(modelo);
+        if (!modeloNorm) return { success: true, stats: [] };
+
+        const { data, error } = await supabase
+            .from('piezas_fotos_modelos')
+            .select('pieza, pieza_normalizado, danado')
+            .eq('modelo_normalizado', modeloNorm)
+            .lt('reportes', 2);
+
+        if (error) return { success: false, stats: [] };
+
+        const porPieza = {};
+        for (const row of (data || [])) {
+            const key = row.pieza_normalizado;
+            if (!porPieza[key]) porPieza[key] = { pieza: row.pieza, total: 0, danadas: 0 };
+            porPieza[key].total++;
+            if (row.danado) porPieza[key].danadas++;
+        }
+        const stats = Object.values(porPieza)
+            .filter(p => p.danadas > 0)
+            .map(p => ({ pieza: p.pieza, total: p.total, danadas: p.danadas, porcentaje: Math.round((p.danadas / p.total) * 100) }))
+            .sort((a, b) => b.porcentaje - a.porcentaje || b.danadas - a.danadas)
+            .slice(0, 5);
+
+        return { success: true, stats };
+    } catch (e) {
+        console.error('Error en estadisticas-fallas-modelo:', e.message);
+        return { success: false, stats: [] };
+    }
+});
+
+// Historial PRIVADO: solo lo que ESTE taller (empresa) documentó de este modelo,
+// a diferencia de las estadísticas comunitarias de arriba.
+ipcMain.handle('historial-modelo-taller', async (event, { modelo, empresaId }) => {
+    try {
+        const modeloNorm = normalizarModeloHolo(modelo);
+        if (!modeloNorm || !empresaId) return { success: true, piezas: [] };
+
+        const { data, error } = await supabase
+            .from('piezas_fotos_modelos')
+            .select('pieza, danado, creado_en')
+            .eq('modelo_normalizado', modeloNorm)
+            .eq('empresa_id', String(empresaId))
+            .order('creado_en', { ascending: false });
+
+        if (error) return { success: false, piezas: [] };
+        return { success: true, piezas: data || [] };
+    } catch (e) {
+        console.error('Error en historial-modelo-taller:', e.message);
+        return { success: false, piezas: [] };
+    }
+});
+
+ipcMain.handle('renombrar-pieza-modelo', async (event, { modelo, piezaVieja, piezaNueva }) => {
+    try {
+        const modeloNorm = normalizarModeloHolo(modelo);
+        const piezaViejaNorm = normalizarPiezaLibre(piezaVieja);
+        const piezaNuevaNorm = normalizarPiezaLibre(piezaNueva);
+        if (!modeloNorm || !piezaViejaNorm || !piezaNuevaNorm) return { success: false, msg: 'Datos incompletos' };
+
+        const { error } = await supabase
+            .from('piezas_fotos_modelos')
+            .update({ pieza: piezaNueva.trim(), pieza_normalizado: piezaNuevaNorm })
+            .eq('modelo_normalizado', modeloNorm)
+            .eq('pieza_normalizado', piezaViejaNorm);
+
+        if (error) return { success: false, msg: error.message };
+        return { success: true };
+    } catch (e) {
+        console.error('Error en renombrar-pieza-modelo:', e.message);
+        return { success: false, msg: e.message };
+    }
+});
+
+ipcMain.handle('borrar-pieza-modelo', async (event, { modelo, pieza }) => {
+    try {
+        const modeloNorm = normalizarModeloHolo(modelo);
+        const piezaNorm = normalizarPiezaLibre(pieza);
+        if (!modeloNorm || !piezaNorm) return { success: false, msg: 'Datos incompletos' };
+
+        const { data: filas } = await supabase
+            .from('piezas_fotos_modelos')
+            .select('foto_url')
+            .eq('modelo_normalizado', modeloNorm)
+            .eq('pieza_normalizado', piezaNorm);
+
+        await supabase
+            .from('piezas_fotos_modelos')
+            .delete()
+            .eq('modelo_normalizado', modeloNorm)
+            .eq('pieza_normalizado', piezaNorm);
+
+        const rutas = (filas || [])
+            .map(f => (f.foto_url || '').split('/piezas_fotos/')[1])
+            .filter(Boolean);
+        if (rutas.length) await supabase.storage.from('piezas_fotos').remove(rutas);
+
+        return { success: true };
+    } catch (e) {
+        console.error('Error en borrar-pieza-modelo:', e.message);
+        return { success: false, msg: e.message };
+    }
+});
+
+// Nombres de piezas ya usados por CUALQUIER técnico/modelo, para sugerir mientras
+// se escribe (evita que "Flex de Carga" y "flex carga" se dupliquen sin querer).
+ipcMain.handle('sugerencias-nombres-pieza', async () => {
+    try {
+        const { data, error } = await supabase
+            .from('piezas_fotos_modelos')
+            .select('pieza')
+            .order('creado_en', { ascending: false })
+            .limit(500);
+        if (error) return { success: false, nombres: [] };
+        const vistos = new Set();
+        const nombres = [];
+        for (const row of (data || [])) {
+            const norm = normalizarPiezaLibre(row.pieza);
+            if (norm && !vistos.has(norm)) { vistos.add(norm); nombres.push(row.pieza); }
+            if (nombres.length >= 40) break;
+        }
+        return { success: true, nombres };
+    } catch (e) {
+        return { success: false, nombres: [] };
+    }
+});
+
+// Nota de voz por pieza: graba un audio corto y se transcribe con la IA (Groq
+// Whisper) que ya usa el resto de la app. Solo se guarda el TEXTO transcrito, no
+// el audio (más simple, y lo transcrito es lo que sirve para leer/buscar después).
+ipcMain.handle('transcribir-audio-pieza', async (event, { buf, ext }) => {
+    let tmpPath = null;
+    try {
+        tmpPath = path.join(app.getPath('temp'), `bh_audio_${Date.now()}.${ext || 'webm'}`);
+        fs.writeFileSync(tmpPath, Buffer.from(buf));
+
+        const respuesta = await openai.audio.transcriptions.create({
+            file: fs.createReadStream(tmpPath),
+            model: 'whisper-large-v3',
+            language: 'es'
+        });
+
+        return { success: true, texto: (respuesta.text || '').trim() };
+    } catch (e) {
+        console.error('Error en transcribir-audio-pieza:', e.message);
+        return { success: false, msg: e.message };
+    } finally {
+        if (tmpPath) fs.unlink(tmpPath, () => {});
+    }
+});
+
+// Caché local en disco (por PC): evita re-descargar de Supabase cada vez que se
+// abre el mismo modelo, y deja el holograma con fotos/video reales aunque no haya
+// internet. Un manifest .json por modelo guarda el nombre "bonito" de cada pieza
+// (el nombre de archivo solo puede llevar el slug).
+function holoCacheDir() {
+    const dir = path.join(app.getPath('userData'), 'piezas_fotos_cache');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+}
+function holoManifestPath(slug) {
+    return path.join(holoCacheDir(), `_manifest_${slug}.json`);
+}
+function holoLeerManifest(slug) {
+    try { return JSON.parse(fs.readFileSync(holoManifestPath(slug), 'utf8')); } catch (e) { return {}; }
+}
+function holoGuardarManifest(slug, pSlug, piezaDisplay) {
+    const manifest = holoLeerManifest(slug);
+    manifest[pSlug] = piezaDisplay;
+    fs.writeFileSync(holoManifestPath(slug), JSON.stringify(manifest));
+}
+
+ipcMain.handle('guardar-foto-pieza-cache', async (event, { modelo, pieza, angulo, etapa, buf, ext }) => {
+    try {
+        const slug = holoSlug(modelo);
+        const pSlug = piezaSlug(pieza);
+        const anguloVal = HOLO_ANGULOS_VALIDOS.includes(angulo) ? angulo : 'frente';
+        const etapaVal = HOLO_ETAPAS_VALIDAS.includes(etapa) ? etapa : 'actual';
+        if (!slug || !pSlug) return { success: false };
+        fs.writeFileSync(path.join(holoCacheDir(), `${slug}_${pSlug}_${anguloVal}_${etapaVal}.${ext}`), Buffer.from(buf));
+        holoGuardarManifest(slug, pSlug, pieza.trim());
+        return { success: true };
+    } catch (e) {
+        console.error('Error en guardar-foto-pieza-cache:', e.message);
+        return { success: false, msg: e.message };
+    }
+});
+
+ipcMain.handle('leer-fotos-pieza-cache-modelo', async (event, { modelo }) => {
+    try {
+        const slug = holoSlug(modelo);
+        if (!slug) return { success: true, fotos: [] };
+        const dir = holoCacheDir();
+        const manifest = holoLeerManifest(slug);
+        const prefijo = `${slug}_`;
+        const fotos = fs.readdirSync(dir)
+            .filter(f => f.startsWith(prefijo) && !f.startsWith('_manifest_'))
+            .map(f => {
+                const ext = path.extname(f).slice(1).toLowerCase();
+                const sinExt = f.slice(prefijo.length, f.length - ext.length - 1); // "<piezaSlug>_<angulo>_<etapa>"
+                const partes = sinExt.split('_');
+                const etapa = partes.pop();
+                const angulo = partes.pop();
+                const pSlug = partes.join('_');
+                const b64 = fs.readFileSync(path.join(dir, f)).toString('base64');
+                const tipo = HOLO_EXT_A_TIPO[ext] || 'foto';
+                return { pieza: manifest[pSlug] || pSlug, angulo, etapa, tipo, dataUrl: `data:${HOLO_MIME[ext] || 'image/jpeg'};base64,${b64}` };
+            });
+        return { success: true, fotos };
+    } catch (e) {
+        console.error('Error en leer-fotos-pieza-cache-modelo:', e.message);
+        return { success: false, msg: e.message, fotos: [] };
+    }
+});
+
+ipcMain.handle('buscar-fotos-modelo', async (event, { modelo, etapa }) => {
+    try {
+        const modeloNorm = normalizarModeloHolo(modelo);
+        if (!modeloNorm) return { success: true, fotos: [] };
+
+        let query = supabase
+            .from('piezas_fotos_modelos')
+            .select('pieza, angulo, etapa, tipo, foto_url, danado, caja_danio, notas')
+            .eq('modelo_normalizado', modeloNorm)
+            .lt('reportes', 2); // moderación básica: oculta fotos con 2+ reportes
+
+        query = query.eq('etapa', HOLO_ETAPAS_VALIDAS.includes(etapa) ? etapa : 'actual');
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('Error buscando fotos de piezas:', error.message);
+            return { success: false, msg: error.message, fotos: [] };
+        }
+
+        return { success: true, fotos: data || [] };
+    } catch (e) {
+        console.error('Error en buscar-fotos-modelo:', e.message);
+        return { success: false, msg: e.message, fotos: [] };
+    }
+});
+
+// Búsqueda DIFUSA para el modal "Piezas de otro modelo (referencia)": a diferencia
+// de buscar-fotos-modelo (que exige el modelo exacto de la orden actual), acá alcanza
+// con que el texto esté CONTENIDO en el modelo, para poder explorar modelos parecidos
+// sin acordarse del nombre exacto que usó otro técnico.
+ipcMain.handle('buscar-piezas-similares', async (event, { texto }) => {
+    try {
+        const t = normalizarModeloHolo(texto);
+        if (t.length < 3) return { success: true, fotos: [] };
+
+        const { data, error } = await supabase
+            .from('piezas_fotos_modelos')
+            .select('pieza, modelo_original, tipo, foto_url, danado')
+            .ilike('modelo_normalizado', `%${t}%`)
+            .eq('etapa', 'actual')
+            .lt('reportes', 2)
+            .limit(30);
+
+        if (error) return { success: false, fotos: [] };
+        return { success: true, fotos: data || [] };
+    } catch (e) {
+        console.error('Error en buscar-piezas-similares:', e.message);
+        return { success: false, fotos: [] };
+    }
+});
+
+// Lista los modelos que YA tienen piezas guardadas (con cuántas), para poder abrir
+// el holograma directo desde la librería sin necesitar una orden activa.
+ipcMain.handle('listar-modelos-con-fotos', async () => {
+    try {
+        const { data, error } = await supabase
+            .from('piezas_fotos_modelos')
+            .select('modelo_normalizado, modelo_original')
+            .eq('etapa', 'actual')
+            .lt('reportes', 2)
+            .order('creado_en', { ascending: false })
+            .limit(2000);
+
+        if (error) return { success: false, modelos: [] };
+
+        const conteo = {};
+        for (const row of (data || [])) {
+            const key = row.modelo_normalizado;
+            if (!conteo[key]) conteo[key] = { modelo: row.modelo_original, piezas: 0 };
+            conteo[key].piezas++;
+        }
+        const modelos = Object.values(conteo).sort((a, b) => b.piezas - a.piezas);
+        return { success: true, modelos };
+    } catch (e) {
+        console.error('Error en listar-modelos-con-fotos:', e.message);
+        return { success: false, modelos: [] };
     }
 });
 
@@ -1509,7 +1947,7 @@ ipcMain.on('guardar-orden', async (event, orden) => {
             saldo: parseFloat(orden.saldo)
         }]).select();
         if (error) throw error;
-        event.reply('resultado-guardado', { success: true, id: data[0].id });
+        event.reply('resultado-guardado', { success: true, id: data[0].id, tracking_token: data[0].tracking_token });
     } catch (err) {
         console.error(err);
         event.reply('resultado-guardado', { success: false, msg: err.message });
@@ -3539,6 +3977,7 @@ ipcMain.on('imprimir-documento', async (event, params) => {
     let win = null;
     let tmpPath = null;
     const modo = (params && params.modo) || 'pdf';
+    const origen = params && params.origen; // opcional: para que el renderer distinga a qué pedido corresponde la respuesta
     try {
         const { html, filename } = params || {};
         if (!html) throw new Error('No hay contenido para imprimir');
@@ -3561,9 +4000,9 @@ ipcMain.on('imprimir-documento', async (event, params) => {
             if (destino) {
                 fs.writeFileSync(destino, pdf);
                 shell.openPath(destino);
-                event.reply('documento-impreso', { success: true, modo: 'pdf' });
+                event.reply('documento-impreso', { success: true, modo: 'pdf', origen });
             } else {
-                event.reply('documento-impreso', { success: false, modo: 'pdf', cancelado: true });
+                event.reply('documento-impreso', { success: false, modo: 'pdf', cancelado: true, origen });
             }
             try { win.close(); } catch (e) {}
             win = null;
@@ -3571,14 +4010,14 @@ ipcMain.on('imprimir-documento', async (event, params) => {
         } else {
             // Ticket: abre el diálogo de impresión de Windows para elegir la tickera.
             win.webContents.print({ silent: false, printBackground: true }, (ok, reason) => {
-                event.reply('documento-impreso', { success: ok, modo: 'ticket', cancelado: !ok, msg: ok ? null : (reason || 'cancelado') });
+                event.reply('documento-impreso', { success: ok, modo: 'ticket', cancelado: !ok, msg: ok ? null : (reason || 'cancelado'), origen });
                 try { if (win) { win.close(); win = null; } } catch (e) {}
                 if (tmpPath) fs.unlink(tmpPath, () => {});
             });
         }
     } catch (err) {
         console.error('Error al imprimir documento:', err.message);
-        event.reply('documento-impreso', { success: false, modo, msg: err.message });
+        event.reply('documento-impreso', { success: false, modo, msg: err.message, origen });
         try { if (win) win.close(); } catch (e) {}
         if (tmpPath) { try { fs.unlink(tmpPath, () => {}); } catch (e) {} }
     }
@@ -3801,9 +4240,28 @@ ipcMain.on('buscar-orden-id', async (event, id) => {
 // === HANDLER: Guardar bitácora y cambiar estado ===
 ipcMain.on('actualizar-bitacora-estado', async (event, data) => {
     try {
+        // AGREGA la nota nueva a la bitácora existente, nunca la reemplaza entera:
+        // este handler se dispara desde el textarea de "notas" del Laboratorio, que
+        // el técnico llena en blanco cada vez (no carga el historial previo). Antes
+        // pisaba directo con "data.bitacora", asi que un envio vacio/nuevo borraba
+        // cualquier nota anterior (ej. el aviso de "se agrego un pedido de
+        // accesorios" que deja el panel de Pedidos Pendientes).
+        const { data: ordenActual, error: errLeer } = await supabase
+            .from('ordenes')
+            .select('bitacora')
+            .eq('id', data.id)
+            .eq('empresa_id', empresaActual)
+            .single();
+        if (errLeer) throw errLeer;
+
+        const notaNueva = (data.bitacora || '').trim();
+        const bitacoraFinal = notaNueva
+            ? (ordenActual.bitacora || '') + (ordenActual.bitacora ? '\n' : '') + notaNueva
+            : (ordenActual.bitacora || '');
+
         const { error } = await supabase
             .from('ordenes')
-            .update({ bitacora: data.bitacora, estado: data.estado })
+            .update({ bitacora: bitacoraFinal, estado: data.estado })
             .eq('id', data.id)
             .eq('empresa_id', empresaActual);
         if (error) throw error;
@@ -3811,6 +4269,19 @@ ipcMain.on('actualizar-bitacora-estado', async (event, data) => {
     } catch (err) {
         event.reply('bitacora-actualizada', { success: false, msg: err.message });
     }
+});
+
+// === HANDLER: Accesorios ya agregados a una orden (para el Detalle de la orden) ===
+ipcMain.on('obtener-accesorios-orden', async (event, ordenId) => {
+    const { data, error } = await supabase
+        .from('pedidos_accesorios')
+        .select('id, items, total, estado, created_at')
+        .eq('orden_id', ordenId)
+        .eq('empresa_id', empresaActual)
+        .eq('estado', 'agregado')
+        .order('created_at', { ascending: true });
+    if (error) console.error('obtener-accesorios-orden:', error.message);
+    event.reply('accesorios-de-la-orden', data || []);
 });
 
 // === HANDLER: Cambiar estado de una orden ===
@@ -3833,6 +4304,83 @@ ipcMain.on('actualizar-estado-orden', async (event, data) => {
         } catch (e) { console.warn('fecha_entregado:', e.message); }
     }
     event.reply('orden-actualizada', { success: !error });
+});
+
+// === PEDIDOS DE ACCESORIOS (creados por el cliente desde el tracking web) ===
+// Quedan "pendiente" hasta que un humano del taller los revisa aqui: nunca
+// tocan costo/saldo de la orden por si solos (ver web-limpia/api/db.js).
+ipcMain.on('listar-pedidos-accesorios-pendientes', async (event) => {
+    const { data, error } = await supabase
+        .from('pedidos_accesorios')
+        .select('id, orden_id, items, total, created_at, ordenes(cliente, modelo)')
+        .eq('empresa_id', empresaActual)
+        .eq('estado', 'pendiente')
+        .order('created_at', { ascending: false });
+    if (error) console.error('listar-pedidos-accesorios-pendientes:', error.message);
+    event.reply('pedidos-accesorios-pendientes', data || []);
+});
+
+ipcMain.on('resolver-pedido-accesorio', async (event, { id, accion }) => {
+    try {
+        const { data: pedido, error: errPedido } = await supabase
+            .from('pedidos_accesorios')
+            .select('id, orden_id, items, total, estado')
+            .eq('id', id)
+            .eq('empresa_id', empresaActual)
+            .single();
+        if (errPedido || !pedido) throw new Error('Pedido no encontrado.');
+        if (pedido.estado !== 'pendiente') throw new Error('Este pedido ya fue revisado.');
+
+        if (accion === 'rechazar') {
+            const { error } = await supabase.from('pedidos_accesorios').update({ estado: 'rechazado' }).eq('id', id);
+            if (error) throw error;
+            event.reply('resultado-pedido-accesorio', { success: true, accion: 'rechazar' });
+            return;
+        }
+
+        if (accion !== 'agregar') throw new Error('Acción no soportada.');
+
+        // Sumar el total del pedido a la orden (costo y saldo, nunca precio_repuesto/
+        // precio_servicio: esto es venta de accesorios, no repuesto de la reparación,
+        // asi que no distorsiona las metricas de margen del repuesto).
+        const { data: orden, error: errOrden } = await supabase
+            .from('ordenes')
+            .select('id, costo, saldo, bitacora')
+            .eq('id', pedido.orden_id)
+            .eq('empresa_id', empresaActual)
+            .single();
+        if (errOrden || !orden) throw new Error('La orden de este pedido ya no existe.');
+
+        const resumen = (pedido.items || []).map(it => `${it.nombre} x${it.cantidad}`).join(', ');
+        const nuevaBitacora = `${orden.bitacora || ''}\n[Accesorios] Se agregó a la orden: ${resumen} (S/ ${Number(pedido.total).toFixed(2)}).`.trim();
+
+        const { error: errUpdateOrden } = await supabase
+            .from('ordenes')
+            .update({
+                costo: (parseFloat(orden.costo) || 0) + parseFloat(pedido.total),
+                saldo: (parseFloat(orden.saldo) || 0) + parseFloat(pedido.total),
+                bitacora: nuevaBitacora
+            })
+            .eq('id', orden.id)
+            .eq('empresa_id', empresaActual);
+        if (errUpdateOrden) throw errUpdateOrden;
+
+        // Descontar stock, igual que pasaria con cualquier venta real de estos productos.
+        for (const it of (pedido.items || [])) {
+            const { data: prod } = await supabase.from('productos').select('stock').eq('id', it.producto_id).single();
+            if (prod) {
+                await supabase.from('productos').update({ stock: Math.max(0, prod.stock - it.cantidad) }).eq('id', it.producto_id);
+            }
+        }
+
+        const { error: errPedidoUpdate } = await supabase.from('pedidos_accesorios').update({ estado: 'agregado' }).eq('id', id);
+        if (errPedidoUpdate) throw errPedidoUpdate;
+
+        event.reply('resultado-pedido-accesorio', { success: true, accion: 'agregar' });
+    } catch (err) {
+        console.error('resolver-pedido-accesorio:', err.message);
+        event.reply('resultado-pedido-accesorio', { success: false, msg: err.message });
+    }
 });
 
 // === HANDLER: Listar usuarios ===

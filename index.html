@@ -17,6 +17,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/index.min.js"></script>
+    <!-- Holograma 3D del Laboratorio: three.js incluido localmente (assets/vendor/three) para que funcione sin internet -->
+    <script src="assets/vendor/three/three.min.js"></script>
+    <script src="assets/vendor/three/OrbitControls.js"></script>
 
     <style>
         /* ===================== SISTEMA DE TEMAS =====================
@@ -1794,6 +1797,72 @@
             color: white;
         }
 
+        .holo-chip {
+            background: rgba(63, 216, 255, 0.08);
+            border: 1px solid #3fd8ff;
+            color: #3fd8ff;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .holo-chip:hover {
+            background: rgba(63, 216, 255, 0.18);
+        }
+
+        .holo-chip.holo-danado {
+            background: rgba(255, 59, 78, 0.16);
+            border-color: #ff3b4e;
+            color: #ff3b4e;
+        }
+
+        #holo-canvas-wrap:fullscreen,
+        #holo-canvas-wrap:-webkit-full-screen {
+            width: 100vw !important;
+            height: 100vh !important;
+            border-radius: 0;
+        }
+
+        .holo-modo-btn {
+            background: #1a1a1a;
+            color: #888;
+        }
+
+        .holo-modo-btn.holo-modo-activo {
+            background: var(--bh-purple);
+            color: white;
+        }
+
+        .holo-icon-btn {
+            background: rgba(63, 216, 255, 0.08);
+            border: 1px solid #3fd8ff;
+            color: #3fd8ff;
+            border-radius: 6px;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .holo-icon-btn:hover {
+            background: rgba(63, 216, 255, 0.2);
+        }
+
+        .holo-chip.holo-resaltada {
+            box-shadow: 0 0 0 2px #fff, 0 0 12px #3fd8ff;
+        }
+
+        .holo-chip.holo-atenuada {
+            opacity: 0.3;
+        }
+
         @media print {
             body * { visibility: hidden; }
             #area-impresion, #area-impresion * { visibility: visible; }
@@ -2058,6 +2127,20 @@
                         <i class='bx bx-key'></i> Generador
                     </button>
                     <div style="position:relative;">
+                        <button id="btn-notif-pedidos" class="bh-btn-white" style="position:relative; padding:8px 12px;"
+                            title="Pedidos de accesorios de clientes" onclick="toggleNotifPedidos()">
+                            <i class='bx bx-bell' style="font-size:16px;"></i>
+                            <span id="badge-pedidos-pendientes"
+                                style="display:none; position:absolute; top:-6px; right:-6px; background:var(--danger); color:white; font-size:10px; font-weight:800; min-width:16px; height:16px; border-radius:8px; align-items:center; justify-content:center; padding:0 4px;">0</span>
+                        </button>
+                        <div id="panel-notif-pedidos" class="profile-dropdown" style="display:none; width:320px; max-height:420px; overflow-y:auto; right:auto; left:0;">
+                            <div style="padding:12px 14px; border-bottom:1px solid var(--bh-border); font-weight:700; font-size:13px;">🛍️ Pedidos de accesorios</div>
+                            <div id="lista-pedidos-pendientes" style="padding:8px;">
+                                <div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">Sin pedidos pendientes.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="position:relative;">
                         <div class="user-profile-trigger"
                             onclick="document.getElementById('user-menu').classList.toggle('show')">
                             <div id="top-bar-avatar" class="avatar-circle">👤</div>
@@ -2262,75 +2345,59 @@
                                 </div>
                             </div>
 
-                            <!-- NUEVO: Ruta de Diagnóstico de Encendido -->
+                            <!-- HOLOGRAMA 3D: Diagnóstico visual del equipo -->
                             <div class="bh-card" style="margin-bottom:0; padding:20px;">
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:6px;">
                                     <h3 style="margin:0; color:var(--bh-purple); display:flex; align-items:center; gap:8px; font-size:16px;">
-                                        <i class='bx bx-git-repo-forked'></i> Ruta de Diagnóstico de Encendido
+                                        <i class='bx bx-cube-alt'></i> Holograma del Equipo
                                     </h3>
-                                    <span id="diag-ruta-estado" style="font-size:12px; font-weight:bold; color:var(--warning);">Paso 1 de 4</span>
-                                </div>
-                                
-                                <!-- Progress Bar -->
-                                <div style="width:100%; background:#222; border-radius:10px; height:8px; margin-bottom:20px; overflow:hidden;">
-                                    <div id="diag-ruta-progreso" style="height:100%; width:25%; background:var(--bh-purple); transition:width 0.3s ease, background 0.3s ease;"></div>
-                                </div>
-
-                                <!-- Pasos -->
-                                <div id="diag-paso-1" class="diag-step-container active" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); transition:opacity 0.3s ease;">
-                                    <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
-                                        <i class='bx bx-plug'></i> 1. Validación Primaria (Standby)
-                                    </h4>
-                                    <p style="font-size:13px; color:#aaa; margin-bottom:15px;">Conectar fuente sin presionar Power. Medir ~4.2V en VPH_PWR / IF_PMIC.</p>
-                                    <div style="display:flex; gap:10px;">
-                                        <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(1, true)"><i class='bx bx-check'></i> Medición Correcta</button>
-                                        <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(1, false)"><i class='bx bx-x'></i> Falla Detectada</button>
+                                    <div style="display:flex; align-items:center; gap:10px;">
+                                        <span id="holo-auto-hint" style="font-size:11px; color:#888;"></span>
+                                        <div style="display:flex; gap:4px;">
+                                            <button type="button" class="holo-icon-btn" title="Abrir un modelo ya guardado (sin necesitar una orden)" onclick="holoAbrirSelectorModelos()"><i class='bx bx-folder-open'></i></button>
+                                            <button type="button" class="holo-icon-btn" title="Generar reporte PDF del desarme" onclick="holoGenerarReporte()"><i class='bx bx-file-blank'></i></button>
+                                            <button type="button" class="holo-icon-btn" title="Historial de este modelo en tu taller" onclick="holoAbrirHistorialTaller()"><i class='bx bx-history'></i></button>
+                                            <button type="button" class="holo-icon-btn" title="Buscar piezas en modelos similares" onclick="holoAbrirModelosSimilares()"><i class='bx bx-search-alt'></i></button>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div id="diag-paso-2" class="diag-step-container" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); opacity:0.5; pointer-events:none; transition:opacity 0.3s ease;">
-                                    <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
-                                        <i class='bx bx-power-off'></i> 2. Despertar del Sistema
-                                    </h4>
-                                    <p style="font-size:13px; color:#aaa; margin-bottom:15px;">Presionar Power. Verificar que el consumo salga de 0 mA.</p>
-                                    <div style="display:flex; gap:10px;">
-                                        <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(2, true)"><i class='bx bx-check'></i> Medición Correcta</button>
-                                        <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(2, false)"><i class='bx bx-x'></i> Falla Detectada</button>
+                                <!-- Estadísticas comunitarias: qué se marcó dañado más seguido en este modelo -->
+                                <div id="holo-stats-comunidad" style="display:none; font-size:11px; color:#e2950f; background:rgba(226,149,15,0.08); border:1px dashed #e2950f; border-radius:6px; padding:6px 10px; margin-bottom:10px;"></div>
+
+                                <input type="text" id="holo-buscar-pieza-input" class="bh-input" placeholder="🔍 Buscar y resaltar una pieza..." style="margin-bottom:10px;" oninput="holoBuscarPieza(this.value)">
+
+                                <!-- Piezas de ESTA sesión: se van agregando a medida que fotografías/grabas cada una -->
+                                <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+                                    <div id="holo-piezas-lista" style="display:flex; gap:6px; flex-wrap:wrap; flex:1;"></div>
+                                    <button type="button" class="bh-btn-purple" style="padding:6px 12px; font-size:12px;" onclick="holoAbrirModalFoto()">
+                                        <i class='bx bx-plus'></i> Nueva pieza
+                                    </button>
+                                    <button type="button" class="holo-icon-btn" title="Ordenar automáticamente" onclick="holoOrdenarAutomatico()"><i class='bx bx-grid-alt'></i></button>
+                                    <button type="button" class="bh-btn-white" style="padding:6px 12px; font-size:12px;" onclick="holoReset()">↺ Reset</button>
+                                </div>
+
+                                <div id="holo-canvas-wrap" style="position:relative; width:100%; height:320px; border-radius:10px; overflow:hidden; background:radial-gradient(circle at 50% 30%, #0a1420 0%, #000 75%); border:1px solid #1b2a3a;">
+                                    <canvas id="holo-canvas" style="width:100%; height:100%; display:block; cursor:grab;"></canvas>
+                                    <div style="position:absolute; top:8px; left:10px; font-size:10px; color:#3fd8ff; opacity:0.7; letter-spacing:1px; pointer-events:none;">ARRASTRA EL FONDO PARA GIRAR · ARRASTRA UNA PIEZA PARA MOVERLA LIBREMENTE · RUEDA/+- PARA ZOOM · FLECHAS PARA GIRAR · ESPACIO ARMA/DESARMA</div>
+                                    <div style="position:absolute; top:8px; right:8px; display:flex; gap:6px;">
+                                        <button type="button" onclick="holoCapturarPantalla()" title="Guardar imagen del holograma"
+                                            style="background:rgba(0,0,0,0.5); border:1px solid #3fd8ff; color:#3fd8ff; border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
+                                            <i class='bx bx-camera'></i>
+                                        </button>
+                                        <button type="button" onclick="holoToggleFullscreen()" title="Pantalla completa"
+                                            style="background:rgba(0,0,0,0.5); border:1px solid #3fd8ff; color:#3fd8ff; border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
+                                            <i class='bx bx-fullscreen' id="holo-fullscreen-icon"></i>
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div id="diag-paso-3" class="diag-step-container" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); opacity:0.5; pointer-events:none; transition:opacity 0.3s ease;">
-                                    <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
-                                        <i class='bx bx-microchip'></i> 3. Potencia CPU (Líneas BUCK)
-                                    </h4>
-                                    <p style="font-size:13px; color:#aaa; margin-bottom:5px;">Medir bobinas alrededor del PMIC.</p>
-                                    <div style="background:rgba(216,180,254,0.1); border-left:3px solid var(--bh-purple); padding:8px; font-size:12px; color:var(--bh-purple); margin-bottom:15px; border-radius:0 4px 4px 0;">
-                                        <strong>Ojo:</strong> 10 a 60 Ohmios es normal, NO es corto. Solo 0 Ohmios es corto.
-                                    </div>
-                                    <div style="display:flex; gap:10px;">
-                                        <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(3, true)"><i class='bx bx-check'></i> Medición Correcta</button>
-                                        <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(3, false)"><i class='bx bx-x'></i> Falla Detectada</button>
-                                    </div>
+                                <div style="display:flex; align-items:center; gap:10px; margin-top:12px;">
+                                    <i class='bx bx-git-compare' style="color:#aaa;"></i>
+                                    <input type="range" id="holo-explode" min="0" max="100" value="100" style="flex:1;" oninput="holoSetExplode(this.value)">
+                                    <span style="font-size:11px; color:#aaa; width:110px; text-align:right;">Separación</span>
                                 </div>
-
-                                <div id="diag-paso-4" class="diag-step-container" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); opacity:0.5; pointer-events:none; transition:opacity 0.3s ease;">
-                                    <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
-                                        <i class='bx bx-pulse'></i> 4. Lógica LDO (1.8V)
-                                    </h4>
-                                    <p style="font-size:13px; color:#aaa; margin-bottom:15px;">Medir presencia de 1.8V en línea VDD_IO.</p>
-                                    <div style="display:flex; gap:10px;">
-                                        <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(4, true)"><i class='bx bx-check'></i> Medición Correcta</button>
-                                        <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(4, false)"><i class='bx bx-x'></i> Falla Detectada</button>
-                                    </div>
-                                </div>
-
-                                <!-- Resumen / Fin -->
-                                <div id="diag-resumen" style="display:none; padding:15px; border:1px solid var(--bh-purple); border-radius:8px; background:rgba(124,58,237,0.1); margin-top:20px; text-align:center;">
-                                    <h4 style="margin:0 0 10px 0; color:white;">Diagnóstico Finalizado</h4>
-                                    <p id="diag-resumen-texto" style="font-size:13px; color:#ddd; margin-bottom:15px;"></p>
-                                    <button class="bh-btn-purple" onclick="insertarRutaBitacora()" style="width:100%; margin-bottom:10px;"><i class='bx bx-message-square-add'></i> Añadir Resultado a Bitácora</button>
-                                    <button class="bh-btn-white" onclick="reiniciarRuta()" style="width:100%; border:none; background:transparent; color:#aaa; padding:10px;">Reiniciar Ruta</button>
-                                </div>
+                                <div style="font-size:10px; color:#666; margin-top:6px;">Cada foto/video que guardes queda disponible para todos los técnicos que reparen este mismo modelo.</div>
                             </div>
                         </div>
 
@@ -2368,6 +2435,11 @@
                                     Repositorio de Dump</button>
                                 <button class="bh-btn-white"
                                     style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
+                                    onclick="document.getElementById('modal-ruta-diagnostico').style.display='flex'">
+                                    <i class='bx bx-git-repo-forked'></i> Ruta de Diagnóstico de Encendido
+                                </button>
+                                <button class="bh-btn-white"
+                                    style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
                                     onclick="document.getElementById('modal-ohm').style.display='flex'">
                                     <i class='bx bx-calculator'></i> Calculadora Ley de Ohm
                                 </button>
@@ -2395,6 +2467,240 @@
                                         style="display:none;position:absolute;top:8px;right:10px;background:var(--danger);color:white;font-size:10px;font-weight:900;padding:2px 7px;border-radius:10px;min-width:18px;text-align:center;"></span>
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal: Ruta de Diagnóstico de Encendido (antes vivía fija en Laboratorio, ahora en modal para dejar el espacio al Holograma) -->
+                <div id="modal-ruta-diagnostico" class="modal-overlay">
+                    <div class="modal-content" style="width:600px; max-height:85vh; overflow-y:auto;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                            <h3 style="margin:0; color:var(--bh-purple); display:flex; align-items:center; gap:8px; font-size:16px;">
+                                <i class='bx bx-git-repo-forked'></i> Ruta de Diagnóstico de Encendido
+                            </h3>
+                            <span id="diag-ruta-estado" style="font-size:12px; font-weight:bold; color:var(--warning);">Paso 1 de 4</span>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div style="width:100%; background:#222; border-radius:10px; height:8px; margin-bottom:20px; overflow:hidden;">
+                            <div id="diag-ruta-progreso" style="height:100%; width:25%; background:var(--bh-purple); transition:width 0.3s ease, background 0.3s ease;"></div>
+                        </div>
+
+                        <!-- Pasos -->
+                        <div id="diag-paso-1" class="diag-step-container active" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); transition:opacity 0.3s ease;">
+                            <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
+                                <i class='bx bx-plug'></i> 1. Validación Primaria (Standby)
+                            </h4>
+                            <p style="font-size:13px; color:#aaa; margin-bottom:15px;">Conectar fuente sin presionar Power. Medir ~4.2V en VPH_PWR / IF_PMIC.</p>
+                            <div style="display:flex; gap:10px;">
+                                <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(1, true)"><i class='bx bx-check'></i> Medición Correcta</button>
+                                <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(1, false)"><i class='bx bx-x'></i> Falla Detectada</button>
+                            </div>
+                        </div>
+
+                        <div id="diag-paso-2" class="diag-step-container" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); opacity:0.5; pointer-events:none; transition:opacity 0.3s ease;">
+                            <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
+                                <i class='bx bx-power-off'></i> 2. Despertar del Sistema
+                            </h4>
+                            <p style="font-size:13px; color:#aaa; margin-bottom:15px;">Presionar Power. Verificar que el consumo salga de 0 mA.</p>
+                            <div style="display:flex; gap:10px;">
+                                <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(2, true)"><i class='bx bx-check'></i> Medición Correcta</button>
+                                <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(2, false)"><i class='bx bx-x'></i> Falla Detectada</button>
+                            </div>
+                        </div>
+
+                        <div id="diag-paso-3" class="diag-step-container" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); opacity:0.5; pointer-events:none; transition:opacity 0.3s ease;">
+                            <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
+                                <i class='bx bx-microchip'></i> 3. Potencia CPU (Líneas BUCK)
+                            </h4>
+                            <p style="font-size:13px; color:#aaa; margin-bottom:5px;">Medir bobinas alrededor del PMIC.</p>
+                            <div style="background:rgba(216,180,254,0.1); border-left:3px solid var(--bh-purple); padding:8px; font-size:12px; color:var(--bh-purple); margin-bottom:15px; border-radius:0 4px 4px 0;">
+                                <strong>Ojo:</strong> 10 a 60 Ohmios es normal, NO es corto. Solo 0 Ohmios es corto.
+                            </div>
+                            <div style="display:flex; gap:10px;">
+                                <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(3, true)"><i class='bx bx-check'></i> Medición Correcta</button>
+                                <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(3, false)"><i class='bx bx-x'></i> Falla Detectada</button>
+                            </div>
+                        </div>
+
+                        <div id="diag-paso-4" class="diag-step-container" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); opacity:0.5; pointer-events:none; transition:opacity 0.3s ease;">
+                            <h4 style="margin:0 0 10px 0; display:flex; align-items:center; gap:8px; color:var(--info);">
+                                <i class='bx bx-pulse'></i> 4. Lógica LDO (1.8V)
+                            </h4>
+                            <p style="font-size:13px; color:#aaa; margin-bottom:15px;">Medir presencia de 1.8V en línea VDD_IO.</p>
+                            <div style="display:flex; gap:10px;">
+                                <button class="bh-btn-purple" style="background:var(--success); flex:1;" onclick="avanzarRuta(4, true)"><i class='bx bx-check'></i> Medición Correcta</button>
+                                <button class="bh-btn-purple" style="background:var(--danger); flex:1;" onclick="avanzarRuta(4, false)"><i class='bx bx-x'></i> Falla Detectada</button>
+                            </div>
+                        </div>
+
+                        <!-- Resumen / Fin -->
+                        <div id="diag-resumen" style="display:none; padding:15px; border:1px solid var(--bh-purple); border-radius:8px; background:rgba(124,58,237,0.1); margin-top:20px; text-align:center;">
+                            <h4 style="margin:0 0 10px 0; color:white;">Diagnóstico Finalizado</h4>
+                            <p id="diag-resumen-texto" style="font-size:13px; color:#ddd; margin-bottom:15px;"></p>
+                            <button class="bh-btn-purple" onclick="insertarRutaBitacora()" style="width:100%; margin-bottom:10px;"><i class='bx bx-message-square-add'></i> Añadir Resultado a Bitácora</button>
+                            <button class="bh-btn-white" onclick="reiniciarRuta()" style="width:100%; border:none; background:transparent; color:#aaa; padding:10px;">Reiniciar Ruta</button>
+                        </div>
+
+                        <div style="text-align:right; margin-top:15px;">
+                            <button class="bh-btn-white" onclick="document.getElementById('modal-ruta-diagnostico').style.display='none'">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal: Fotografiar pieza para el Holograma 3D -->
+                <div id="modal-holo-foto" class="modal-overlay">
+                    <div class="modal-content" style="width:460px;">
+                        <h3 style="margin-top:0; color:var(--bh-purple);"><i class='bx bx-camera'></i> Fotografiar / grabar pieza</h3>
+                        <p style="color:var(--text-muted); font-size:12px; margin-top:-6px;">Se guarda para <b id="holo-foto-modelo-nombre">este modelo</b> y se comparte con todos los técnicos que reparen el mismo equipo.</p>
+
+                        <label style="font-size:12px; color:#aaa;">Nombre de la pieza</label>
+                        <input type="text" id="holo-foto-pieza-input" class="bh-input" list="holo-piezas-sugerencias"
+                            placeholder="Ej: Tapa trasera, Flex de carga, Flex de volumen, Placa de carga..."
+                            style="margin:6px 0 10px;">
+                        <datalist id="holo-piezas-sugerencias"></datalist>
+
+                        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#3fd8ff; margin-bottom:8px; cursor:pointer;">
+                            <input type="checkbox" id="holo-guiado-check" checked onchange="holoToggleModoGuiado()">
+                            📐 Modo guiado: pedir las 6 caras en orden (recomendado para que la pieza quede completa)
+                        </label>
+
+                        <!-- Modo guiado: la app va pidiendo cara por cara con instrucciones -->
+                        <div id="holo-guiado-panel" style="background:rgba(63,216,255,0.06); border:1px dashed #3fd8ff; border-radius:8px; padding:10px; margin-bottom:10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <b id="holo-guiado-titulo" style="color:#3fd8ff; font-size:13px;">Paso 1 de 6: Frente</b>
+                                <span id="holo-guiado-contador" style="font-size:11px; color:#888;"></span>
+                            </div>
+                            <div style="width:100%; background:#222; border-radius:10px; height:6px; overflow:hidden; margin-bottom:6px;">
+                                <div id="holo-guiado-barra" style="height:100%; width:16.6%; background:#3fd8ff; transition:width 0.3s ease;"></div>
+                            </div>
+                            <p id="holo-guiado-instruccion" style="font-size:12px; color:#ccc; margin:0;">Mostrá la pieza de frente a la cámara.</p>
+                        </div>
+
+                        <!-- Modo manual (guiado desactivado): elegir cara suelta -->
+                        <div id="holo-manual-panel" style="display:none; margin-bottom:10px;">
+                            <select id="holo-foto-angulo-select" class="bh-input" style="margin:0; background:#222; color:#fff;">
+                                <option value="frente">↖️ Frente</option>
+                                <option value="atras">↘️ Atrás</option>
+                                <option value="arriba">⬆️ Arriba</option>
+                                <option value="abajo">⬇️ Abajo</option>
+                                <option value="izquierda">⬅️ Izquierda</option>
+                                <option value="derecha">➡️ Derecha</option>
+                            </select>
+                        </div>
+
+                        <div style="display:flex; gap:8px; margin-bottom:10px;">
+                            <select id="holo-foto-etapa-select" class="bh-input" style="margin:0; background:#222; color:#fff; max-width:130px;" title="¿En qué momento de la reparación es esta foto?">
+                                <option value="actual">📍 Actual</option>
+                                <option value="antes">⏮️ Antes</option>
+                                <option value="despues">⏭️ Después</option>
+                            </select>
+                            <div style="display:flex; gap:0; border:1px solid var(--bh-border); border-radius:8px; overflow:hidden;">
+                                <button type="button" class="holo-modo-btn holo-modo-activo" id="holo-modo-foto" onclick="holoCambiarModo('foto')" style="border:none; padding:8px 14px; font-size:12px; cursor:pointer;">📷 Foto</button>
+                                <button type="button" class="holo-modo-btn" id="holo-modo-video" onclick="holoCambiarModo('video')" style="border:none; padding:8px 14px; font-size:12px; cursor:pointer;">🎥 Video</button>
+                            </div>
+                        </div>
+
+                        <div style="background:black; border-radius:8px; overflow:hidden; min-height:220px; position:relative;">
+                            <video id="holo-foto-video" style="width:100%; height:220px; object-fit:cover; display:none;" autoplay playsinline muted></video>
+                            <canvas id="holo-foto-canvas" width="640" height="480" style="display:none;"></canvas>
+                            <img id="holo-foto-preview" style="width:100%; height:220px; object-fit:contain; display:none; border:2px solid var(--success);">
+                            <canvas id="holo-foto-anotacion-canvas" style="position:absolute; top:0; left:0; width:100%; height:220px; display:none; cursor:crosshair;"></canvas>
+                            <video id="holo-foto-preview-video" style="width:100%; height:220px; object-fit:contain; display:none; border:2px solid var(--success);" controls loop muted></video>
+                            <div id="holo-foto-rec-indicator" style="display:none; position:absolute; top:8px; left:8px; background:rgba(239,68,68,0.85); color:#fff; font-size:11px; font-weight:bold; padding:3px 10px; border-radius:20px;">● REC</div>
+                            <div id="holo-foto-placeholder" style="padding-top:85px; text-align:center; color:#444;">
+                                <div style="font-size:34px;">📵</div>
+                                <div style="font-size:12px; margin-top:8px;">Cámara desactivada</div>
+                            </div>
+                        </div>
+
+                        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--warning); margin-top:10px; cursor:pointer;">
+                            <input type="checkbox" id="holo-foto-danado-check" onchange="holoToggleAnotacion()">
+                            ⚠️ Esta pieza está dañada / tiene la falla (marca dónde en la foto — sirve para entrenar una IA de detección más adelante)
+                        </label>
+
+                        <div style="display:flex; gap:8px; margin-top:10px;">
+                            <button class="bh-btn-white" id="holo-foto-btn-cam" onclick="holoToggleCamara()">Activar Cámara</button>
+                            <button class="bh-btn-purple" id="holo-foto-btn-tomar" style="display:none;" onclick="holoTomarFoto()">Capturar ⚡</button>
+                            <button class="bh-btn-purple" id="holo-foto-btn-grabar" style="display:none; background:var(--danger);" onclick="holoIniciarGrabacion()">⏺ Grabar</button>
+                            <button class="bh-btn-purple" id="holo-foto-btn-detener" style="display:none; background:var(--danger);" onclick="holoDetenerGrabacion()">⏹ Detener</button>
+                            <button class="bh-btn-white" id="holo-foto-btn-retomar" style="display:none;" onclick="holoRetomarFoto()">🗑️ Repetir</button>
+                        </div>
+
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:12px; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;">
+                            <button type="button" class="bh-btn-white" id="holo-nota-btn-grabar" style="padding:6px 12px; font-size:12px;" onclick="holoGrabarNotaVoz()">
+                                <i class='bx bx-microphone'></i> Nota de voz
+                            </button>
+                            <span id="holo-nota-estado" style="font-size:11px; color:#888;"></span>
+                        </div>
+                        <textarea id="holo-nota-texto" class="bh-input" rows="2" placeholder="La nota transcrita aparece acá (editable)..." style="margin-top:8px;"></textarea>
+
+                        <div style="text-align:right; margin-top:15px;">
+                            <button class="bh-btn-white" onclick="holoCerrarModalFoto()">Cancelar</button>
+                            <button class="bh-btn-white" id="holo-guiado-btn-saltar" style="display:none;" onclick="holoSaltarCaraGuiada()">Saltar esta cara ⏭</button>
+                            <button class="bh-btn-white" id="holo-guiado-btn-terminar" style="display:none;" onclick="holoTerminarGuiado()">Terminar ✅</button>
+                            <button class="bh-btn-purple" id="holo-foto-btn-guardar" style="display:none;" onclick="holoGuardarFoto()">Guardar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal: Historial privado de este modelo en TU taller -->
+                <div id="modal-holo-historial" class="modal-overlay">
+                    <div class="modal-content" style="width:420px;">
+                        <h3 style="margin-top:0; color:var(--bh-purple);"><i class='bx bx-history'></i> Historial en tu taller</h3>
+                        <p style="color:var(--text-muted); font-size:12px; margin-top:-6px;">Solo tus propias capturas de <b id="holo-historial-modelo-nombre">este modelo</b> (no incluye datos de otros talleres).</p>
+                        <div id="holo-historial-lista" style="max-height:320px; overflow-y:auto; font-size:13px;"></div>
+                        <div style="text-align:right; margin-top:15px;">
+                            <button class="bh-btn-white" onclick="document.getElementById('modal-holo-historial').style.display='none'">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal: Buscar piezas en modelos similares (referencia visual) -->
+                <div id="modal-holo-similares" class="modal-overlay">
+                    <div class="modal-content" style="width:460px;">
+                        <h3 style="margin-top:0; color:var(--bh-purple);"><i class='bx bx-search-alt'></i> Piezas de otro modelo (referencia)</h3>
+                        <p style="color:var(--text-muted); font-size:12px; margin-top:-6px;">Útil cuando el equipo actual todavía no tiene fotos: mira cómo son las piezas de un modelo parecido.</p>
+                        <div style="display:flex; gap:8px; margin-bottom:12px;">
+                            <input type="text" id="holo-similares-modelo-input" class="bh-input" placeholder="Ej: iPhone 13 Pro" style="margin:0;" onkeypress="if(event.key==='Enter') holoBuscarModelosSimilares()">
+                            <button class="bh-btn-purple" onclick="holoBuscarModelosSimilares()">Buscar</button>
+                        </div>
+                        <div id="holo-similares-resultados" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-height:320px; overflow-y:auto;"></div>
+                        <div style="text-align:right; margin-top:15px;">
+                            <button class="bh-btn-white" onclick="document.getElementById('modal-holo-similares').style.display='none'">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal: Abrir un modelo ya guardado en la librería (sin necesitar una orden) -->
+                <div id="modal-holo-modelos" class="modal-overlay">
+                    <div class="modal-content" style="width:420px;">
+                        <h3 style="margin-top:0; color:var(--bh-purple);"><i class='bx bx-folder-open'></i> Abrir modelo guardado</h3>
+                        <p style="color:var(--text-muted); font-size:12px; margin-top:-6px;">Modelos que ya tienen piezas fotografiadas por cualquier técnico. Se abre directo, sin necesitar una orden activa.</p>
+                        <input type="text" id="holo-modelos-filtro" class="bh-input" placeholder="Filtrar..." oninput="holoFiltrarListaModelos(this.value)" style="margin-bottom:10px;">
+                        <div id="holo-modelos-lista" style="max-height:320px; overflow-y:auto;"></div>
+                        <div style="text-align:right; margin-top:15px;">
+                            <button class="bh-btn-white" onclick="document.getElementById('modal-holo-modelos').style.display='none'">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal: Comparar Antes / Después de una pieza -->
+                <div id="modal-holo-comparar" class="modal-overlay">
+                    <div class="modal-content" style="width:520px;">
+                        <h3 style="margin-top:0; color:var(--bh-purple);"><i class='bx bx-git-compare'></i> Antes / Después: <span id="holo-comparar-pieza-nombre"></span></h3>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                            <div>
+                                <div style="font-size:11px; color:#888; margin-bottom:4px; text-align:center;">ANTES</div>
+                                <div id="holo-comparar-antes" style="background:#000; border-radius:8px; min-height:200px; display:flex; align-items:center; justify-content:center; color:#444; font-size:12px;">Sin foto</div>
+                            </div>
+                            <div>
+                                <div style="font-size:11px; color:#888; margin-bottom:4px; text-align:center;">DESPUÉS</div>
+                                <div id="holo-comparar-despues" style="background:#000; border-radius:8px; min-height:200px; display:flex; align-items:center; justify-content:center; color:#444; font-size:12px;">Sin foto</div>
+                            </div>
+                        </div>
+                        <div style="text-align:right; margin-top:15px;">
+                            <button class="bh-btn-white" onclick="document.getElementById('modal-holo-comparar').style.display='none'">Cerrar</button>
                         </div>
                     </div>
                 </div>
@@ -4638,6 +4944,7 @@
                     onclick="ipcRenderer.send('abrir-carpeta-grabaciones')"><i class='bx bx-folder-open'></i>
                     Grabaciones</button>
             </div>
+            <div id="grab-estado-transmision" style="display:none; margin-top:10px; padding:12px 14px; border-radius:8px; font-size:13px; font-weight:700;"></div>
         </div>
     </div>
 
@@ -4858,6 +5165,10 @@
                         <p id="det-orden-sin-firma" style="color:#666; font-size:12px; background:rgba(255,255,255,0.03); border:1px dashed #333; border-radius:10px; padding:18px; text-align:center;">No se capturó firma en la recepción.</p>
                     </div>
                 </div>
+            </div>
+            <div id="det-orden-accesorios-wrap" style="margin-top:16px; display:none;">
+                <h3 style="margin:0 0 8px; font-size:12px; text-transform:uppercase; color:#aaa;">🛍️ Accesorios agregados a esta orden</h3>
+                <div id="det-orden-accesorios" style="background:rgba(255,255,255,0.03); border:1px solid #333; border-radius:10px; padding:4px 12px;"></div>
             </div>
             <div style="margin-top:16px;">
                 <h3 style="margin:0 0 8px; font-size:12px; text-transform:uppercase; color:#aaa;">🗒 Bitácora del técnico</h3>
@@ -5550,6 +5861,7 @@
             if ((id === 'taller' || id === 'dashboard') && !window.isDemoMode) {
                 ipcRenderer.send('obtener-tecnicos');
                 ipcRenderer.send('obtener-ordenes');
+                ipcRenderer.send('listar-pedidos-accesorios-pendientes');
             }
             if (id === 'inventario' && !window.isDemoMode) {
                 ipcRenderer.send('obtener-productos');
@@ -5585,6 +5897,10 @@
                     ipcRenderer.send('pedir-datos-empresa', { id: empresaId });
                 }
                 document.getElementById('conf-app-name').value = localStorage.getItem('appName') || '';
+            }
+
+            if (id === 'laboratorio') {
+                setTimeout(() => { if (typeof initHologramaLab === 'function') initHologramaLab(); }, 30);
             }
         }
 
@@ -6243,7 +6559,8 @@
                 if (recEmpresa) recEmpresa.innerText = appName;
 
                 // === GENERAR QR INDIVIDUAL POR ORDEN ===
-                const trackingUrl = `https://blackhouse-os-web.vercel.app/tracking.html?id=${ordenId}`;
+                const tokenSeguridad = datos.tracking_token ? `&t=${datos.tracking_token}` : '';
+                const trackingUrl = `https://blackhouse-os-web.vercel.app/tracking.html?id=${ordenId}${tokenSeguridad}`;
                 const qrContainer = document.getElementById('rec-qr-orden');
                 if (qrContainer && typeof QRCode !== 'undefined') {
                     qrContainer.innerHTML = '';
@@ -6365,7 +6682,7 @@
                         <td>${tecCell}</td>
                         <td>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <select class="status-select" onchange="cambiarEstadoOrden(${r.id}, this.value, '${r.telefono}')" style="background:${bgSelect}; color:white;">
+                            <select class="status-select" onchange="cambiarEstadoOrden(${r.id}, this.value, '${r.telefono}', '${r.tracking_token || ''}')" style="background:${bgSelect}; color:white;">
                                 <option value="Recibido" ${r.estado === 'Recibido' ? 'selected' : ''}>📥 Recibido</option>
                                 <option value="En Proceso" ${r.estado === 'En Proceso' ? 'selected' : ''}>🔧 En Proceso</option>
                                 <option value="Completado" ${r.estado === 'Completado' ? 'selected' : ''}>✅ Completado</option>
@@ -6527,7 +6844,22 @@
 
             document.getElementById('det-orden-bitacora').innerText = r.bitacora || 'Sin anotaciones en bitácora.';
             document.getElementById('modal-detalle-orden').style.display = 'flex';
+
+            document.getElementById('det-orden-accesorios-wrap').style.display = 'none';
+            if (!window.isDemoMode) ipcRenderer.send('obtener-accesorios-orden', r.id);
         }
+
+        ipcRenderer.on('accesorios-de-la-orden', (e, pedidos) => {
+            const wrap = document.getElementById('det-orden-accesorios-wrap');
+            const cont = document.getElementById('det-orden-accesorios');
+            if (!pedidos || pedidos.length === 0) { wrap.style.display = 'none'; return; }
+
+            const fila = (l, v) => `<div style="display:flex; justify-content:space-between; gap:10px; padding:6px 2px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;"><span style="color:#888;">${l}</span><span style="color:#eee; text-align:right;">${v}</span></div>`;
+            cont.innerHTML = pedidos.map(p => (p.items || []).map(it =>
+                fila(`${it.nombre} x${it.cantidad}`, 'S/ ' + (parseFloat(it.precio) * it.cantidad).toFixed(2))
+            ).join('')).join('');
+            wrap.style.display = 'block';
+        });
 
         // (Re)asignar el técnico de una orden desde la tabla de Control de Taller.
         function asignarTecnicoOrden(id, tecnico) {
@@ -7474,7 +7806,7 @@
             else { showToast(res.msg, 'danger'); }
         });
 
-        function cambiarEstadoOrden(id, nuevoEstado, telefono) {
+        function cambiarEstadoOrden(id, nuevoEstado, telefono, tokenSeguridad) {
             ipcRenderer.send('actualizar-estado-orden', { id, estado: nuevoEstado });
             if (nuevoEstado === 'Devuelto') {
                 const miUsuario = localStorage.getItem('userNickname') || 'Técnico';
@@ -7484,7 +7816,7 @@
                     `marcó la orden ID-${String(id).padStart(4, '0')} como DEVUELTO (Sin solución). Revisar.`
                 );
             }
-            const trackingLink = `https://blackhouse-os-web.vercel.app/tracking.html?id=${id}`;
+            const trackingLink = `https://blackhouse-os-web.vercel.app/tracking.html?id=${id}${tokenSeguridad ? '&t=' + tokenSeguridad : ''}`;
             const mensaje = `Hola, el estado de su orden #${id} ha cambiado a: *${nuevoEstado}*. \nVer detalle: ${trackingLink}`;
             const url = `https://wa.me/51${telefono}?text=${encodeURIComponent(mensaje)}`;
             if (isElectron) window.open(url, '_blank');
@@ -7496,6 +7828,70 @@
             showToast(`Estado actualizado`, 'success');
             ipcRenderer.send('obtener-ordenes');
         });
+
+        // === PEDIDOS DE ACCESORIOS (cliente los arma desde el tracking web) ===
+        function toggleNotifPedidos() {
+            document.getElementById('panel-notif-pedidos').style.display =
+                document.getElementById('panel-notif-pedidos').style.display === 'block' ? 'none' : 'block';
+        }
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('panel-notif-pedidos');
+            const btn = document.getElementById('btn-notif-pedidos');
+            if (panel && panel.style.display === 'block' && !panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+                panel.style.display = 'none';
+            }
+        });
+
+        function renderPedidosPendientes(pedidos) {
+            const badge = document.getElementById('badge-pedidos-pendientes');
+            const lista = document.getElementById('lista-pedidos-pendientes');
+            if (!badge || !lista) return;
+
+            if (!pedidos || pedidos.length === 0) {
+                badge.style.display = 'none';
+                lista.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:12px;">Sin pedidos pendientes.</div>';
+                return;
+            }
+
+            badge.style.display = 'flex';
+            badge.textContent = pedidos.length > 9 ? '9+' : pedidos.length;
+
+            lista.innerHTML = pedidos.map(p => {
+                const orden = p.ordenes || {};
+                const resumen = (p.items || []).map(it => `${it.nombre} x${it.cantidad}`).join(', ');
+                return `
+                    <div style="padding:10px 8px; border-bottom:1px solid var(--bh-border); font-size:12px;">
+                        <div style="font-weight:700; color:var(--text-main);">Orden #${p.orden_id} · ${orden.cliente || 'Cliente'}</div>
+                        <div style="color:var(--text-muted); margin:2px 0 6px;">${orden.modelo || ''}</div>
+                        <div style="margin-bottom:6px;">${resumen}</div>
+                        <div style="font-weight:700; color:var(--success); margin-bottom:8px;">Total: S/ ${Number(p.total).toFixed(2)}</div>
+                        <div style="display:flex; gap:6px;">
+                            <button class="bh-btn-purple" style="flex:1; padding:6px; font-size:11px;" onclick="resolverPedidoAccesorio(${p.id}, 'agregar')">✅ Agregar a la orden</button>
+                            <button class="bh-btn-white" style="flex:1; padding:6px; font-size:11px; color:var(--danger); border-color:var(--danger);" onclick="resolverPedidoAccesorio(${p.id}, 'rechazar')">❌ Rechazar</button>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function resolverPedidoAccesorio(id, accion) {
+            ipcRenderer.send('resolver-pedido-accesorio', { id, accion });
+        }
+
+        ipcRenderer.on('pedidos-accesorios-pendientes', (e, data) => renderPedidosPendientes(data));
+
+        ipcRenderer.on('resultado-pedido-accesorio', (e, res) => {
+            if (res.success) {
+                showToast(res.accion === 'agregar' ? 'Accesorios agregados a la orden' : 'Pedido rechazado', 'success');
+                ipcRenderer.send('obtener-ordenes');
+            } else {
+                showToast('Error: ' + res.msg, 'danger');
+            }
+            ipcRenderer.send('listar-pedidos-accesorios-pendientes');
+        });
+
+        if (!window.isDemoMode) {
+            setInterval(() => ipcRenderer.send('listar-pedidos-accesorios-pendientes'), 25000);
+        }
 
         const canvas = document.getElementById('signature-pad');
         const ctx = canvas.getContext('2d');
@@ -8738,6 +9134,7 @@
         }
 
         ipcRenderer.on('documento-impreso', (e, res) => {
+            if (res && res.origen === 'holograma-reporte') return; // ese evento lo maneja el listener del Holograma
             if (res && res.success) {
                 showToast(res.modo === 'pdf' ? 'PDF guardado ✅' : 'Ticket enviado a la impresora 🧾', 'success');
                 document.getElementById('modal-comprobante-listo').style.display = 'none';
@@ -9137,12 +9534,1356 @@
                 // Si la orden ya tenía notas previas, las cargamos en la bitácora
                 document.getElementById('lab-bitacora').value = orden.bitacora || '';
 
+                // Carga las piezas ya fotografiadas de este modelo (caché local + librería compartida)
+                if (typeof holoCargarFotosDelModelo === 'function') {
+                    holoCargarFotosDelModelo(orden.modelo || '');
+                }
+
                 showToast("Datos cargados correctamente", "success");
             } else {
                 infoPanel.style.display = 'none';
                 document.getElementById('lab-bitacora').value = '';
+                if (typeof holoReset === 'function') holoReset();
+                if (typeof holoCargarFotosDelModelo === 'function') holoCargarFotosDelModelo('');
                 showToast("Orden no encontrada", "danger");
             }
+        });
+
+        // =====================================================================
+        // HOLOGRAMA 3D DEL EQUIPO (Laboratorio) — three.js, cargado localmente
+        // Celular genérico (sin marca) con forma real: bordes redondeados, notch,
+        // cámara triple, botones laterales, puerto, parlante/mic. 9 piezas
+        // independientes que se pueden "desarmar" (slider) y marcar en rojo
+        // (manual con los chips, o automático leyendo la falla reportada).
+        // =====================================================================
+        let holoInit = false;
+        let holoScene, holoCamera, holoRenderer, holoControls, holoGroup;
+        // Ya no hay una lista fija de piezas: el técnico va nombrando y fotografiando
+        // cada pieza real mientras desarma el equipo (tapa, flex de carga, flex de
+        // volumen, placa de carga, etc.). holoParts/holoDanado se llenan en vivo.
+        const holoParts = {};
+        const holoDanado = {};
+        const holoNormalizarPieza = (txt) => String(txt || '').replace(/\s+/g, ' ').trim().toUpperCase();
+
+        const HOLO_COLOR_OK = 0x3fd8ff;
+        const HOLO_COLOR_BAD = 0xff3b4e;
+
+        function holoRoundedRectShape(w, h, r) {
+            const s = new THREE.Shape();
+            const x = -w / 2, y = -h / 2;
+            s.moveTo(x + r, y);
+            s.lineTo(x + w - r, y);
+            s.quadraticCurveTo(x + w, y, x + w, y + r);
+            s.lineTo(x + w, y + h - r);
+            s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            s.lineTo(x + r, y + h);
+            s.quadraticCurveTo(x, y + h, x, y + h - r);
+            s.lineTo(x, y + r);
+            s.quadraticCurveTo(x, y, x + r, y);
+            return s;
+        }
+
+        function holoSlabGeometry(w, h, depth, r, segments) {
+            const geo = new THREE.ExtrudeGeometry(holoRoundedRectShape(w, h, r), { depth: depth, bevelEnabled: false, curveSegments: segments || 6 });
+            geo.translate(0, 0, -depth / 2);
+            return geo;
+        }
+
+        function initHologramaLab() {
+            const wrap = document.getElementById('holo-canvas-wrap');
+            const canvas = document.getElementById('holo-canvas');
+            if (!wrap || !canvas || typeof THREE === 'undefined') return;
+
+            if (!holoInit) {
+                holoInit = true;
+
+                holoScene = new THREE.Scene();
+                holoCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+                holoCamera.position.set(0, 0.3, 5.2);
+
+                holoRenderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+                holoRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+                holoRenderer.outputEncoding = THREE.sRGBEncoding;
+
+                holoControls = new THREE.OrbitControls(holoCamera, holoRenderer.domElement);
+                holoControls.enableDamping = true;
+                holoControls.dampingFactor = 0.08;
+                holoControls.autoRotate = true;
+                holoControls.autoRotateSpeed = 1.0;
+                holoControls.minDistance = 2.5;
+                holoControls.maxDistance = 9;
+                holoControls.enablePan = false;
+
+                holoGroup = new THREE.Group();
+                holoScene.add(holoGroup);
+
+                // Plataforma tipo "holograma" bajo el equipo
+                [[1.55, 1.75, 0.25], [1.0, 1.1, 0.15]].forEach(([rIn, rOut, op]) => {
+                    const ring = new THREE.Mesh(
+                        new THREE.RingGeometry(rIn, rOut, 48),
+                        new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: op, side: THREE.DoubleSide })
+                    );
+                    ring.rotation.x = -Math.PI / 2;
+                    ring.position.y = -1.7;
+                    holoScene.add(ring);
+                });
+
+                holoConstruirCelular();
+                holoRegistrarPickTargets();
+                holoConfigurarDragPiezas(canvas);
+
+                window.addEventListener('resize', holoResize);
+                requestAnimationFrame(holoAnimar);
+            }
+
+            holoResize();
+        }
+
+        // Dos "vidrios" transparentes (invisibles hasta que se les pone una foto/video)
+        // pegados a la cara de frente y de atrás de una pieza, para soportar fotos
+        // multi-ángulo sin tener que tocar el material de la geometría base.
+        // Caja de 6 caras (NO es reconstrucción 3D real: son 6 fotos planas, una por
+        // lado, pegadas a una caja). Cada cara es invisible (opacidad 0) hasta que se
+        // le pone una foto/video de ese ángulo.
+        function holoCrearCajaFoto(w, h, d) {
+            const invisible = () => new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide });
+            const holg = 0.003; // separación mínima para evitar z-fighting con la caja base
+
+            const frente = new THREE.Mesh(new THREE.PlaneGeometry(w, h), invisible());
+            frente.position.z = d / 2 + holg;
+
+            const atras = new THREE.Mesh(new THREE.PlaneGeometry(w, h), invisible());
+            atras.position.z = -d / 2 - holg;
+            atras.rotation.y = Math.PI;
+
+            const arriba = new THREE.Mesh(new THREE.PlaneGeometry(w, d), invisible());
+            arriba.position.y = h / 2 + holg;
+            arriba.rotation.x = -Math.PI / 2;
+
+            const abajo = new THREE.Mesh(new THREE.PlaneGeometry(w, d), invisible());
+            abajo.position.y = -h / 2 - holg;
+            abajo.rotation.x = Math.PI / 2;
+
+            const izquierda = new THREE.Mesh(new THREE.PlaneGeometry(d, h), invisible());
+            izquierda.position.x = -w / 2 - holg;
+            izquierda.rotation.y = -Math.PI / 2;
+
+            const derecha = new THREE.Mesh(new THREE.PlaneGeometry(d, h), invisible());
+            derecha.position.x = w / 2 + holg;
+            derecha.rotation.y = Math.PI / 2;
+
+            return { frente, atras, arriba, abajo, izquierda, derecha };
+        }
+
+        // Carcasa genérica (sin marca): es solo un fondo de referencia para orientarse
+        // ("así se ve un celular por fuera"), fija y no interactiva. Las piezas REALES
+        // que se marcan/dañan/arrastran son las que el técnico va fotografiando durante
+        // el desarme (ver holoCrearPiezaDinamica más abajo).
+        function holoConstruirCelular() {
+            // Proporción real del iPhone 11: 150.9 x 75.7 x 8.3 mm (fuente: specs públicas de
+            // Apple/Dimensions.com — no se descargó ninguna foto ni modelo 3D con derechos).
+            const BODY_W = 1.15, BODY_H = BODY_W * (150.9 / 75.7), BODY_R = 0.22;
+
+            const frameGeo = holoSlabGeometry(BODY_W, BODY_H, 0.24, BODY_R, 8);
+            const frameEdges = new THREE.LineSegments(new THREE.EdgesGeometry(frameGeo, 25), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.4 }));
+            holoGroup.add(frameEdges);
+
+            // Agujeros de tornillos (detalle, cerca de las 4 esquinas y junto al puerto)
+            const tornilloGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.03, 10);
+            const tornilloMat = new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.5 });
+            [
+                [-BODY_W / 2 + 0.1, BODY_H / 2 - 0.16], [BODY_W / 2 - 0.1, BODY_H / 2 - 0.16],
+                [-BODY_W / 2 + 0.1, -BODY_H / 2 + 0.16], [BODY_W / 2 - 0.1, -BODY_H / 2 + 0.16],
+                [-0.12, -BODY_H / 2 + 0.03], [0.12, -BODY_H / 2 + 0.03]
+            ].forEach(([tx, ty]) => {
+                const tornillo = new THREE.Mesh(tornilloGeo, tornilloMat);
+                tornillo.rotation.x = Math.PI / 2;
+                tornillo.position.set(tx, ty, 0.005);
+                holoGroup.add(tornillo);
+                const tornilloEdges = new THREE.LineSegments(new THREE.EdgesGeometry(tornilloGeo, 20), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.6 }));
+                tornilloEdges.rotation.copy(tornillo.rotation);
+                tornilloEdges.position.copy(tornillo.position);
+                holoGroup.add(tornilloEdges);
+            });
+
+            // Pantalla (silueta con muesca/notch)
+            const screenSlab = new THREE.Mesh(holoSlabGeometry(BODY_W - 0.08, BODY_H - 0.08, 0.04, BODY_R - 0.04, 8), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.12 }));
+            screenSlab.position.z = 0.13;
+            const screenEdges = new THREE.LineSegments(new THREE.EdgesGeometry(screenSlab.geometry, 25), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+            screenEdges.position.copy(screenSlab.position);
+            const notch = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.035, 0.05), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+            notch.position.set(0, BODY_H / 2 - 0.09, 0.15);
+            const notchEdges = new THREE.LineSegments(new THREE.EdgesGeometry(notch.geometry), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+            notchEdges.position.copy(notch.position);
+            holoGroup.add(screenSlab, screenEdges, notch, notchEdges);
+
+            // Cámara trasera: el iPhone 11 (a diferencia del 11 Pro) tiene DOBLE lente,
+            // acomodada en diagonal dentro de un bloque cuadrado, más un flash.
+            const camGroup = new THREE.Group();
+            const camPlate = new THREE.Mesh(holoSlabGeometry(0.3, 0.3, 0.03, 0.07, 8), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.15 }));
+            const camPlateEdges = new THREE.LineSegments(new THREE.EdgesGeometry(camPlate.geometry, 25), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+            camGroup.add(camPlate, camPlateEdges);
+            [[-0.07, 0.07], [0.07, -0.07]].forEach(([lx, ly]) => {
+                const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.02, 20), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.2 }));
+                lens.rotation.x = Math.PI / 2;
+                lens.position.set(lx, ly, 0.025);
+                const lensEdges = new THREE.LineSegments(new THREE.EdgesGeometry(lens.geometry, 20), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+                lensEdges.rotation.copy(lens.rotation); lensEdges.position.copy(lens.position);
+                camGroup.add(lens, lensEdges);
+            });
+            const flash = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.018, 12), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.25 }));
+            flash.rotation.x = Math.PI / 2;
+            flash.position.set(0.07, 0.07, 0.02);
+            const flashEdges = new THREE.LineSegments(new THREE.EdgesGeometry(flash.geometry, 12), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+            flashEdges.rotation.copy(flash.rotation); flashEdges.position.copy(flash.position);
+            camGroup.add(flash, flashEdges);
+            camGroup.position.set(0.26, 0.62, -0.14);
+            holoGroup.add(camGroup);
+
+            // Cámara frontal (dot junto al notch)
+            const frontCam = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.015, 16), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.25 }));
+            frontCam.rotation.x = Math.PI / 2;
+            frontCam.position.set(0.08, BODY_H / 2 - 0.09, 0.16);
+            const frontCamEdges = new THREE.LineSegments(new THREE.EdgesGeometry(frontCam.geometry, 20), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+            frontCamEdges.rotation.copy(frontCam.rotation); frontCamEdges.position.copy(frontCam.position);
+            holoGroup.add(frontCam, frontCamEdges);
+
+            // Puerto USB-C (borde inferior)
+            const carga = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.07, 0.1), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.2 }));
+            carga.position.set(0, -BODY_H / 2 + 0.02, 0);
+            const cargaEdges = new THREE.LineSegments(new THREE.EdgesGeometry(carga.geometry), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+            cargaEdges.position.copy(carga.position);
+            holoGroup.add(carga, cargaEdges);
+
+            // Altavoz + micrófono (rejilla inferior)
+            [-0.32, -0.24, -0.16].forEach(x => {
+                const slit = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 0.05), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.2 }));
+                slit.position.set(x, -BODY_H / 2 + 0.02, 0.08);
+                const slitEdges = new THREE.LineSegments(new THREE.EdgesGeometry(slit.geometry), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+                slitEdges.position.copy(slit.position);
+                holoGroup.add(slit, slitEdges);
+            });
+            const micHole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.05, 12), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.2 }));
+            micHole.rotation.z = Math.PI / 2;
+            micHole.position.set(0.3, -BODY_H / 2 + 0.02, 0.08);
+            const micEdges = new THREE.LineSegments(new THREE.EdgesGeometry(micHole.geometry, 16), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+            micEdges.rotation.copy(micHole.rotation); micEdges.position.copy(micHole.position);
+            holoGroup.add(micHole, micEdges);
+
+            // Auricular (borde superior)
+            const auricular = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.03, 0.04), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.2 }));
+            auricular.position.set(-0.15, BODY_H / 2 - 0.09, 0.15);
+            const auricularEdges = new THREE.LineSegments(new THREE.EdgesGeometry(auricular.geometry), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+            auricularEdges.position.copy(auricular.position);
+            holoGroup.add(auricular, auricularEdges);
+
+            // Botones (volumen + encendido)
+            [0.55, 0.42].forEach(y => {
+                const b = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.13, 0.05), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.25 }));
+                b.position.set(-BODY_W / 2 - 0.01, y, 0);
+                const be = new THREE.LineSegments(new THREE.EdgesGeometry(b.geometry), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+                be.position.copy(b.position);
+                holoGroup.add(b, be);
+            });
+            const powerBtn = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.05), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.25 }));
+            powerBtn.position.set(BODY_W / 2 + 0.01, 0.5, 0);
+            const powerEdges = new THREE.LineSegments(new THREE.EdgesGeometry(powerBtn.geometry), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+            powerEdges.position.copy(powerBtn.position);
+            holoGroup.add(powerBtn, powerEdges);
+
+            // Señal / antena (bandas en el marco, arriba y abajo)
+            [BODY_H / 2 - 0.25, -BODY_H / 2 + 0.35].forEach(y => {
+                const band = new THREE.Mesh(holoSlabGeometry(BODY_W + 0.01, 0.025, 0.25, BODY_R, 8), new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.15 }));
+                band.position.set(0, y, 0);
+                const bandEdges = new THREE.LineSegments(new THREE.EdgesGeometry(band.geometry, 25), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+                bandEdges.position.copy(band.position);
+                holoGroup.add(band, bandEdges);
+            });
+        }
+
+        // ---- Piezas DINÁMICAS: cada una la crea el técnico al fotografiar/grabar ----
+        let holoPiezaContador = 0;
+        const HOLO_GOLDEN_ANGLE = 137.5 * Math.PI / 180;
+
+        // Acomoda cada pieza nueva en un anillo alrededor del equipo (espiral tipo
+        // "semillas de girasol") para que no se encimen aunque se vayan agregando muchas.
+        function holoSlotAutomatico(index) {
+            const angle = index * HOLO_GOLDEN_ANGLE;
+            const radio = 1.9 + index * 0.1;
+            return new THREE.Vector3(Math.cos(angle) * radio, Math.sin(angle) * radio * 0.55, (index % 2 === 0 ? 1 : -1) * 0.35);
+        }
+
+        function holoCrearEtiqueta(texto) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(5,10,18,0.88)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#3fd8ff'; ctx.lineWidth = 3;
+            ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+            ctx.fillStyle = '#3fd8ff';
+            ctx.font = 'bold 26px Arial, sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            let t = texto || '';
+            while (ctx.measureText(t).width > canvas.width - 24 && t.length > 3) t = t.slice(0, -1);
+            if (t !== texto) t += '…';
+            ctx.fillText(t, canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+            sprite.scale.set(0.55, 0.14, 1);
+            return sprite;
+        }
+
+        // Crea (o reutiliza si ya existe) la tarjeta 3D de una pieza nombrada por el
+        // técnico. w/h se calculan según la proporción real de la foto para que no se
+        // vea estirada.
+        function holoCrearPiezaDinamica(piezaKey, piezaDisplay, aspecto) {
+            if (holoParts[piezaKey]) return holoParts[piezaKey];
+
+            const alto = 0.5;
+            const ancho = Math.max(0.28, Math.min(0.8, alto * (aspecto || 1)));
+            const depth = Math.min(ancho, alto) * 0.4; // caja con volumen real, no una tarjeta delgada
+            const geo = holoSlabGeometry(ancho, alto, depth, 0.04, 6);
+            const fill = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: HOLO_COLOR_OK, transparent: true, opacity: 0.1 }));
+            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), new THREE.LineBasicMaterial({ color: HOLO_COLOR_OK }));
+            const caras = holoCrearCajaFoto(ancho, alto, depth);
+            const etiqueta = holoCrearEtiqueta(piezaDisplay);
+            etiqueta.position.set(0, alto / 2 + 0.16, 0);
+
+            const group = new THREE.Group();
+            group.add(fill, edges, caras.frente, caras.atras, caras.arriba, caras.abajo, caras.izquierda, caras.derecha, etiqueta);
+
+            const posDesarmado = holoSlotAutomatico(holoPiezaContador++);
+            const posArmado = new THREE.Vector3(0, 0, 0);
+            group.position.copy(posDesarmado);
+            holoGroup.add(group);
+
+            const parte = {
+                group: group, posArmado: posArmado, posDesarmado: posDesarmado, factor: 1,
+                extraMeshes: [fill, edges, caras.frente, caras.atras, caras.arriba, caras.abajo, caras.izquierda, caras.derecha],
+                fotoTargetFrente: caras.frente, fotoTargetAtras: caras.atras,
+                fotoTargetArriba: caras.arriba, fotoTargetAbajo: caras.abajo,
+                fotoTargetIzquierda: caras.izquierda, fotoTargetDerecha: caras.derecha,
+                etiqueta: etiqueta, nombre: piezaDisplay
+            };
+            holoParts[piezaKey] = parte;
+            if (!(piezaKey in holoDanado)) holoDanado[piezaKey] = false;
+            holoRegistrarPickTargets();
+            holoRenderListaPiezas();
+            return parte;
+        }
+
+        function holoEliminarPiezaDeEscena(piezaKey, parteDirecta) {
+            const p = parteDirecta || holoParts[piezaKey];
+            if (!p) return;
+            p.group.traverse(obj => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (obj.material.map) obj.material.map.dispose();
+                    obj.material.dispose();
+                }
+            });
+            holoGroup.remove(p.group);
+            delete holoParts[piezaKey];
+            delete holoDanado[piezaKey];
+        }
+
+        function holoLimpiarTodasLasPiezas() {
+            Object.keys(holoParts).forEach(holoEliminarPiezaDeEscena);
+            holoPiezaContador = 0;
+            holoRegistrarPickTargets();
+            holoRenderListaPiezas();
+        }
+
+        // Borrado con "deshacer": la pieza desaparece al toque de la vista, pero recién
+        // se borra de verdad (Supabase + memoria) 6 segundos después si nadie la
+        // restaura. Evita perder una pieza por un clic accidental.
+        let holoUltimaEliminada = null;
+
+        async function holoEliminarPieza(piezaKey) {
+            const p = holoParts[piezaKey];
+            if (!p) return;
+            const modelo = window.holoModeloActual;
+            const nombre = p.nombre;
+            const danadoPrevio = !!holoDanado[piezaKey];
+
+            p.group.visible = false;
+            delete holoParts[piezaKey];
+            delete holoDanado[piezaKey];
+            holoRegistrarPickTargets();
+            holoRenderListaPiezas();
+
+            const timeoutId = setTimeout(async () => {
+                holoEliminarPiezaDeEscena(piezaKey, p);
+                if (modelo) await ipcRenderer.invoke('borrar-pieza-modelo', { modelo, pieza: nombre });
+                holoUltimaEliminada = null;
+            }, 6000);
+
+            holoUltimaEliminada = { piezaKey, parte: p, danadoPrevio, timeoutId };
+            showToast(`Pieza "${nombre}" eliminada. <a href="#" onclick="holoDeshacerBorrado(); return false;" style="color:#3fd8ff; text-decoration:underline; font-weight:bold;">Deshacer</a>`, 'warning');
+        }
+
+        function holoDeshacerBorrado() {
+            if (!holoUltimaEliminada) return;
+            clearTimeout(holoUltimaEliminada.timeoutId);
+            const { piezaKey, parte, danadoPrevio } = holoUltimaEliminada;
+            parte.group.visible = true;
+            holoParts[piezaKey] = parte;
+            holoDanado[piezaKey] = danadoPrevio;
+            holoRegistrarPickTargets();
+            holoRenderListaPiezas();
+            holoUltimaEliminada = null;
+            showToast('Se restauró la pieza', 'success');
+        }
+
+        async function holoRenombrarPieza(piezaKeyViejo) {
+            const p = holoParts[piezaKeyViejo];
+            if (!p) return;
+            const nuevoNombre = prompt('Nuevo nombre para esta pieza:', p.nombre);
+            if (!nuevoNombre || !nuevoNombre.trim() || nuevoNombre.trim() === p.nombre) return;
+
+            const modelo = window.holoModeloActual;
+            const piezaKeyNuevo = holoNormalizarPieza(nuevoNombre);
+
+            if (modelo) await ipcRenderer.invoke('renombrar-pieza-modelo', { modelo, piezaVieja: p.nombre, piezaNueva: nuevoNombre.trim() });
+
+            p.nombre = nuevoNombre.trim();
+            const nuevaEtiqueta = holoCrearEtiqueta(p.nombre);
+            nuevaEtiqueta.position.copy(p.etiqueta.position);
+            p.group.remove(p.etiqueta);
+            p.etiqueta.material.map.dispose();
+            p.etiqueta.material.dispose();
+            p.group.add(nuevaEtiqueta);
+            p.etiqueta = nuevaEtiqueta;
+
+            if (piezaKeyNuevo !== piezaKeyViejo) {
+                holoParts[piezaKeyNuevo] = p;
+                holoDanado[piezaKeyNuevo] = holoDanado[piezaKeyViejo];
+                delete holoParts[piezaKeyViejo];
+                delete holoDanado[piezaKeyViejo];
+                holoRegistrarPickTargets();
+            }
+            holoRenderListaPiezas();
+            showToast('Pieza renombrada', 'success');
+        }
+
+        function holoRenderListaPiezas() {
+            const cont = document.getElementById('holo-piezas-lista');
+            if (!cont) return;
+            const keys = Object.keys(holoParts);
+            if (keys.length === 0) {
+                cont.innerHTML = '<span style="font-size:12px; color:#666;">Todavía no fotografiaste ninguna pieza de este equipo. Usa "+ Nueva pieza" mientras vas desarmando.</span>';
+                return;
+            }
+            cont.innerHTML = keys.map(key => {
+                const p = holoParts[key];
+                const danado = !!holoDanado[key];
+                return `
+                    <span class="holo-chip${danado ? ' holo-danado' : ''}" id="holo-chip-${key}" style="display:inline-flex; align-items:center; gap:6px;">
+                        <span onclick="holoTogglePieza('${key}')" style="cursor:pointer;">${p.nombre}</span>
+                        <i class='bx bx-git-compare' style="cursor:pointer; opacity:0.7;" title="Comparar antes/después" onclick="holoCompararPieza('${key}')"></i>
+                        <i class='bx bx-edit-alt' style="cursor:pointer; opacity:0.7;" title="Renombrar" onclick="holoRenombrarPieza('${key}')"></i>
+                        <i class='bx bx-flag' style="cursor:pointer; opacity:0.7;" title="Reportar foto incorrecta" onclick="holoReportarPieza('${key}')"></i>
+                        <i class='bx bx-trash' style="cursor:pointer; opacity:0.7;" title="Borrar" onclick="holoEliminarPieza('${key}')"></i>
+                    </span>`;
+            }).join('');
+        }
+
+        // Buscar/resaltar: filtra visualmente los chips sin tocar la escena 3D.
+        function holoBuscarPieza(texto) {
+            const t = (texto || '').trim().toLowerCase();
+            Object.keys(holoParts).forEach(key => {
+                const chip = document.getElementById('holo-chip-' + key);
+                if (!chip) return;
+                const coincide = !t || holoParts[key].nombre.toLowerCase().includes(t);
+                chip.classList.toggle('holo-atenuada', !coincide);
+                chip.classList.toggle('holo-resaltada', !!t && coincide);
+            });
+        }
+
+        // Re-acomoda todas las piezas ya creadas en el layout automático (por si el
+        // arrastre manual las dejó encimadas o muy desordenadas).
+        function holoOrdenarAutomatico() {
+            holoPiezaContador = 0;
+            Object.keys(holoParts).forEach(key => {
+                const p = holoParts[key];
+                p.posDesarmado = holoSlotAutomatico(holoPiezaContador++);
+                p.factor = 1;
+                holoAplicarFactor(key);
+            });
+            showToast('Piezas reordenadas', 'success');
+        }
+
+        function holoResize() {
+            const wrap = document.getElementById('holo-canvas-wrap');
+            if (!wrap || !holoRenderer) return;
+            const w = wrap.clientWidth || 300;
+            const h = wrap.clientHeight || 320;
+            holoRenderer.setSize(w, h, false);
+            holoCamera.aspect = w / h;
+            holoCamera.updateProjectionMatrix();
+        }
+
+        function holoToggleFullscreen() {
+            const wrap = document.getElementById('holo-canvas-wrap');
+            if (!wrap) return;
+            if (!document.fullscreenElement) {
+                wrap.requestFullscreen().catch(() => showToast('No se pudo abrir pantalla completa', 'warning'));
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            const icon = document.getElementById('holo-fullscreen-icon');
+            const enFullscreen = !!document.fullscreenElement && document.fullscreenElement.id === 'holo-canvas-wrap';
+            if (icon) icon.className = enFullscreen ? 'bx bx-exit-fullscreen' : 'bx bx-fullscreen';
+            setTimeout(holoResize, 60);
+        });
+
+        function holoAnimar() {
+            requestAnimationFrame(holoAnimar);
+            if (holoControls) holoControls.update();
+            if (holoRenderer && holoScene && holoCamera) holoRenderer.render(holoScene, holoCamera);
+        }
+
+        function holoAplicarFactor(pieza) {
+            const p = holoParts[pieza];
+            if (!p) return;
+            p.group.position.lerpVectors(p.posArmado, p.posDesarmado, p.factor || 0);
+        }
+
+        function holoSetExplode(val) {
+            const t = Math.max(0, Math.min(100, Number(val))) / 100;
+            Object.keys(holoParts).forEach(pieza => {
+                holoParts[pieza].factor = t;
+                holoAplicarFactor(pieza);
+            });
+        }
+
+        // Deja arrastrar CADA pieza por separado con el mouse, LIBREMENTE en cualquier
+        // dirección (no solo arriba/abajo): mientras se arrastra, la pieza se mueve
+        // sobre un plano imaginario que mira hacia la cámara, y se desactiva el giro
+        // de cámara para que el arrastre no compita con OrbitControls.
+        const holoRaycaster = new THREE.Raycaster();
+        const holoMouseNDC = new THREE.Vector2();
+        let holoPickTargets = [];
+        let holoMeshToPieza = new Map();
+        let holoDragPieza = null;
+        const holoDragPlane = new THREE.Plane();
+        const holoDragOffset = new THREE.Vector3();
+        const holoDragPoint = new THREE.Vector3();
+
+        function holoRegistrarPickTargets() {
+            holoPickTargets = [];
+            holoMeshToPieza = new Map();
+            Object.keys(holoParts).forEach(pieza => {
+                (holoParts[pieza].extraMeshes || []).forEach(m => {
+                    if (m.isMesh) { holoPickTargets.push(m); holoMeshToPieza.set(m, pieza); }
+                });
+            });
+        }
+
+        function holoActualizarMouseNDC(canvas, e) {
+            const rect = canvas.getBoundingClientRect();
+            holoMouseNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            holoMouseNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function holoConfigurarDragPiezas(canvas) {
+            canvas.addEventListener('pointerdown', (e) => {
+                holoControls.autoRotate = false;
+                holoActualizarMouseNDC(canvas, e);
+                holoRaycaster.setFromCamera(holoMouseNDC, holoCamera);
+                const hits = holoRaycaster.intersectObjects(holoPickTargets, false);
+                if (hits.length === 0) return; // clic en el fondo: que gire la cámara normal
+
+                const pieza = holoMeshToPieza.get(hits[0].object);
+                if (!pieza) return;
+
+                holoDragPieza = pieza;
+                const posMundo = holoParts[pieza].group.getWorldPosition(new THREE.Vector3());
+
+                // Plano perpendicular a la cámara que pasa por la pieza: al arrastrar sobre
+                // ese plano, la pieza sigue al mouse libremente en cualquier dirección.
+                const normal = new THREE.Vector3();
+                holoCamera.getWorldDirection(normal);
+                holoDragPlane.setFromNormalAndCoplanarPoint(normal, posMundo);
+
+                const puntoInicial = new THREE.Vector3();
+                if (!holoRaycaster.ray.intersectPlane(holoDragPlane, puntoInicial)) puntoInicial.copy(posMundo);
+                holoDragOffset.copy(posMundo).sub(puntoInicial);
+
+                holoControls.enabled = false;
+                canvas.style.cursor = 'grabbing';
+                canvas.setPointerCapture(e.pointerId);
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
+                if (!holoDragPieza) return;
+                holoActualizarMouseNDC(canvas, e);
+                holoRaycaster.setFromCamera(holoMouseNDC, holoCamera);
+                if (!holoRaycaster.ray.intersectPlane(holoDragPlane, holoDragPoint)) return;
+
+                const nuevaPosMundo = holoDragPoint.clone().add(holoDragOffset);
+                holoGroup.worldToLocal(nuevaPosMundo);
+
+                const p = holoParts[holoDragPieza];
+                p.group.position.copy(nuevaPosMundo);
+                p.posDesarmado.copy(nuevaPosMundo);
+                p.factor = 1;
+            });
+
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => canvas.addEventListener(ev, () => {
+                if (!holoDragPieza) return;
+                holoDragPieza = null;
+                holoControls.enabled = true;
+                canvas.style.cursor = 'grab';
+            }));
+        }
+
+        function holoAplicarColor(pieza, danado) {
+            const p = holoParts[pieza];
+            if (!p) return;
+            const color = danado ? HOLO_COLOR_BAD : HOLO_COLOR_OK;
+            (p.extraMeshes || []).forEach(m => {
+                if (!m.material) return;
+                // Si esta malla tiene una foto/video real aplicado (tiene .map), no la
+                // tiñamos de cian/rojo parejo (se vería como un filtro de color encima):
+                // mostramos la foto en sus colores reales y solo la "enrojecemos" un
+                // poco si está dañada.
+                if (m.material.map) {
+                    m.material.color.setHex(danado ? 0xff7777 : 0xffffff);
+                    return;
+                }
+                m.material.color.setHex(color);
+                if (m.material.opacity && m.material.opacity < 0.3) m.material.opacity = danado ? Math.max(m.material.opacity, 0.22) : m.material.opacity;
+            });
+
+            const chip = document.getElementById('holo-chip-' + pieza);
+            if (chip) chip.classList.toggle('holo-danado', danado);
+        }
+
+        function holoTogglePieza(pieza) {
+            holoDanado[pieza] = !holoDanado[pieza];
+            holoAplicarColor(pieza, holoDanado[pieza]);
+        }
+
+        function holoReset() {
+            Object.keys(holoParts).forEach(p => {
+                holoDanado[p] = false;
+                holoParts[p].factor = 1;
+                holoAplicarFactor(p);
+                holoAplicarColor(p, false);
+            });
+            const slider = document.getElementById('holo-explode');
+            if (slider) slider.value = 100;
+        }
+
+        // =====================================================================
+        // FOTOS REALES DE PIEZAS (Holograma) — el técnico fotografía la pieza y
+        // esa foto se usa de textura en el modelo 3D. Se guarda en 2 lugares:
+        // caché local (esta PC, funciona sin internet) y una tabla compartida en
+        // Supabase (piezas_fotos_modelos) que TODOS los usuarios de BlackHouse OS
+        // ven y alimentan, así el holograma se vuelve más real con el tiempo.
+        // =====================================================================
+        let holoFotoStream = null;
+        let holoFotoMediaRecorder = null;
+        let holoFotoVideoChunks = [];
+        let holoFotoModoActual = 'foto'; // 'foto' | 'video'
+        let holoFotoResultado = null; // { dataUrl, ext, tipo } de la última captura
+
+        const HOLO_ANGULO_A_CAMPO = {
+            frente: 'fotoTargetFrente', atras: 'fotoTargetAtras',
+            arriba: 'fotoTargetArriba', abajo: 'fotoTargetAbajo',
+            izquierda: 'fotoTargetIzquierda', derecha: 'fotoTargetDerecha'
+        };
+
+        function holoObtenerCaraFoto(piezaKey, angulo) {
+            const p = holoParts[piezaKey];
+            if (!p) return null;
+            return p[HOLO_ANGULO_A_CAMPO[angulo] || 'fotoTargetFrente'];
+        }
+
+        // Aplica una foto/video a la pieza (creándola en la escena si es la primera
+        // vez que se ve, por ejemplo al reabrir un modelo ya fotografiado antes).
+        function holoAplicarMediaDesdeURL(piezaDisplay, angulo, url, tipo) {
+            const piezaKey = holoNormalizarPieza(piezaDisplay);
+            if (!piezaKey || typeof THREE === 'undefined') return;
+            if (!holoParts[piezaKey]) holoCrearPiezaDinamica(piezaKey, piezaDisplay, 4 / 3);
+
+            const target = holoObtenerCaraFoto(piezaKey, angulo);
+            if (!target) return;
+
+            const alListo = (texture) => {
+                texture.encoding = THREE.sRGBEncoding;
+                target.material.map = texture;
+                target.material.opacity = 0.95;
+                target.material.needsUpdate = true;
+                holoAplicarColor(piezaKey, !!holoDanado[piezaKey]);
+            };
+
+            if (tipo === 'video') {
+                const video = document.createElement('video');
+                video.src = url; video.loop = true; video.muted = true; video.playsInline = true;
+                video.play().then(() => alListo(new THREE.VideoTexture(video))).catch(() => {});
+            } else {
+                new THREE.TextureLoader().load(url, alListo);
+            }
+        }
+
+        // Reconstruye TODAS las piezas de este modelo (caché local primero, para que
+        // sea instantáneo; luego la librería compartida, cacheando lo nuevo localmente).
+        async function holoCargarFotosDelModelo(modelo) {
+            window.holoModeloActual = modelo || '';
+            if (!holoGroup) { setTimeout(() => holoCargarFotosDelModelo(modelo), 300); return; }
+
+            holoLimpiarTodasLasPiezas();
+
+            const nombreModelo = document.getElementById('holo-foto-modelo-nombre');
+            if (nombreModelo) nombreModelo.textContent = modelo || 'este modelo';
+            const hint = document.getElementById('holo-auto-hint');
+            if (hint) hint.textContent = modelo ? `Equipo: ${modelo}` : '';
+            if (!modelo) return;
+
+            holoAplicarEstadisticasComunidad(modelo);
+
+            try {
+                const cache = await ipcRenderer.invoke('leer-fotos-pieza-cache-modelo', { modelo });
+                const yaCargadas = new Set();
+                (cache.fotos || []).filter(f => (f.etapa || 'actual') === 'actual').forEach(f => {
+                    holoAplicarMediaDesdeURL(f.pieza, f.angulo, f.dataUrl, f.tipo);
+                    yaCargadas.add(holoNormalizarPieza(f.pieza) + '_' + f.angulo);
+                });
+
+                const remoto = await ipcRenderer.invoke('buscar-fotos-modelo', { modelo });
+                for (const f of (remoto.fotos || [])) {
+                    const piezaKey = holoNormalizarPieza(f.pieza);
+                    if (f.danado) { holoDanado[piezaKey] = true; }
+                    if (yaCargadas.has(piezaKey + '_' + f.angulo)) continue;
+                    holoAplicarMediaDesdeURL(f.pieza, f.angulo, f.foto_url, f.tipo);
+                    // La cacheamos localmente para la próxima vez (y para que funcione sin internet)
+                    try {
+                        const resp = await fetch(f.foto_url);
+                        const arrBuf = await resp.arrayBuffer();
+                        const ext = (f.foto_url.split('.').pop() || 'jpg').split('?')[0].toLowerCase();
+                        await ipcRenderer.invoke('guardar-foto-pieza-cache', { modelo, pieza: f.pieza, angulo: f.angulo, buf: new Uint8Array(arrBuf), ext });
+                    } catch (e) { /* sin internet: ya se aplicó igual desde la URL remota */ }
+                }
+                Object.keys(holoDanado).forEach(k => holoAplicarColor(k, !!holoDanado[k]));
+                holoRenderListaPiezas();
+            } catch (e) { console.warn('No se pudieron cargar las piezas del holograma:', e.message); }
+        }
+
+        // --- Modo guiado: pide las 6 caras en orden, con instrucciones, para que la
+        // pieza quede completa (esto NO es reconstrucción 3D: son 6 fotos planas). ---
+        const HOLO_SECUENCIA_GUIADA = [
+            { angulo: 'frente', label: 'Frente', instruccion: 'Mostrá la pieza de frente a la cámara.' },
+            { angulo: 'atras', label: 'Atrás', instruccion: 'Dale la vuelta a la pieza y mostrá el reverso.' },
+            { angulo: 'arriba', label: 'Borde superior', instruccion: 'Girá y mostrá el borde de arriba.' },
+            { angulo: 'abajo', label: 'Borde inferior', instruccion: 'Girá y mostrá el borde de abajo.' },
+            { angulo: 'izquierda', label: 'Lado izquierdo', instruccion: 'Girá y mostrá el lado izquierdo.' },
+            { angulo: 'derecha', label: 'Lado derecho', instruccion: 'Girá y mostrá el lado derecho.' }
+        ];
+        let holoGuiadoIndice = 0;
+
+        function holoToggleModoGuiado() {
+            const activo = document.getElementById('holo-guiado-check').checked;
+            document.getElementById('holo-guiado-panel').style.display = activo ? 'block' : 'none';
+            document.getElementById('holo-manual-panel').style.display = activo ? 'none' : 'block';
+            document.getElementById('holo-guiado-btn-saltar').style.display = activo ? 'inline-block' : 'none';
+            document.getElementById('holo-guiado-btn-terminar').style.display = (activo && holoGuiadoIndice > 0) ? 'inline-block' : 'none';
+            if (activo) holoActualizarPanelGuiado();
+        }
+
+        function holoActualizarPanelGuiado() {
+            const paso = HOLO_SECUENCIA_GUIADA[holoGuiadoIndice];
+            document.getElementById('holo-guiado-titulo').textContent = `Paso ${holoGuiadoIndice + 1} de 6: ${paso.label}`;
+            document.getElementById('holo-guiado-contador').textContent = `${holoGuiadoIndice}/6 guardadas`;
+            document.getElementById('holo-guiado-barra').style.width = `${((holoGuiadoIndice) / 6) * 100 + 2}%`;
+            document.getElementById('holo-guiado-instruccion').textContent = paso.instruccion;
+            document.getElementById('holo-guiado-btn-terminar').style.display = holoGuiadoIndice > 0 ? 'inline-block' : 'none';
+        }
+
+        // Limpia solo la captura actual (foto/video/anotación/nota), sin cerrar el
+        // modal ni tocar el nombre de la pieza — para pasar al siguiente ángulo.
+        function holoResetCapturaParcial() {
+            holoApagarCamaraFoto();
+            document.getElementById('holo-foto-preview').style.display = 'none';
+            document.getElementById('holo-foto-preview-video').style.display = 'none';
+            document.getElementById('holo-foto-placeholder').style.display = 'block';
+            document.getElementById('holo-foto-btn-retomar').style.display = 'none';
+            document.getElementById('holo-foto-btn-guardar').style.display = 'none';
+            document.getElementById('holo-foto-danado-check').checked = false;
+            document.getElementById('holo-nota-texto').value = '';
+            document.getElementById('holo-nota-estado').textContent = '';
+            holoFotoResultado = null;
+            holoAnotacionCaja = null;
+            document.getElementById('holo-foto-anotacion-canvas').style.display = 'none';
+        }
+
+        function holoAvanzarGuiado() {
+            holoGuiadoIndice++;
+            document.getElementById('holo-foto-pieza-input').readOnly = true;
+            if (holoGuiadoIndice >= HOLO_SECUENCIA_GUIADA.length) {
+                showToast('¡Las 6 caras de la pieza quedaron guardadas! 🎉', 'success');
+                holoCerrarModalFoto();
+                return;
+            }
+            holoResetCapturaParcial();
+            holoActualizarPanelGuiado();
+        }
+
+        function holoSaltarCaraGuiada() {
+            holoAvanzarGuiado();
+        }
+
+        function holoTerminarGuiado() {
+            showToast(`Guardaste ${holoGuiadoIndice} de 6 caras de esta pieza.`, 'success');
+            holoCerrarModalFoto();
+        }
+
+        async function holoAbrirModalFoto() {
+            if (!window.holoModeloActual) {
+                showToast('Primero carga una orden con el modelo del equipo', 'warning');
+                return;
+            }
+            holoFotoResultado = null;
+            holoGuiadoIndice = 0;
+            document.getElementById('holo-foto-pieza-input').readOnly = false;
+            document.getElementById('holo-foto-pieza-input').value = holoSugerirNombrePieza();
+            document.getElementById('holo-guiado-check').checked = true;
+            document.getElementById('holo-foto-angulo-select').value = 'frente';
+            document.getElementById('holo-foto-etapa-select').value = 'actual';
+            document.getElementById('holo-nota-texto').value = '';
+            document.getElementById('holo-nota-estado').textContent = '';
+            holoToggleModoGuiado();
+            document.getElementById('modal-holo-foto').style.display = 'flex';
+
+            // Sugerencias de nombres ya usados por cualquier técnico (para no duplicar
+            // "Flex de Carga" / "flex carga" / etc. sin querer)
+            try {
+                const res = await ipcRenderer.invoke('sugerencias-nombres-pieza');
+                const datalist = document.getElementById('holo-piezas-sugerencias');
+                if (datalist && res && res.nombres) {
+                    datalist.innerHTML = res.nombres.map(n => `<option value="${n.replace(/"/g, '')}">`).join('');
+                }
+            } catch (e) { /* sin internet: el input libre sigue funcionando igual */ }
+        }
+
+        function holoCerrarModalFoto() {
+            holoApagarCamaraFoto();
+            if (holoFotoMediaRecorder && holoFotoMediaRecorder.state !== 'inactive') holoFotoMediaRecorder.stop();
+            document.getElementById('modal-holo-foto').style.display = 'none';
+            document.getElementById('holo-foto-preview').style.display = 'none';
+            document.getElementById('holo-foto-preview-video').style.display = 'none';
+            document.getElementById('holo-foto-placeholder').style.display = 'block';
+            document.getElementById('holo-foto-btn-retomar').style.display = 'none';
+            document.getElementById('holo-foto-btn-guardar').style.display = 'none';
+            document.getElementById('holo-foto-btn-grabar').style.display = 'none';
+            document.getElementById('holo-foto-btn-detener').style.display = 'none';
+            document.getElementById('holo-foto-rec-indicator').style.display = 'none';
+            document.getElementById('holo-foto-btn-cam').innerText = 'Activar Cámara';
+            document.getElementById('holo-foto-danado-check').checked = false;
+            holoFotoResultado = null;
+            holoAnotacionCaja = null;
+            document.getElementById('holo-foto-anotacion-canvas').style.display = 'none';
+            if (holoNotaRecorder && holoNotaRecorder.state === 'recording') holoNotaRecorder.stop();
+            holoGuiadoIndice = 0;
+            document.getElementById('holo-foto-pieza-input').readOnly = false;
+        }
+
+        // =====================================================================
+        // ANOTACIÓN DE DAÑO: dataset base para una futura IA de detección de fallas.
+        // Hoy esto SOLO recolecta y etiqueta fotos (bueno/dañado + caja del daño). No
+        // hay ningún modelo entrenado ni inferencia real todavía — eso requeriría
+        // miles de fotos anotadas y un pipeline aparte (YOLO/TensorFlow/PyTorch) fuera
+        // de este programa. Esto es el punto de partida de ese dataset.
+        // =====================================================================
+        let holoAnotacionCaja = null; // {x,y,w,h} normalizado 0-1, o null si no se marcó nada
+        let holoAnotacionDragStart = null;
+
+        function holoToggleAnotacion() {
+            const activa = document.getElementById('holo-foto-danado-check').checked
+                && holoFotoResultado && holoFotoResultado.tipo === 'foto';
+            const canvas = document.getElementById('holo-foto-anotacion-canvas');
+            canvas.style.display = activa ? 'block' : 'none';
+            if (activa) {
+                canvas.width = canvas.clientWidth;
+                canvas.height = canvas.clientHeight;
+                holoAnotacionCaja = null;
+                holoRedibujarAnotacion();
+            }
+        }
+
+        function holoRedibujarAnotacion() {
+            const canvas = document.getElementById('holo-foto-anotacion-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!holoAnotacionCaja) return;
+            const { x, y, w, h } = holoAnotacionCaja;
+            ctx.strokeStyle = '#ff3b4e'; ctx.lineWidth = 2;
+            ctx.strokeRect(x * canvas.width, y * canvas.height, w * canvas.width, h * canvas.height);
+            ctx.fillStyle = 'rgba(255,59,78,0.18)';
+            ctx.fillRect(x * canvas.width, y * canvas.height, w * canvas.width, h * canvas.height);
+        }
+
+        (() => {
+            const canvas = document.getElementById('holo-foto-anotacion-canvas');
+            canvas.addEventListener('pointerdown', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                holoAnotacionDragStart = { x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height };
+            });
+            canvas.addEventListener('pointermove', (e) => {
+                if (!holoAnotacionDragStart) return;
+                const rect = canvas.getBoundingClientRect();
+                const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+                holoAnotacionCaja = {
+                    x: Math.min(holoAnotacionDragStart.x, nx), y: Math.min(holoAnotacionDragStart.y, ny),
+                    w: Math.abs(nx - holoAnotacionDragStart.x), h: Math.abs(ny - holoAnotacionDragStart.y)
+                };
+                holoRedibujarAnotacion();
+            });
+            ['pointerup', 'pointerleave'].forEach(ev => canvas.addEventListener(ev, () => { holoAnotacionDragStart = null; }));
+        })();
+
+        function holoCambiarModo(modo) {
+            holoFotoModoActual = modo;
+            document.getElementById('holo-modo-foto').classList.toggle('holo-modo-activo', modo === 'foto');
+            document.getElementById('holo-modo-video').classList.toggle('holo-modo-activo', modo === 'video');
+            // Si la cámara ya está prendida, mostrar el botón de captura correspondiente
+            if (holoFotoStream) {
+                document.getElementById('holo-foto-btn-tomar').style.display = (modo === 'foto') ? 'inline-block' : 'none';
+                document.getElementById('holo-foto-btn-grabar').style.display = (modo === 'video') ? 'inline-block' : 'none';
+            }
+        }
+
+        async function holoToggleCamara() {
+            const video = document.getElementById('holo-foto-video');
+            const placeholder = document.getElementById('holo-foto-placeholder');
+            const btn = document.getElementById('holo-foto-btn-cam');
+            if (!holoFotoStream) {
+                try {
+                    holoFotoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    video.srcObject = holoFotoStream;
+                    video.style.display = 'block';
+                    placeholder.style.display = 'none';
+                    document.getElementById('holo-foto-btn-tomar').style.display = (holoFotoModoActual === 'foto') ? 'inline-block' : 'none';
+                    document.getElementById('holo-foto-btn-grabar').style.display = (holoFotoModoActual === 'video') ? 'inline-block' : 'none';
+                    btn.innerText = 'Apagar Cámara';
+                } catch (e) { showToast('No se pudo acceder a la cámara', 'danger'); }
+            } else {
+                holoApagarCamaraFoto();
+                btn.innerText = 'Activar Cámara';
+            }
+        }
+
+        function holoApagarCamaraFoto() {
+            const video = document.getElementById('holo-foto-video');
+            if (holoFotoStream) { holoFotoStream.getTracks().forEach(t => t.stop()); holoFotoStream = null; }
+            video.style.display = 'none';
+            document.getElementById('holo-foto-btn-tomar').style.display = 'none';
+            document.getElementById('holo-foto-btn-grabar').style.display = 'none';
+        }
+
+        function holoTomarFoto() {
+            const video = document.getElementById('holo-foto-video');
+            const canvas = document.getElementById('holo-foto-canvas');
+            const img = document.getElementById('holo-foto-preview');
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            img.src = dataUrl;
+            img.style.display = 'block';
+            holoFotoResultado = { dataUrl, ext: 'jpg', tipo: 'foto' };
+            holoApagarCamaraFoto();
+            document.getElementById('holo-foto-btn-cam').innerText = 'Activar Cámara';
+            document.getElementById('holo-foto-btn-retomar').style.display = 'inline-block';
+            document.getElementById('holo-foto-btn-guardar').style.display = 'inline-block';
+            holoToggleAnotacion();
+        }
+
+        function holoIniciarGrabacion() {
+            if (!holoFotoStream) return;
+            holoFotoVideoChunks = [];
+            const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+            holoFotoMediaRecorder = new MediaRecorder(holoFotoStream, { mimeType });
+            holoFotoMediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) holoFotoVideoChunks.push(e.data); };
+            holoFotoMediaRecorder.onstop = () => {
+                const blob = new Blob(holoFotoVideoChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const previewVideo = document.getElementById('holo-foto-preview-video');
+                previewVideo.src = url;
+                previewVideo.style.display = 'block';
+                holoFotoResultado = { blob, ext: 'webm', tipo: 'video' };
+                holoApagarCamaraFoto();
+                document.getElementById('holo-foto-btn-cam').innerText = 'Activar Cámara';
+                document.getElementById('holo-foto-btn-detener').style.display = 'none';
+                document.getElementById('holo-foto-rec-indicator').style.display = 'none';
+                document.getElementById('holo-foto-btn-retomar').style.display = 'inline-block';
+                document.getElementById('holo-foto-btn-guardar').style.display = 'inline-block';
+            };
+            holoFotoMediaRecorder.start();
+            document.getElementById('holo-foto-btn-grabar').style.display = 'none';
+            document.getElementById('holo-foto-btn-detener').style.display = 'inline-block';
+            document.getElementById('holo-foto-rec-indicator').style.display = 'block';
+        }
+
+        function holoDetenerGrabacion() {
+            if (holoFotoMediaRecorder && holoFotoMediaRecorder.state !== 'inactive') holoFotoMediaRecorder.stop();
+        }
+
+        function holoRetomarFoto() {
+            document.getElementById('holo-foto-preview').style.display = 'none';
+            document.getElementById('holo-foto-preview-video').style.display = 'none';
+            document.getElementById('holo-foto-btn-retomar').style.display = 'none';
+            document.getElementById('holo-foto-btn-guardar').style.display = 'none';
+            document.getElementById('holo-foto-anotacion-canvas').style.display = 'none';
+            holoAnotacionCaja = null;
+            holoFotoResultado = null;
+            holoToggleCamara();
+        }
+
+        async function holoGuardarFoto() {
+            const modelo = window.holoModeloActual;
+            if (!modelo) return showToast('Primero carga una orden con modelo de equipo', 'warning');
+            if (!holoFotoResultado) return showToast('Toma una foto o graba un video primero', 'warning');
+
+            const pieza = document.getElementById('holo-foto-pieza-input').value.trim();
+            if (!pieza) return showToast('Escribe el nombre de la pieza (ej: Flex de carga)', 'warning');
+            const guiado = document.getElementById('holo-guiado-check').checked;
+            const angulo = guiado ? HOLO_SECUENCIA_GUIADA[holoGuiadoIndice].angulo : document.getElementById('holo-foto-angulo-select').value;
+            const etapa = document.getElementById('holo-foto-etapa-select').value;
+            const notas = document.getElementById('holo-nota-texto').value.trim();
+            const { dataUrl, blob, ext, tipo } = holoFotoResultado;
+            const danado = document.getElementById('holo-foto-danado-check').checked;
+            const cajaDanio = (danado && tipo === 'foto') ? holoAnotacionCaja : null;
+
+            const btnGuardar = document.getElementById('holo-foto-btn-guardar');
+            btnGuardar.disabled = true;
+            showToast(tipo === 'video' ? 'Guardando video...' : 'Guardando foto...', 'info');
+
+            try {
+                const arrBuf = blob ? await blob.arrayBuffer() : await (await fetch(dataUrl)).arrayBuffer();
+                const buf = new Uint8Array(arrBuf);
+                const empresaId = localStorage.getItem('miEmpresaId');
+                const usuario = localStorage.getItem('usuarioLogin');
+                const previewUrl = dataUrl || URL.createObjectURL(blob);
+
+                // 1) Caché local inmediato: se ve al toque y funciona sin internet
+                await ipcRenderer.invoke('guardar-foto-pieza-cache', { modelo, pieza, angulo, etapa, buf, ext });
+                // "Antes"/"Después" son solo para comparación (ver 🔀 en la lista de piezas):
+                // no tocan el holograma en vivo, que solo muestra la foto "Actual".
+                if (etapa === 'actual') {
+                    holoAplicarMediaDesdeURL(pieza, angulo, previewUrl, tipo);
+                    const piezaKey = holoNormalizarPieza(pieza);
+                    // OR, no reemplazo: en modo guiado se capturan varias caras de la misma
+                    // pieza, y si UNA cara está dañada la pieza entera debe seguir marcada
+                    // aunque las demás caras se guarden sin el check tildado.
+                    holoDanado[piezaKey] = !!holoDanado[piezaKey] || danado;
+                    holoAplicarColor(piezaKey, holoDanado[piezaKey]);
+                    holoRenderListaPiezas();
+                }
+
+                // 2) Sube a la librería compartida para que todos los usuarios se beneficien
+                // (incluye si está dañada + dónde, para ir armando el dataset de una futura IA)
+                const res = await ipcRenderer.invoke('subir-foto-pieza', { modelo, pieza, angulo, etapa, buf, ext, empresaId, usuario, danado, cajaDanio, notas });
+                if (res && res.success) {
+                    showToast((tipo === 'video' ? 'Video' : 'Foto') + ' guardado y compartido con la comunidad ✅', 'success');
+                } else {
+                    showToast('Guardado en esta PC (no se pudo compartir: ' + (res && res.msg ? res.msg : 'sin internet') + ')', 'warning');
+                }
+            } catch (e) {
+                showToast('Error guardando: ' + e.message, 'danger');
+            }
+
+            btnGuardar.disabled = false;
+            if (guiado) holoAvanzarGuiado(); else holoCerrarModalFoto();
+        }
+
+        // =====================================================================
+        // FUNCIONES PREMIUM: inteligencia comunitaria, reportes, productividad
+        // =====================================================================
+
+        // --- Estadísticas comunitarias: qué se marca dañado más seguido en este modelo ---
+        async function holoAplicarEstadisticasComunidad(modelo) {
+            const cont = document.getElementById('holo-stats-comunidad');
+            if (!cont) return;
+            cont.style.display = 'none';
+            if (!modelo) return;
+            try {
+                const res = await ipcRenderer.invoke('estadisticas-fallas-modelo', { modelo });
+                if (!res.success || !res.stats || !res.stats.length) return;
+                const top = res.stats[0];
+                cont.innerHTML = `📊 La comunidad reporta <b>${top.pieza}</b> dañada en el <b>${top.porcentaje}%</b> de las fotos de este modelo (${top.danadas}/${top.total}).` +
+                    (res.stats.length > 1 ? ` También: ${res.stats.slice(1).map(s => `${s.pieza} (${s.porcentaje}%)`).join(', ')}.` : '');
+                cont.style.display = 'block';
+            } catch (e) { /* sin datos o sin internet: no es crítico, se omite en silencio */ }
+        }
+
+        // --- Historial privado: solo lo que TU taller documentó de este modelo ---
+        async function holoAbrirHistorialTaller() {
+            const modelo = window.holoModeloActual;
+            if (!modelo) return showToast('Primero carga una orden con modelo de equipo', 'warning');
+            document.getElementById('holo-historial-modelo-nombre').textContent = modelo;
+            const cont = document.getElementById('holo-historial-lista');
+            cont.innerHTML = '<span style="color:#888; font-size:12px;">Cargando...</span>';
+            document.getElementById('modal-holo-historial').style.display = 'flex';
+
+            const empresaId = localStorage.getItem('miEmpresaId');
+            const res = await ipcRenderer.invoke('historial-modelo-taller', { modelo, empresaId });
+            if (!res.success || !res.piezas.length) {
+                cont.innerHTML = '<span style="color:#666; font-size:12px;">Todavía no hay capturas de este modelo en tu taller.</span>';
+                return;
+            }
+            cont.innerHTML = res.piezas.map(p => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <span>${p.danado ? '🔴' : '🔵'} ${p.pieza}</span>
+                    <span style="color:#666; font-size:11px;">${new Date(p.creado_en).toLocaleDateString()}</span>
+                </div>
+            `).join('');
+        }
+
+        // --- Abrir directo un modelo que ya tiene piezas guardadas (sin orden) ---
+        async function holoAbrirSelectorModelos() {
+            const cont = document.getElementById('holo-modelos-lista');
+            document.getElementById('holo-modelos-filtro').value = '';
+            cont.innerHTML = '<span style="color:#888; font-size:12px;">Cargando...</span>';
+            document.getElementById('modal-holo-modelos').style.display = 'flex';
+
+            const res = await ipcRenderer.invoke('listar-modelos-con-fotos');
+            window.holoModelosDisponibles = (res && res.modelos) || [];
+            holoRenderListaModelos(window.holoModelosDisponibles);
+        }
+
+        function holoRenderListaModelos(modelos) {
+            const cont = document.getElementById('holo-modelos-lista');
+            if (!modelos.length) {
+                cont.innerHTML = '<span style="color:#666; font-size:12px;">Todavía no hay ningún modelo con piezas guardadas en la librería.</span>';
+                return;
+            }
+            cont.innerHTML = modelos.map(m => `
+                <div onclick="holoSeleccionarModeloGuardado(${JSON.stringify(m.modelo).replace(/"/g, '&quot;')})"
+                    style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-radius:8px; cursor:pointer; margin-bottom:4px; border:1px solid transparent;"
+                    onmouseover="this.style.background='rgba(63,216,255,0.08)'; this.style.borderColor='#3fd8ff';"
+                    onmouseout="this.style.background='transparent'; this.style.borderColor='transparent';">
+                    <span>📱 ${m.modelo}</span>
+                    <span style="font-size:11px; color:#888;">${m.piezas} pieza${m.piezas === 1 ? '' : 's'}</span>
+                </div>
+            `).join('');
+        }
+
+        function holoFiltrarListaModelos(texto) {
+            const t = texto.toLowerCase();
+            holoRenderListaModelos((window.holoModelosDisponibles || []).filter(m => m.modelo.toLowerCase().includes(t)));
+        }
+
+        function holoSeleccionarModeloGuardado(modelo) {
+            document.getElementById('modal-holo-modelos').style.display = 'none';
+            holoCargarFotosDelModelo(modelo);
+            showToast(`Abriendo holograma de "${modelo}"`, 'success');
+        }
+
+        // --- Buscar piezas en modelos similares (referencia de solo lectura) ---
+        function holoAbrirModelosSimilares() {
+            document.getElementById('holo-similares-modelo-input').value = '';
+            document.getElementById('holo-similares-resultados').innerHTML = '';
+            document.getElementById('modal-holo-similares').style.display = 'flex';
+        }
+
+        async function holoBuscarModelosSimilares() {
+            const texto = document.getElementById('holo-similares-modelo-input').value.trim();
+            const cont = document.getElementById('holo-similares-resultados');
+            if (!texto) return;
+            if (texto.length < 3) {
+                cont.innerHTML = '<span style="color:#666; font-size:12px;">Escribe al menos 3 letras.</span>';
+                return;
+            }
+            cont.innerHTML = '<span style="color:#888; font-size:12px;">Buscando...</span>';
+            // Búsqueda difusa: alcanza con que el texto esté contenido en el modelo
+            // (no hace falta escribirlo exactamente igual a como lo puso otro técnico).
+            const res = await ipcRenderer.invoke('buscar-piezas-similares', { texto });
+            if (!res.success || !res.fotos.length) {
+                cont.innerHTML = '<span style="color:#666; font-size:12px;">No hay fotos de ningún taller que coincidan con ese texto todavía.</span>';
+                return;
+            }
+            cont.innerHTML = res.fotos.filter(f => f.tipo === 'foto').map(f => `
+                <div style="text-align:center;">
+                    <img src="${f.foto_url}" style="width:100%; height:80px; object-fit:cover; border-radius:6px; border:1px solid ${f.danado ? '#ff3b4e' : '#3fd8ff'};">
+                    <div style="font-size:10px; color:#aaa; margin-top:2px;">${f.pieza}</div>
+                    <div style="font-size:9px; color:#666;">${f.modelo_original || ''}</div>
+                </div>
+            `).join('');
+        }
+
+        // --- Moderación básica: reportar una foto mal subida por otro taller ---
+        async function holoReportarPieza(piezaKey) {
+            const p = holoParts[piezaKey];
+            if (!p) return;
+            const modelo = window.holoModeloActual;
+            if (!modelo) return;
+            if (!confirm(`¿Reportar la foto de "${p.nombre}" como incorrecta/mal etiquetada?`)) return;
+            await ipcRenderer.invoke('reportar-pieza-modelo', { modelo, pieza: p.nombre, angulo: 'frente' });
+            await ipcRenderer.invoke('reportar-pieza-modelo', { modelo, pieza: p.nombre, angulo: 'atras' });
+            showToast('Foto reportada. Gracias por ayudar a mantener la calidad de la librería.', 'success');
+        }
+
+        // --- Comparar Antes / Después de una pieza ---
+        async function holoCompararPieza(piezaKey) {
+            const p = holoParts[piezaKey];
+            if (!p) return;
+            const modelo = window.holoModeloActual;
+            document.getElementById('holo-comparar-pieza-nombre').textContent = p.nombre;
+            document.getElementById('modal-holo-comparar').style.display = 'flex';
+
+            const renderLado = async (etapa, contId) => {
+                const cont = document.getElementById(contId);
+                cont.innerHTML = 'Cargando...';
+                const res = await ipcRenderer.invoke('buscar-fotos-modelo', { modelo, etapa });
+                const fila = (res.fotos || []).find(f => holoNormalizarPieza(f.pieza) === piezaKey && f.tipo === 'foto');
+                cont.innerHTML = fila
+                    ? `<img src="${fila.foto_url}" style="width:100%; height:200px; object-fit:contain; border-radius:8px;">`
+                    : 'Sin foto';
+            };
+            renderLado('antes', 'holo-comparar-antes');
+            renderLado('despues', 'holo-comparar-despues');
+        }
+
+        // --- Reporte PDF del desarme completo (reusa el motor de impresión de la app) ---
+        async function holoGenerarReporte() {
+            const modelo = window.holoModeloActual;
+            if (!modelo) return showToast('Primero carga una orden con modelo de equipo', 'warning');
+            if (Object.keys(holoParts).length === 0) return showToast('Todavía no hay piezas fotografiadas para este equipo', 'warning');
+
+            showToast('Generando reporte...', 'info');
+            const res = await ipcRenderer.invoke('buscar-fotos-modelo', { modelo });
+            const fotos = res.fotos || [];
+
+            const filasHtml = Object.keys(holoParts).map(key => {
+                const p = holoParts[key];
+                const propias = fotos.filter(f => holoNormalizarPieza(f.pieza) === key);
+                const imgs = propias.filter(f => f.tipo === 'foto').map(f => `<img src="${f.foto_url}" style="width:150px; height:150px; object-fit:cover; border-radius:6px; margin-right:8px; border:2px solid ${f.danado ? '#ff3b4e' : '#3fd8ff'};">`).join('');
+                const notas = propias.map(f => f.notas).filter(Boolean).join(' / ');
+                return `
+                    <div style="page-break-inside:avoid; margin-bottom:20px; padding-bottom:15px; border-bottom:1px solid #ddd;">
+                        <h3 style="margin:0 0 8px; color:#222;">${holoDanado[key] ? '🔴' : '🔵'} ${p.nombre}</h3>
+                        <div style="display:flex; flex-wrap:wrap;">${imgs || '<span style="color:#999; font-size:12px;">Sin foto (solo video, o pendiente)</span>'}</div>
+                        ${notas ? `<p style="font-size:12px; color:#555; margin-top:8px;"><b>Nota:</b> ${notas}</p>` : ''}
+                    </div>`;
+            }).join('');
+
+            const html = `<!doctype html><html><head><meta charset="utf-8"><title>Reporte de desarme</title></head>
+                <body style="font-family:Arial,sans-serif; padding:30px; color:#222;">
+                    <h1 style="color:#7c3aed;">Reporte de Desarme</h1>
+                    <p><b>Equipo:</b> ${modelo}<br><b>Fecha:</b> ${new Date().toLocaleString()}</p>
+                    <hr style="margin:20px 0;">
+                    ${filasHtml}
+                </body></html>`;
+
+            ipcRenderer.send('imprimir-documento', { html, modo: 'pdf', origen: 'holograma-reporte', filename: `desarme_${holoNormalizarPieza(modelo).toLowerCase().replace(/\s+/g, '_')}.pdf` });
+        }
+
+        ipcRenderer.on('documento-impreso', (e, res) => {
+            if (res && res.origen === 'holograma-reporte' && res.modo === 'pdf' && !res.cancelado) {
+                if (res.success) showToast('Reporte PDF guardado ✅', 'success');
+                else if (res.msg) showToast('No se pudo generar el reporte: ' + res.msg, 'danger');
+            }
+        });
+
+        // --- Captura de pantalla del holograma ---
+        function holoCapturarPantalla() {
+            if (!holoRenderer) return;
+            holoRenderer.render(holoScene, holoCamera);
+            const dataUrl = holoRenderer.domElement.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = `holograma_${Date.now()}.png`;
+            link.click();
+            showToast('Imagen del holograma guardada', 'success');
+        }
+
+        // --- Sugerir nombre de pieza según la falla reportada (editable, no automático a ciegas) ---
+        const HOLO_SUGERENCIAS_POR_FALLA = [
+            { claves: ['no carga', 'puerto', 'usb', 'conector de carga'], sugerencia: 'Flex de Carga' },
+            { claves: ['volumen'], sugerencia: 'Flex de Volumen' },
+            { claves: ['pantalla', 'táctil', 'tactil', 'display', 'rota', 'rayada'], sugerencia: 'Pantalla' },
+            { claves: ['bateria', 'batería', 'hincha', 'apaga solo'], sugerencia: 'Batería' },
+            { claves: ['camara', 'cámara'], sugerencia: 'Cámara' },
+            { claves: ['no enciende', 'no prende', 'corto', 'mojado', 'agua'], sugerencia: 'Placa' },
+            { claves: ['tapa', 'trasera', 'cristal trasero'], sugerencia: 'Tapa Trasera' }
+        ];
+
+        function holoSugerirNombrePieza() {
+            const fallaEl = document.getElementById('lab-falla');
+            const texto = (fallaEl ? fallaEl.textContent : '').toLowerCase();
+            const match = HOLO_SUGERENCIAS_POR_FALLA.find(s => s.claves.some(c => texto.includes(c)));
+            return match ? match.sugerencia : '';
+        }
+
+        // --- Nota de voz transcrita por IA (Groq Whisper) ---
+        let holoNotaStream = null;
+        let holoNotaRecorder = null;
+        let holoNotaChunks = [];
+
+        async function holoGrabarNotaVoz() {
+            const btn = document.getElementById('holo-nota-btn-grabar');
+            const estado = document.getElementById('holo-nota-estado');
+            if (holoNotaRecorder && holoNotaRecorder.state === 'recording') {
+                holoNotaRecorder.stop();
+                return;
+            }
+            try {
+                holoNotaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                holoNotaChunks = [];
+                holoNotaRecorder = new MediaRecorder(holoNotaStream);
+                holoNotaRecorder.ondataavailable = (e) => { if (e.data.size > 0) holoNotaChunks.push(e.data); };
+                holoNotaRecorder.onstop = async () => {
+                    holoNotaStream.getTracks().forEach(t => t.stop());
+                    btn.innerHTML = '<i class="bx bx-microphone"></i> Nota de voz';
+                    estado.textContent = 'Transcribiendo...';
+                    const blob = new Blob(holoNotaChunks, { type: 'audio/webm' });
+                    const buf = new Uint8Array(await blob.arrayBuffer());
+                    const res = await ipcRenderer.invoke('transcribir-audio-pieza', { buf, ext: 'webm' });
+                    if (res.success) {
+                        const textarea = document.getElementById('holo-nota-texto');
+                        textarea.value = (textarea.value ? textarea.value + ' ' : '') + res.texto;
+                        estado.textContent = '';
+                    } else {
+                        estado.textContent = 'No se pudo transcribir: ' + (res.msg || 'error');
+                    }
+                };
+                holoNotaRecorder.start();
+                btn.innerHTML = '<i class="bx bx-stop-circle"></i> Detener';
+                estado.textContent = 'Grabando...';
+            } catch (e) {
+                showToast('No se pudo acceder al micrófono', 'danger');
+            }
+        }
+
+        // --- Atajos de teclado (solo cuando Laboratorio está visible) ---
+        document.addEventListener('keydown', (e) => {
+            const wrap = document.getElementById('holo-canvas-wrap');
+            if (!wrap || !holoCamera || !holoControls || !holoGroup) return;
+            const tag = ((document.activeElement && document.activeElement.tagName) || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+            const labView = document.getElementById('laboratorio');
+            if (!labView || labView.style.display === 'none') return;
+
+            const paso = 0.12;
+            if (e.key === 'ArrowLeft') { holoGroup.rotation.y -= paso; }
+            else if (e.key === 'ArrowRight') { holoGroup.rotation.y += paso; }
+            else if (e.key === 'ArrowUp') { holoGroup.rotation.x = Math.max(-1, holoGroup.rotation.x - paso); }
+            else if (e.key === 'ArrowDown') { holoGroup.rotation.x = Math.min(1, holoGroup.rotation.x + paso); }
+            else if (e.key === '+' || e.key === '=') { holoCamera.position.multiplyScalar(0.9); }
+            else if (e.key === '-' || e.key === '_') { holoCamera.position.multiplyScalar(1.1); }
+            else if (e.key === ' ') {
+                const slider = document.getElementById('holo-explode');
+                if (!slider) return;
+                const nuevo = Number(slider.value) > 0 ? 0 : 100;
+                slider.value = nuevo;
+                holoSetExplode(nuevo);
+            } else { return; }
+            e.preventDefault();
         });
 
         // 5. Guardar la Bitácora y cambiar el estado a Reparado
@@ -9376,7 +11117,23 @@
             document.getElementById('grab-aviso').style.display = 'none';
             document.getElementById('grab-btn-encender').innerHTML = "<i class='bx bx-power-off'></i> Apagar";
             document.getElementById('grab-btn-rec').disabled = false;
+            document.getElementById('grab-btn-live').disabled = false; // antes se quedaba deshabilitado para siempre
             dibujarBucle();
+        }
+
+        // Panel de estado visible en la propia pantalla de grabación (no un toast
+        // que desaparece): "info" = azul, "live" = rojo parpadeante, "error" = rojo fijo.
+        function mostrarEstadoTransmision(mensaje, tipo) {
+            const el = document.getElementById('grab-estado-transmision');
+            if (!el) return;
+            if (!mensaje) { el.style.display = 'none'; return; }
+            const estilos = {
+                info: 'background:rgba(59,130,246,0.12); color:#93c5fd; border:1px solid rgba(59,130,246,0.3);',
+                live: 'background:rgba(239,68,68,0.14); color:#fca5a5; border:1px solid rgba(239,68,68,0.4); animation: parpadeoRec 1.5s infinite;',
+                error: 'background:rgba(239,68,68,0.12); color:#fca5a5; border:1px solid rgba(239,68,68,0.4);'
+            };
+            el.style.cssText = 'display:block; margin-top:10px; padding:12px 14px; border-radius:8px; font-size:13px; font-weight:700; ' + (estilos[tipo] || estilos.info);
+            el.innerHTML = mensaje;
         }
 
         function apagarEstudio() {
@@ -9395,6 +11152,9 @@
             if (btnE) btnE.innerHTML = "<i class='bx bx-power-off'></i> Encender";
             const btnR = document.getElementById('grab-btn-rec');
             if (btnR) btnR.disabled = true;
+            const btnL = document.getElementById('grab-btn-live');
+            if (btnL) btnL.disabled = true;
+            mostrarEstadoTransmision(null);
         }
 
         function cambiarEscena(nombre) {
@@ -9567,29 +11327,32 @@
             if (GRAB.transmitiendo) {
                 GRAB.transmitiendo = false;
                 if (GRAB.canalEnvivo) {
-                    await supabase.removeChannel(GRAB.canalEnvivo);
+                    await supabaseChat.removeChannel(GRAB.canalEnvivo);
                     GRAB.canalEnvivo = null;
                 }
                 for (let socketId in GRAB.peerConnections) {
                     GRAB.peerConnections[socketId].close();
                 }
                 GRAB.peerConnections = {};
-                
-                // Actualizar DB para indicar que ya no estamos en vivo
+
+                // Actualizar DB para indicar que ya no estamos en vivo (via IPC:
+                // la llave anon del renderer no tiene permiso de escritura en "ordenes").
                 if (ordenId) {
-                    supabase.from('ordenes').update({ modo_transmision: null }).eq('id', ordenId).then();
+                    ipcRenderer.invoke('actualizar-modo-transmision', { ordenId, modo: null });
                 }
 
                 btn.innerHTML = "<i class='bx bx-broadcast'></i> En Vivo";
                 btn.style.background = "linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%)";
                 btn.style.animation = "";
                 showToast("Transmisión finalizada", "info");
+                mostrarEstadoTransmision(null);
                 return;
             }
 
             // ---- Iniciar Transmisión ----
-            if (!GRAB.encendido) { showToast("Primero enciende el estudio.", "error"); return; }
-            if (!ordenId) { showToast("Debes vincular una orden para transmitir en vivo.", "warning"); return; }
+            if (!GRAB.encendido) { mostrarEstadoTransmision("⚠️ Primero enciende el estudio.", "error"); return; }
+            if (!ordenId) { mostrarEstadoTransmision("⚠️ Debes vincular una orden para transmitir en vivo.", "error"); return; }
+            if (!supabaseChat) { mostrarEstadoTransmision("⚠️ Conexión en tiempo real no disponible todavía, intenta de nuevo en unos segundos.", "error"); return; }
 
             try {
                 // Capturar el canvas a 30fps
@@ -9598,14 +11361,19 @@
                 if (GRAB.streams.mic) GRAB.streams.mic.getAudioTracks().forEach(t => stream.addTrack(t));
                 GRAB.currentLiveStream = stream;
 
-                showToast("Iniciando servidor de transmisión...", "info");
-                
-                // Actualizar estado en DB
-                await supabase.from('ordenes').update({ modo_transmision: 'En Vivo' }).eq('id', ordenId);
+                mostrarEstadoTransmision("⏳ Iniciando servidor de transmisión...", "info");
+
+                // Actualizar estado en DB (via IPC con la llave de servicio: la
+                // llave anon del renderer no tiene permiso de escritura en "ordenes").
+                const resModo = await ipcRenderer.invoke('actualizar-modo-transmision', { ordenId, modo: 'En Vivo' });
+                if (!resModo || !resModo.success) {
+                    mostrarEstadoTransmision("❌ No se pudo vincular la transmisión a la orden: " + ((resModo && resModo.msg) || 'error'), "error");
+                    return;
+                }
 
                 // Configurar canal de Supabase
                 const roomName = 'reparacion_' + ordenId;
-                GRAB.canalEnvivo = supabase.channel(roomName);
+                GRAB.canalEnvivo = supabaseChat.channel(roomName);
 
                 GRAB.canalEnvivo
                     .on('broadcast', { event: 'viewer-joined' }, async (payload) => {
@@ -9636,11 +11404,14 @@
                             btn.style.background = "#000";
                             btn.style.animation = "parpadeoRec 1s infinite";
                             showToast("¡Estás EN VIVO! El cliente ya puede verte.", "success");
+                            mostrarEstadoTransmision("🔴 EN VIVO — orden #" + ordenId + ". El cliente ya puede verte en su link de rastreo.", "live");
+                        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                            mostrarEstadoTransmision("❌ Se cayó la conexión en tiempo real (" + status + "). Dale a 'En Vivo' de nuevo.", "error");
                         }
                     });
 
             } catch (e) {
-                showToast("No se pudo iniciar la transmisión: " + e.message, "danger");
+                mostrarEstadoTransmision("❌ No se pudo iniciar la transmisión: " + e.message, "error");
             }
         }
 
@@ -10778,7 +12549,8 @@
         });
         // Cuando se marque como "Completado" o "Entregado"
         async function registrarFeed(usuario, mensaje) {
-            await supabase.from('feed_taller').insert([
+            if (!supabaseChat) return;
+            await supabaseChat.from('feed_taller').insert([
                 {
                     usuario: usuario,
                     mensaje: mensaje,
