@@ -12,6 +12,9 @@ Para vender BlackHouse OS, es fundamental comprender por qué es superior a cual
 2. **Inteligencia Artificial Nativa:** Integra modelos avanzados (Llama 3 y Gemini) para automatizar el pre-diagnóstico de recepción, guiar a los técnicos en fallas de microsoldadura, e importar inventarios masivos desde una simple fotografía de factura.
 3. **Seguridad Nivel Enterprise (RLS):** Aislamiento multi-inquilino real. El módulo de vendedor del Punto de Venta (POS) está blindado a nivel de motor de base de datos (Row-Level Security), impidiendo fugas de costos o información del administrador hacia el personal de mostrador.
 4. **Resiliencia Offline-First:** Las fallas de internet no detienen la operación del negocio. Electron procesa el stock y las transacciones de ventas mediante Workers asíncronos locales sobre SQLite, sincronizándose automáticamente al restablecerse la red sin congelar la interfaz de usuario.
+5. **Portal Público de Rastreo y Venta:** Ningún competidor del rubro ofrece un portal web para el cliente final con timeline en vivo, video/streaming de la reparación y una tienda de accesorios integrada — no es solo gestión interna, es una herramienta de cara al cliente que genera ventas extra por sí sola.
+6. **Holograma 3D y Comunidad de Talleres:** Los técnicos arman un modelo 3D real pieza por pieza de cada equipo, alimentando una base de conocimiento compartida entre todos los talleres que usan BlackHouse OS — una demostración visual única para el cliente en el mostrador.
+7. **Un Asistente con Personalidad Propia (J.P.):** No es un chatbot genérico de soporte: vigila el negocio en tiempo real, avisa proactivamente de problemas, celebra logros y capacita a personal nuevo con tutoriales guiados — un diferenciador emocional que ningún ERP/POS tradicional tiene.
 
 ---
 
@@ -94,6 +97,118 @@ A continuación, se detalla una a una cada función del sistema, su especificaci
 #### F13. Aislamiento Estricto por Row-Level Security (RLS)
 *   **Descripción Técnica:** Políticas de seguridad implementadas en la base de datos SQL para separar el acceso del rol `pos_vendedor` del rol administrativo. El vendedor solo puede consultar la vista enmascarada `vw_productos_pos`, la cual carece de columnas de costo y márgenes de ganancia.
 *   **Beneficio para Marketing:** **"Privacidad absoluta de tus finanzas."** Puedes contratar personal de ventas sin temor a que vean cuánto te costó realmente cada pantalla o cuál es tu margen neto. Los vendedores solo ven lo necesario para facturar, protegiendo tus secretos comerciales.
+
+#### F14. Recuperación de Contraseña y Sesión Recordada
+*   **Descripción Técnica:** Los usuarios restablecen su clave desde la web sin depender de soporte técnico, y la sesión se mantiene activa entre reinicios mediante un token que se renueva solo.
+*   **Beneficio para Marketing:** **"Nunca dependes de nadie para volver a entrar."** Ni el dueño ni sus técnicos pierden tiempo pidiendo ayuda para recuperar el acceso al sistema.
+
+---
+
+### MÓDULO: LABORATORIO — GRABACIÓN, TRANSMISIÓN EN VIVO Y HOLOGRAMA 3D
+
+#### F15. Estudio de Grabación de Reparaciones
+*   **Descripción Técnica:** Combina microscopio, pantalla del equipo y cámara frontal en un solo video con overlays de marca (estilo streaming profesional), guardado localmente y subido a la nube ligado a la orden.
+*   **Beneficio para Marketing:** **"Evidencia en video de cada reparación."** Deja atrás las dudas o reclamos: hay un video real de cómo se trabajó el equipo, con la calidad de un canal profesional.
+
+#### F16. Transmisión en Vivo de la Reparación
+*   **Descripción Técnica:** Vía WebRTC y Supabase Realtime, retransmite en vivo lo que el técnico está reparando; el cliente lo ve conectándose desde el mismo link de rastreo de su orden.
+*   **Beneficio para Marketing:** **"Tu cliente ve la reparación en tiempo real, no una promesa."** Ningún competidor ofrece esto: el cliente observa desde su celular exactamente qué le están haciendo a su equipo mientras espera.
+
+#### F17. Holograma 3D del Equipo (pieza por pieza, comunidad de talleres)
+*   **Descripción Técnica:** El técnico fotografía y nombra cada pieza real mientras desarma un equipo, guiado paso a paso por las 6 caras de cada componente, armando una vista 3D interactiva. La base de fotos se comparte entre todos los talleres que usan BlackHouse OS (estadísticas de fallas comunes, piezas similares, moderación básica), con reporte en PDF y captura de pantalla.
+*   **Beneficio para Marketing:** **"El primer holograma 3D de reparaciones del mercado."** Una demostración visual espectacular para el cliente en el mostrador, y un banco de conocimiento colectivo: cada taller se beneficia de lo que fotografiaron los demás.
+
+#### F18. Copiloto de Microsoldadura, Calculadora de Ohm y Repositorio de Firmware
+*   **Descripción Técnica:** Ley de Ohm y diagnóstico de consumo calculados al instante, más acceso directo a una carpeta de firmwares del taller, todo dentro del Laboratorio.
+*   **Beneficio para Marketing:** **"Todas las herramientas del técnico en un solo lugar."** Sin alternar entre calculadoras, carpetas sueltas y la app: todo integrado.
+
+#### F19. Software "Ambición" Integrado con Candado de Sesión
+*   **Descripción Técnica:** Herramienta externa de utilidades de reparación (flasheo/diagnóstico) lanzada con un clic desde el Laboratorio, con un token de un solo uso que impide abrirla fuera de BlackHouse OS.
+*   **Beneficio para Marketing:** **"Un arsenal técnico bajo un solo login."** Ahorra tiempo y evita licencias sueltas descontroladas entre los técnicos.
+
+---
+
+### MÓDULO: VENTAS, POS Y CAJA
+
+#### F20. Punto de Venta Rápido para Cualquier Rol
+*   **Descripción Técnica:** Dueño, técnico o vendedor pueden vender productos sueltos sin abrir una orden de taller, con carrito, medio de pago (efectivo, Yape/Plin, tarjeta, transferencia) y venta de artículos fuera de catálogo, imprimiendo ticket 80mm con el logo del negocio.
+*   **Beneficio para Marketing:** **"Tu taller también es tu tienda."** Vende un cargador o una mica sin tener que crear una orden de reparación falsa para registrarlo.
+
+#### F21. Venta Móvil para la Vendedora (POS desde el celular)
+*   **Descripción Técnica:** La vendedora vende desde una app en su propio celular conectada al mismo inventario en tiempo real, con carrito, boleta informativa enviada por WhatsApp, y cierre de caja diario que muestra solo sus propias ventas.
+*   **Beneficio para Marketing:** **"Tu vendedora no necesita estar sentada frente a la computadora."** Vende desde donde esté, y cuadra caja sola sin depender del dueño.
+
+#### F22. Cierre del Día Unificado (Libro de Caja)
+*   **Descripción Técnica:** Suma automáticamente lo que entró (adelantos, saldos cobrados, ventas POS) menos lo que salió (gastos, compras externas, devoluciones) para dar el neto real del día, con historial guardado y exportación a Excel con el formato exacto de la plantilla de reportes.
+*   **Beneficio para Marketing:** **"El cuadre de caja que antes tomaba una hora, ahora toma un clic."** Cero calculadora, cero Excel armado a mano cada noche.
+
+#### F23. Comisiones, Costo Real de Repuestos y Caja Personalizada del Técnico
+*   **Descripción Técnica:** Calcula la comisión del técnico (50% de la mano de obra) como nota aparte, descuenta el costo real del repuesto (no el precio cobrado) para la ganancia neta, alerta si un repuesto cuesta más de lo cobrado, y muestra al técnico solo lo que él generó.
+*   **Beneficio para Marketing:** **"Cada técnico ve su propio desempeño, tú ves la ganancia real."** Transparencia con el equipo sin exponer las finanzas completas del negocio.
+
+#### F24. Métricas Premium, Más Vendidos e Historial de Facturación
+*   **Descripción Técnica:** Panel de indicadores con gráficos y comparación contra el período anterior, ranking de productos/servicios más vendidos, e historial de comprobantes con reimpresión desde cualquier momento.
+*   **Beneficio para Marketing:** **"Decisiones de negocio basadas en datos reales, no en intuición."** Sabe qué se vende más y cuánto ganó realmente el mes pasado en segundos.
+
+#### F25. Cotizaciones, Garantías y Etiquetas (Módulos Enterprise)
+*   **Descripción Técnica:** Genera cotizaciones en PDF antes de aceptar un trabajo, certificados de garantía en PDF con código QR a partir de un comprobante ya emitido, y etiquetas imprimibles de producto (nombre, precio, SKU y código de barras) listas para pegar en el estante.
+*   **Beneficio para Marketing:** **"Papelería de nivel corporativo, sin pagar por un diseñador."** Cotiza, respalda tus garantías y organiza tu estante como una cadena grande, aunque tengas un solo local.
+
+#### F26. Devoluciones de Clientes
+*   **Descripción Técnica:** Procesa devoluciones ligadas o no a una factura, reintegrando stock automáticamente si el producto vuelve en buen estado.
+*   **Beneficio para Marketing:** **"Devoluciones ordenadas, sin descuadrar el inventario."**
+
+---
+
+### MÓDULO: "J.P." — EL ASISTENTE ANIMADO CON PERSONALIDAD
+
+#### F27. J.P., el Robot que Enseña, Vigila y Acompaña
+*   **Descripción Técnica:** Personaje animado con nombre, emociones y voz hablada que: (1) explica cada parte de la app cuando detecta un uso incorrecto, (2) responde preguntas en lenguaje natural sobre 27 temas del sistema, (3) revisa el negocio cada 5 minutos y avisa una vez al día de equipos listos sin entregar, órdenes atascadas o reparaciones caras sin adelanto, (4) celebra hitos y buenos márgenes, y (5) guía tutoriales paso a paso a usuarios nuevos.
+*   **Beneficio para Marketing:** **"El único software del rubro con un asistente que realmente se preocupa por tu negocio."** No es un chatbot genérico: conoce tus números reales, avisa antes de que un problema se vuelva grande, y hace que capacitar a personal nuevo sea mucho más rápido.
+
+---
+
+### MÓDULO: PERSONALIZACIÓN VISUAL
+
+#### F28. Temas Visuales y Personalización del Ticket
+*   **Descripción Técnica:** Cuatro temas seleccionables (Original, Negro, Blanco, "Doha-cell" de marca) con tema por defecto configurable por empresa, más personalización completa del comprobante (logo, mensaje de agradecimiento, nota al pie, qué datos mostrar) con vista previa en vivo.
+*   **Beneficio para Marketing:** **"El software se viste con los colores de tu marca."** Desde la interfaz que usan tus técnicos hasta el ticket que recibe el cliente, todo puede llevar tu identidad.
+
+---
+
+### MÓDULO: PANEL WEB Y APP MÓVIL
+
+#### F29. Panel Web del Dueño (Monitor Gerencial desde Cualquier Lugar)
+*   **Descripción Técnica:** Accesible desde cualquier navegador o celular: Monitor Móvil con KPIs y feed en vivo de la actividad del taller, Ventas Móviles con ranking por vendedor, Cierre de Caja, Asistencia del personal, y Agenda de pendientes.
+*   **Beneficio para Marketing:** **"Tu taller en el bolsillo, aunque no estés ahí."** El dueño supervisa todo — ventas, asistencia, caja — sin tener que estar físicamente sentado en la computadora del negocio.
+
+#### F30. Paneles Móviles para Vendedor y Técnico
+*   **Descripción Técnica:** `panel-vendedor.html` y `panel-tecnico.html`: apps web ligeras (instalables como PWA) para que la vendedora venda y el técnico reciba equipos nuevos y consulte stock desde su propio celular, con búsqueda por grupos de modelos compatibles igual que en el escritorio.
+*   **Beneficio para Marketing:** **"Todo tu equipo trabaja desde su celular, sin instalar nada complicado."**
+
+---
+
+### MÓDULO: PORTAL DE RASTREO DEL CLIENTE (WEB PÚBLICA)
+
+#### F31. Rastreo de Reparación por Código QR
+*   **Descripción Técnica:** Cada orden genera un link/QR único que el cliente escanea para ver, sin llamar al taller: una línea de tiempo visual de 4 pasos (Recibido → En Proceso → Completado → Entregado), sin necesidad de crear una cuenta.
+*   **Beneficio para Marketing:** **"Reduce hasta en un 70% las llamadas preguntando '¿ya está listo?'."** Transparencia total, disponible 24/7, sin que nadie del taller tenga que atender el teléfono.
+
+#### F32. Datos Protegidos por Token de Seguridad
+*   **Descripción Técnica:** El link de rastreo incluye un código único e imposible de adivinar; solo con el link correcto (no con el número de orden a secas) el cliente ve información sensible como saldo pendiente, foto de evidencia de recepción y nombre real del taller.
+*   **Beneficio para Marketing:** **"Transparencia con el cliente, sin exponer datos de nadie más."** La privacidad de cada cliente y cada taller queda protegida por diseño.
+
+#### F33. Video y Transmisión en Vivo desde el Rastreo
+*   **Descripción Técnica:** El mismo portal de rastreo reproduce el video grabado de la reparación o conecta en vivo con la transmisión del Laboratorio, cuando el taller la habilita.
+*   **Beneficio para Marketing:** **"El cliente ve su equipo siendo reparado, en tiempo real, desde su casa."**
+
+#### F34. Tienda "Mientras Esperas" — Venta de Accesorios desde el Rastreo
+*   **Descripción Técnica:** El cliente ve, en una vitrina con fotos tipo tienda virtual, los accesorios del taller y la mica exacta compatible con su propio modelo de equipo (comparación inteligente por código de modelo). El pedido se guarda como pendiente — el precio y stock siempre se validan en el servidor — y llega como notificación al escritorio del taller para que un técnico lo revise y lo sume a la cuenta del cliente.
+*   **Beneficio para Marketing:** **"Convierte cada cliente que espera en una venta extra, sin que nadie tenga que ofrecerle nada."** Un canal de venta adicional que funciona solo, 24/7, integrado al mismo sistema.
+
+#### F35. Botón de WhatsApp al Taller Real
+*   **Descripción Técnica:** El botón de contacto en el portal de rastreo llama al WhatsApp real del taller que atiende esa orden (no a un número genérico de soporte del software).
+*   **Beneficio para Marketing:** **"El cliente habla directo con SU taller."**
 
 ---
 
