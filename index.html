@@ -9602,7 +9602,7 @@
         // (manual con los chips, o automático leyendo la falla reportada).
         // =====================================================================
         let holoInit = false;
-        let holoScene, holoCamera, holoRenderer, holoControls, holoGroup;
+        let holoScene, holoCamera, holoRenderer, holoControls, holoGroup, holoLuzKey;
         // Ya no hay una lista fija de piezas: el técnico va nombrando y fotografiando
         // cada pieza real mientras desarma el equipo (tapa, flex de carga, flex de
         // volumen, placa de carga, etc.). holoParts/holoDanado se llenan en vivo.
@@ -9662,6 +9662,19 @@
                 holoGroup = new THREE.Group();
                 holoScene.add(holoGroup);
 
+                // LUCES: antes la escena no tenía ninguna y las caras de foto usaban
+                // MeshBasicMaterial (material que IGNORA la luz), por eso las fotos se
+                // veían totalmente planas. Con luz + relieve (normal map) la misma foto
+                // pasa a tener volumen. Se mantienen suaves para no romper el look
+                // "holograma" de la carcasa (esa sigue siendo Basic a propósito).
+                holoScene.add(new THREE.AmbientLight(0xffffff, 0.62));
+                holoLuzKey = new THREE.DirectionalLight(0xffffff, 0.95);
+                holoLuzKey.position.set(2.5, 3, 4);
+                holoScene.add(holoLuzKey);
+                const holoRim = new THREE.DirectionalLight(HOLO_COLOR_OK, 0.40);
+                holoRim.position.set(-3, -1.5, -2.5);
+                holoScene.add(holoRim);
+
                 // Plataforma tipo "holograma" bajo el equipo
                 [[1.55, 1.75, 0.25], [1.0, 1.1, 0.15]].forEach(([rIn, rOut, op]) => {
                     const ring = new THREE.Mesh(
@@ -9691,7 +9704,12 @@
         // lado, pegadas a una caja). Cada cara es invisible (opacidad 0) hasta que se
         // le pone una foto/video de ese ángulo.
         function holoCrearCajaFoto(w, h, d) {
-            const invisible = () => new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide });
+            // MeshStandardMaterial (no Basic): así la foto RECIBE la luz y, con el normal
+            // map que se genera al cargarla, se ve con relieve real en vez de plana.
+            const invisible = () => new THREE.MeshStandardMaterial({
+                color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide,
+                roughness: 0.72, metalness: 0.06
+            });
             const holg = 0.003; // separación mínima para evitar z-fighting con la caja base
 
             const frente = new THREE.Mesh(new THREE.PlaneGeometry(w, h), invisible());
@@ -10089,6 +10107,12 @@
         function holoAnimar() {
             requestAnimationFrame(holoAnimar);
             if (holoControls) holoControls.update();
+            // La luz principal gira lento: es lo que hace VISIBLE el relieve de las fotos
+            // (con luz fija el normal map casi no se nota).
+            if (holoLuzKey) {
+                const t = performance.now() * 0.00035;
+                holoLuzKey.position.set(Math.cos(t) * 3.6, 2.6, Math.sin(t) * 3.6);
+            }
             if (holoRenderer && holoScene && holoCamera) holoRenderer.render(holoScene, holoCamera);
         }
 
@@ -10252,6 +10276,48 @@
 
         // Aplica una foto/video a la pieza (creándola en la escena si es la primera
         // vez que se ve, por ejemplo al reabrir un modelo ya fotografiado antes).
+        // Genera un MAPA DE RELIEVE (normal map) a partir del brillo de la propia foto:
+        // las zonas claras se leen como "alto" y las oscuras como "bajo", y con eso se
+        // calcula hacia dónde mira cada punto de la superficie (Sobel). Resultado: al
+        // moverse la luz, la foto plana muestra volumen (tornillos, flex, soldaduras).
+        // Se hace UNA sola vez por foto y a baja resolución para que no pese.
+        function holoNormalMapDesdeImagen(img, size) {
+            try {
+                size = size || 256;
+                const cv = document.createElement('canvas');
+                cv.width = size; cv.height = size;
+                const ctx = cv.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(img, 0, 0, size, size);
+                const src = ctx.getImageData(0, 0, size, size).data;
+
+                const alto = new Float32Array(size * size);
+                for (let i = 0; i < size * size; i++) {
+                    alto[i] = (0.299 * src[i * 4] + 0.587 * src[i * 4 + 1] + 0.114 * src[i * 4 + 2]) / 255;
+                }
+                const cl = (v) => Math.min(size - 1, Math.max(0, v));
+                const at = (x, y) => alto[cl(y) * size + cl(x)];
+
+                const out = new Uint8Array(size * size * 4);
+                const fuerza = 2.4;
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+                        const dx = (at(x + 1, y) - at(x - 1, y)) * fuerza;
+                        const dy = (at(x, y + 1) - at(x, y - 1)) * fuerza;
+                        let nx = -dx, ny = -dy, nz = 1;
+                        const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+                        const o = (y * size + x) * 4;
+                        out[o]     = ((nx / len) * 0.5 + 0.5) * 255;
+                        out[o + 1] = ((ny / len) * 0.5 + 0.5) * 255;
+                        out[o + 2] = ((nz / len) * 0.5 + 0.5) * 255;
+                        out[o + 3] = 255;
+                    }
+                }
+                const tex = new THREE.DataTexture(out, size, size, THREE.RGBAFormat);
+                tex.needsUpdate = true;
+                return tex;
+            } catch (e) { return null; }
+        }
+
         function holoAplicarMediaDesdeURL(piezaDisplay, angulo, url, tipo) {
             const piezaKey = holoNormalizarPieza(piezaDisplay);
             if (!piezaKey || typeof THREE === 'undefined') return;
@@ -10264,6 +10330,14 @@
                 texture.encoding = THREE.sRGBEncoding;
                 target.material.map = texture;
                 target.material.opacity = 0.95;
+                // Relieve desde la propia foto (solo en fotos: en video cambia cada cuadro).
+                if (tipo !== 'video' && texture.image) {
+                    const nm = holoNormalMapDesdeImagen(texture.image, 256);
+                    if (nm) {
+                        target.material.normalMap = nm;
+                        if (target.material.normalScale) target.material.normalScale.set(0.85, 0.85);
+                    }
+                }
                 target.material.needsUpdate = true;
                 holoAplicarColor(piezaKey, !!holoDanado[piezaKey]);
             };
