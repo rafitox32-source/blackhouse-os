@@ -834,7 +834,11 @@ ipcMain.handle('subir-foto-pieza', async (event, { modelo, pieza, angulo, etapa,
     try {
         const piezaNorm = normalizarPiezaLibre(pieza);
         if (!piezaNorm) return { success: false, msg: 'Falta el nombre de la pieza' };
-        const anguloVal = HOLO_ANGULOS_VALIDOS.includes(angulo) ? angulo : 'frente';
+        // Además de las 6 caras se aceptan los cuadros de la VUELTA 360°: giro-000,
+        // giro-001, ... Cada cuadro va como un "ángulo" distinto, así encaja con la clave
+        // única (modelo, pieza, angulo, etapa) sin tener que tocar el esquema.
+        const anguloVal = (HOLO_ANGULOS_VALIDOS.includes(angulo) || /^giro-\d{3}$/.test(angulo || ''))
+            ? angulo : 'frente';
         const etapaVal = HOLO_ETAPAS_VALIDAS.includes(etapa) ? etapa : 'actual';
         const tipo = HOLO_EXT_A_TIPO[ext] || 'foto';
         const modeloNorm = normalizarModeloHolo(modelo);
@@ -1102,7 +1106,11 @@ ipcMain.handle('guardar-foto-pieza-cache', async (event, { modelo, pieza, angulo
     try {
         const slug = holoSlug(modelo);
         const pSlug = piezaSlug(pieza);
-        const anguloVal = HOLO_ANGULOS_VALIDOS.includes(angulo) ? angulo : 'frente';
+        // Además de las 6 caras se aceptan los cuadros de la VUELTA 360°: giro-000,
+        // giro-001, ... Cada cuadro va como un "ángulo" distinto, así encaja con la clave
+        // única (modelo, pieza, angulo, etapa) sin tener que tocar el esquema.
+        const anguloVal = (HOLO_ANGULOS_VALIDOS.includes(angulo) || /^giro-\d{3}$/.test(angulo || ''))
+            ? angulo : 'frente';
         const etapaVal = HOLO_ETAPAS_VALIDAS.includes(etapa) ? etapa : 'actual';
         if (!slug || !pSlug) return { success: false };
         fs.writeFileSync(path.join(holoCacheDir(), `${slug}_${pSlug}_${anguloVal}_${etapaVal}.${ext}`), Buffer.from(buf));

@@ -2386,6 +2386,10 @@
                                             style="background:rgba(0,0,0,0.5); border:1px solid #3fd8ff; color:#3fd8ff; border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
                                             <i class='bx bx-camera'></i>
                                         </button>
+                                        <button type="button" onclick="holoAbrirGiro()" title="Vuelta 360° de una pieza (grabar o ver)"
+                                            style="background:rgba(0,0,0,0.5); border:1px solid #3fd8ff; color:#3fd8ff; border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
+                                            <i class='bx bx-rotate-left'></i>
+                                        </button>
                                         <button type="button" onclick="holoToggleFullscreen()" title="Pantalla completa"
                                             style="background:rgba(0,0,0,0.5); border:1px solid #3fd8ff; color:#3fd8ff; border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
                                             <i class='bx bx-fullscreen' id="holo-fullscreen-icon"></i>
@@ -2545,6 +2549,52 @@
 
                         <div style="text-align:right; margin-top:15px;">
                             <button class="bh-btn-white" onclick="document.getElementById('modal-ruta-diagnostico').style.display='none'">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal: VUELTA 360° de una pieza (Opción A del holograma) -->
+                <div id="modal-holo-giro" class="modal-overlay">
+                    <div class="modal-content" style="width:640px; max-width:95vw;">
+                        <h2 style="margin-top:0; color:var(--bh-purple);"><i class='bx bx-rotate-left'></i> Vuelta 360° de la pieza</h2>
+                        <p style="color:var(--text-muted); font-size:12px; margin-top:-6px;">
+                            Graba un video corto <b>girando la pieza</b> (o súbelo). Se extraen 32 fotos y luego,
+                            al arrastrar, la pieza gira de verdad. Se comparte con la comunidad como las demás fotos.
+                        </p>
+
+                        <div class="input-group" style="margin-bottom:10px;">
+                            <label style="font-size:12px;">Pieza</label>
+                            <input type="text" id="holo-giro-pieza" class="bh-input" list="holo-piezas-sugerencias"
+                                placeholder="Ej: Tapa trasera, Flex de carga…">
+                        </div>
+
+                        <!-- Visor / previsualización -->
+                        <div style="position:relative; background:#0a0a0a; border-radius:10px; overflow:hidden; border:1px solid #1b2a3a;">
+                            <img id="holo-giro-img" style="width:100%; height:280px; object-fit:contain; display:none; cursor:ew-resize;" draggable="false">
+                            <video id="holo-giro-video" style="width:100%; height:280px; object-fit:contain; display:none;" playsinline muted></video>
+                            <div id="holo-giro-placeholder" style="height:280px; display:flex; align-items:center; justify-content:center; color:#3c4a5a; font-size:13px; text-align:center; padding:0 20px;">
+                                Sube un video girando la pieza,<br>o abre un giro ya guardado.
+                            </div>
+                            <div id="holo-giro-badge" style="display:none; position:absolute; bottom:8px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.65); color:#3fd8ff; font-size:11px; padding:4px 12px; border-radius:20px; letter-spacing:1px;">
+                                ⇄ ARRASTRA PARA GIRAR
+                            </div>
+                        </div>
+
+                        <div id="holo-giro-progreso" style="display:none; margin-top:10px;">
+                            <div style="height:6px; background:#1b2a3a; border-radius:4px; overflow:hidden;">
+                                <div id="holo-giro-barra" style="height:100%; width:0%; background:var(--bh-purple); transition:.2s;"></div>
+                            </div>
+                            <div id="holo-giro-estado" style="font-size:11px; color:var(--text-muted); margin-top:5px;"></div>
+                        </div>
+
+                        <input type="file" id="holo-giro-file" accept="video/*" style="display:none;" onchange="holoGiroDesdeArchivo(this)">
+
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px;">
+                            <button class="bh-btn-white" onclick="document.getElementById('holo-giro-file').click()">🎬 Subir video del giro</button>
+                            <button class="bh-btn-white" id="holo-giro-btn-abrir" onclick="holoGiroCargarGuardado()">📂 Ver giro guardado</button>
+                            <div style="flex:1"></div>
+                            <button class="bh-btn-white" onclick="holoCerrarGiro()">Cerrar</button>
+                            <button class="bh-btn-purple" id="holo-giro-btn-guardar" style="display:none;" onclick="holoGiroGuardar()">Guardar giro</button>
                         </div>
                     </div>
                 </div>
@@ -9953,6 +10003,9 @@
 
         function holoLimpiarTodasLasPiezas() {
             Object.keys(holoParts).forEach(holoEliminarPiezaDeEscena);
+            // Los giros 360° también son del modelo que se estaba viendo: al cambiar de
+            // equipo se descartan para no mezclar cuadros de modelos distintos.
+            Object.keys(holoGiros).forEach(k => { delete holoGiros[k]; });
             holoPiezaContador = 0;
             holoRegistrarPickTargets();
             holoRenderListaPiezas();
@@ -10262,6 +10315,216 @@
         let holoFotoModoActual = 'foto'; // 'foto' | 'video'
         let holoFotoResultado = null; // { dataUrl, ext, tipo } de la última captura
 
+        // =====================================================================
+        // VUELTA 360° DE UNA PIEZA (Opción A)
+        // No es reconstrucción 3D: son N fotos tomadas alrededor de la pieza que se
+        // muestran según el arrastre. Es lo que usan las tiendas online y da sensación
+        // de 3D real sin ningún cálculo pesado. Los cuadros se guardan como ángulos
+        // "giro-000..giro-031", así reutilizan todo el sistema de fotos ya existente.
+        // =====================================================================
+        const HOLO_GIRO_CUADROS = 32;
+        const holoGiros = {};              // piezaKey -> [url por cuadro]
+        let holoGiroActual = [];           // cuadros mostrándose ahora en el visor
+        let holoGiroIdx = 0;
+        let holoGiroPendiente = null;      // { pieza, cuadros:[dataURL] } sin guardar aún
+
+        const holoGiroEsAngulo = (a) => /^giro-\d{3}$/.test(a || '');
+        const holoGiroIndiceDe = (a) => parseInt(String(a).slice(5), 10) || 0;
+
+        // Extrae N cuadros repartidos a lo largo del video, reescalados para que no pesen.
+        async function holoGiroExtraerCuadros(url, n, onProgreso) {
+            const video = document.createElement('video');
+            video.src = url; video.muted = true; video.playsInline = true; video.preload = 'auto';
+            await new Promise((res, rej) => {
+                video.onloadedmetadata = res;
+                video.onerror = () => rej(new Error('No se pudo leer el video'));
+            });
+            const dur = video.duration;
+            if (!isFinite(dur) || dur <= 0) throw new Error('El video no tiene duración válida');
+
+            const maxLado = 640;
+            const escala = Math.min(1, maxLado / Math.max(video.videoWidth || maxLado, video.videoHeight || maxLado));
+            const cv = document.createElement('canvas');
+            cv.width = Math.round((video.videoWidth || maxLado) * escala);
+            cv.height = Math.round((video.videoHeight || maxLado) * escala);
+            const ctx = cv.getContext('2d');
+
+            const cuadros = [];
+            for (let i = 0; i < n; i++) {
+                // Se evita el último instante exacto: algunos videos no pueden posicionarse ahí.
+                const t = (i / n) * dur * 0.98;
+                await new Promise((res) => {
+                    let listo = false;
+                    const ok = () => { if (!listo) { listo = true; res(); } };
+                    video.onseeked = ok;
+                    setTimeout(ok, 900);   // salvavidas si el navegador no dispara onseeked
+                    video.currentTime = t;
+                });
+                ctx.drawImage(video, 0, 0, cv.width, cv.height);
+                cuadros.push(cv.toDataURL('image/jpeg', 0.72));
+                if (onProgreso) onProgreso(i + 1, n);
+            }
+            try { video.src = ''; } catch (e) {}
+            return cuadros;
+        }
+
+        function holoGiroMostrar(cuadros) {
+            holoGiroActual = cuadros || [];
+            holoGiroIdx = 0;
+            const img = document.getElementById('holo-giro-img');
+            const ph = document.getElementById('holo-giro-placeholder');
+            const badge = document.getElementById('holo-giro-badge');
+            if (!img) return;
+            if (!holoGiroActual.length) {
+                img.style.display = 'none';
+                if (ph) ph.style.display = 'flex';
+                if (badge) badge.style.display = 'none';
+                return;
+            }
+            img.src = holoGiroActual[0];
+            img.style.display = 'block';
+            if (ph) ph.style.display = 'none';
+            if (badge) badge.style.display = 'block';
+        }
+
+        // Arrastre horizontal = girar. Un ancho de pantalla ≈ una vuelta completa.
+        function holoGiroConectarArrastre() {
+            const img = document.getElementById('holo-giro-img');
+            if (!img || img.dataset.giroLista === '1') return;
+            img.dataset.giroLista = '1';
+            let arrastrando = false, xIni = 0, idxIni = 0;
+
+            const mover = (x) => {
+                if (!holoGiroActual.length) return;
+                const ancho = img.clientWidth || 400;
+                const avance = Math.round(((x - xIni) / ancho) * holoGiroActual.length * 1.5);
+                let i = (idxIni + avance) % holoGiroActual.length;
+                if (i < 0) i += holoGiroActual.length;
+                if (i !== holoGiroIdx) { holoGiroIdx = i; img.src = holoGiroActual[i]; }
+            };
+            const iniciar = (x) => { arrastrando = true; xIni = x; idxIni = holoGiroIdx; };
+            const soltar = () => { arrastrando = false; };
+
+            img.addEventListener('mousedown', (e) => { e.preventDefault(); iniciar(e.clientX); });
+            window.addEventListener('mousemove', (e) => { if (arrastrando) mover(e.clientX); });
+            window.addEventListener('mouseup', soltar);
+            img.addEventListener('touchstart', (e) => iniciar(e.touches[0].clientX), { passive: true });
+            img.addEventListener('touchmove', (e) => { if (arrastrando) mover(e.touches[0].clientX); }, { passive: true });
+            img.addEventListener('touchend', soltar);
+        }
+
+        function holoAbrirGiro() {
+            const modal = document.getElementById('modal-holo-giro');
+            if (!modal) return;
+            if (!window.holoModeloActual) return showToast('Primero carga una orden con modelo de equipo', 'warning');
+            const inp = document.getElementById('holo-giro-pieza');
+            if (inp && !inp.value) inp.value = (typeof holoSugerirNombrePieza === 'function' ? holoSugerirNombrePieza() : '');
+            holoGiroPendiente = null;
+            document.getElementById('holo-giro-btn-guardar').style.display = 'none';
+            document.getElementById('holo-giro-progreso').style.display = 'none';
+            holoGiroMostrar([]);
+            modal.style.display = 'flex';
+            holoGiroConectarArrastre();
+        }
+        function holoCerrarGiro() {
+            const m = document.getElementById('modal-holo-giro');
+            if (m) m.style.display = 'none';
+        }
+
+        async function holoGiroDesdeArchivo(input) {
+            const file = input && input.files && input.files[0];
+            input.value = '';
+            if (!file) return;
+            const pieza = (document.getElementById('holo-giro-pieza').value || '').trim();
+            if (!pieza) return showToast('Escribe primero el nombre de la pieza', 'warning');
+
+            const prog = document.getElementById('holo-giro-progreso');
+            const barra = document.getElementById('holo-giro-barra');
+            const estado = document.getElementById('holo-giro-estado');
+            prog.style.display = 'block';
+            estado.textContent = 'Leyendo el video…';
+
+            const url = URL.createObjectURL(file);
+            try {
+                const cuadros = await holoGiroExtraerCuadros(url, HOLO_GIRO_CUADROS, (hecho, total) => {
+                    barra.style.width = Math.round((hecho / total) * 100) + '%';
+                    estado.textContent = `Extrayendo cuadros… ${hecho}/${total}`;
+                });
+                holoGiroPendiente = { pieza, cuadros };
+                holoGiroMostrar(cuadros);
+                estado.textContent = `${cuadros.length} cuadros listos. Arrastra para probar y luego guarda.`;
+                document.getElementById('holo-giro-btn-guardar').style.display = '';
+            } catch (e) {
+                estado.textContent = '';
+                prog.style.display = 'none';
+                showToast('No se pudo procesar el video: ' + e.message, 'danger');
+            } finally {
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        function _holoDataURLaBytes(dataUrl) {
+            const b64 = String(dataUrl).split(',')[1] || '';
+            const bin = atob(b64);
+            const arr = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+            return arr;
+        }
+
+        async function holoGiroGuardar() {
+            if (!holoGiroPendiente) return;
+            const modelo = window.holoModeloActual;
+            if (!modelo) return showToast('Falta el modelo del equipo', 'warning');
+
+            const { pieza, cuadros } = holoGiroPendiente;
+            const btn = document.getElementById('holo-giro-btn-guardar');
+            const barra = document.getElementById('holo-giro-barra');
+            const estado = document.getElementById('holo-giro-estado');
+            btn.disabled = true;
+            document.getElementById('holo-giro-progreso').style.display = 'block';
+
+            const empresaId = localStorage.getItem('miEmpresaId');
+            const usuario = localStorage.getItem('userNickname') || localStorage.getItem('usuarioLogin') || null;
+            let subidos = 0, fallos = 0;
+
+            for (let i = 0; i < cuadros.length; i++) {
+                const angulo = 'giro-' + String(i).padStart(3, '0');
+                const buf = _holoDataURLaBytes(cuadros[i]);
+                try {
+                    // Caché local primero (se ve al instante y sirve sin internet).
+                    await ipcRenderer.invoke('guardar-foto-pieza-cache', { modelo, pieza, angulo, etapa: 'actual', buf, ext: 'jpg' });
+                    const res = await ipcRenderer.invoke('subir-foto-pieza', {
+                        modelo, pieza, angulo, etapa: 'actual', buf, ext: 'jpg',
+                        empresaId, usuario, danado: false, cajaDanio: null, notas: 'Cuadro de vuelta 360°'
+                    });
+                    if (res && res.success) subidos++; else fallos++;
+                } catch (e) { fallos++; }
+                barra.style.width = Math.round(((i + 1) / cuadros.length) * 100) + '%';
+                estado.textContent = `Guardando… ${i + 1}/${cuadros.length}`;
+            }
+
+            holoGiros[holoNormalizarPieza(pieza)] = cuadros.slice();
+            estado.textContent = `Listo: ${subidos} cuadros compartidos` + (fallos ? ` · ${fallos} solo en esta PC` : '');
+            showToast(fallos ? 'Giro guardado en esta PC (algunos cuadros no se compartieron)' : 'Giro 360° guardado y compartido ✅',
+                      fallos ? 'warning' : 'success');
+            btn.disabled = false;
+            btn.style.display = 'none';
+            holoGiroPendiente = null;
+            if (typeof holoRenderListaPiezas === 'function') holoRenderListaPiezas();
+        }
+
+        // Abre el giro ya guardado de la pieza escrita (los cuadros llegan por
+        // holoAplicarMediaDesdeURL al cargar el modelo).
+        function holoGiroCargarGuardado() {
+            const pieza = (document.getElementById('holo-giro-pieza').value || '').trim();
+            const key = holoNormalizarPieza(pieza);
+            const cuadros = (holoGiros[key] || []).filter(Boolean);
+            if (!cuadros.length) return showToast('Esa pieza todavía no tiene un giro 360° guardado', 'warning');
+            holoGiroMostrar(cuadros);
+            document.getElementById('holo-giro-progreso').style.display = 'none';
+            showToast(`Giro cargado (${cuadros.length} cuadros) — arrastra para girar`, 'success');
+        }
+
         const HOLO_ANGULO_A_CAMPO = {
             frente: 'fotoTargetFrente', atras: 'fotoTargetAtras',
             arriba: 'fotoTargetArriba', abajo: 'fotoTargetAbajo',
@@ -10320,7 +10583,17 @@
 
         function holoAplicarMediaDesdeURL(piezaDisplay, angulo, url, tipo) {
             const piezaKey = holoNormalizarPieza(piezaDisplay);
-            if (!piezaKey || typeof THREE === 'undefined') return;
+            if (!piezaKey) return;
+
+            // Los cuadros de la vuelta 360° NO son una cara de la caja: se guardan aparte,
+            // en su posición dentro de la secuencia, para el visor de giro.
+            if (holoGiroEsAngulo(angulo)) {
+                if (!holoGiros[piezaKey]) holoGiros[piezaKey] = [];
+                holoGiros[piezaKey][holoGiroIndiceDe(angulo)] = url;
+                return;
+            }
+
+            if (typeof THREE === 'undefined') return;
             if (!holoParts[piezaKey]) holoCrearPiezaDinamica(piezaKey, piezaDisplay, 4 / 3);
 
             const target = holoObtenerCaraFoto(piezaKey, angulo);
