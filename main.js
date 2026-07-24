@@ -4296,10 +4296,14 @@ ipcMain.on('actualizar-estado-orden', async (event, data) => {
     // se cobró el saldo. Update separado y tolerante: si falta la migración 009 falla solo esto.
     if (!error && data.estado === 'Entregado') {
         try {
+            // Solo se sella la fecha la PRIMERA vez que se entrega (fecha_entregado aún NULL).
+            // Así, si la orden se re-marca "Entregado" otro día, el saldo no se vuelve a contar
+            // en el cierre de ese día (evita duplicar el cobro).
             const { error: errFecha } = await supabase.from('ordenes')
                 .update({ fecha_entregado: new Date().toISOString() })
                 .eq('id', data.id)
-                .eq('empresa_id', empresaActual);
+                .eq('empresa_id', empresaActual)
+                .is('fecha_entregado', null);
             if (errFecha) console.warn('No se pudo sellar fecha_entregado (¿falta migración 009?):', errFecha.message);
         } catch (e) { console.warn('fecha_entregado:', e.message); }
     }
