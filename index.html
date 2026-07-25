@@ -2560,7 +2560,31 @@
                         <p style="color:var(--text-muted); font-size:12px; margin-top:-6px;">
                             Graba un video corto <b>girando la pieza</b> (o súbelo). Se extraen 32 fotos y luego,
                             al arrastrar, la pieza gira de verdad. Se comparte con la comunidad como las demás fotos.
+                            <a href="#" onclick="holoGiroToggleAyuda(); return false;" style="color:var(--bh-purple); text-decoration:underline; margin-left:4px;">¿Cómo se graba?</a>
                         </p>
+
+                        <!-- Instrucciones paso a paso (plegadas por defecto) -->
+                        <div id="holo-giro-ayuda" style="display:none; background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.3); border-radius:10px; padding:12px 14px; margin-bottom:12px; font-size:12px; line-height:1.65;">
+                            <b style="color:var(--bh-purple);">Cómo grabar una buena vuelta 360°</b>
+                            <ol style="margin:6px 0 8px; padding-left:20px;">
+                                <li><b>Fondo limpio:</b> pon la pieza sobre una hoja blanca o un paño oscuro parejo. Sin herramientas ni cables alrededor.</li>
+                                <li><b>Luz estable:</b> que no te tape la sombra de la mano. Nada de flash directo (quema la foto).</li>
+                                <li><b>Gira la PIEZA, no la cámara:</b> apoya el celular fijo y ve girando la pieza poco a poco (o usa una base giratoria).</li>
+                                <li><b>Una vuelta completa en 8–12 segundos:</b> lento y parejo. Si vas muy rápido, los cuadros salen borrosos.</li>
+                                <li><b>Que la pieza siempre entre completa</b> en el cuadro y quede del mismo tamaño (no te acerques ni alejes mientras grabas).</li>
+                            </ol>
+                            <b style="color:var(--bh-purple);">Luego, en esta ventana</b>
+                            <ol style="margin:6px 0 0; padding-left:20px;">
+                                <li>Escribe el <b>nombre de la pieza</b> (ej: "Tapa trasera").</li>
+                                <li>Toca <b>🎬 Subir video del giro</b> y elige el video.</li>
+                                <li>Espera la barra: se extraen 32 fotos.</li>
+                                <li><b>Arrastra la imagen de lado a lado</b> para probar el giro.</li>
+                                <li>Si te gustó, toca <b>Guardar giro</b>. Si no, sube otro video.</li>
+                            </ol>
+                            <div style="margin-top:8px; color:var(--text-muted);">
+                                💡 Después, para volver a verlo: <b>doble clic sobre la pieza</b> en el holograma, o el ícono ↺ del nombre de la pieza.
+                            </div>
+                        </div>
 
                         <div class="input-group" style="margin-bottom:10px;">
                             <label style="font-size:12px;">Pieza</label>
@@ -10094,9 +10118,15 @@
             cont.innerHTML = keys.map(key => {
                 const p = holoParts[key];
                 const danado = !!holoDanado[key];
+                // Ícono de giro 360°: encendido si la pieza ya tiene su vuelta grabada
+                // (abre el visor), apagado si todavía no la tiene (abre para grabarla).
+                const tieneGiro = (holoGiros[key] || []).filter(Boolean).length > 0;
                 return `
                     <span class="holo-chip${danado ? ' holo-danado' : ''}" id="holo-chip-${key}" style="display:inline-flex; align-items:center; gap:6px;">
                         <span onclick="holoTogglePieza('${key}')" style="cursor:pointer;">${p.nombre}</span>
+                        <i class='bx bx-rotate-left' style="cursor:pointer; ${tieneGiro ? 'opacity:1; color:#3fd8ff;' : 'opacity:0.45;'}"
+                           title="${tieneGiro ? 'Ver vuelta 360° (o doble clic en la pieza)' : 'Grabar vuelta 360° de esta pieza'}"
+                           onclick="holoAbrirGiroDePieza('${key}')"></i>
                         <i class='bx bx-git-compare' style="cursor:pointer; opacity:0.7;" title="Comparar antes/después" onclick="holoCompararPieza('${key}')"></i>
                         <i class='bx bx-edit-alt' style="cursor:pointer; opacity:0.7;" title="Renombrar" onclick="holoRenombrarPieza('${key}')"></i>
                         <i class='bx bx-flag' style="cursor:pointer; opacity:0.7;" title="Reportar foto incorrecta" onclick="holoReportarPieza('${key}')"></i>
@@ -10262,6 +10292,17 @@
                 holoControls.enabled = true;
                 canvas.style.cursor = 'grab';
             }));
+
+            // DOBLE CLIC en una pieza = abrir su vuelta 360°. Se usa doble clic porque el
+            // clic simple ya está tomado para arrastrar la pieza por la escena.
+            canvas.addEventListener('dblclick', (e) => {
+                holoActualizarMouseNDC(canvas, e);
+                holoRaycaster.setFromCamera(holoMouseNDC, holoCamera);
+                const hits = holoRaycaster.intersectObjects(holoPickTargets, false);
+                if (!hits.length) return;
+                const pieza = holoMeshToPieza.get(hits[0].object);
+                if (pieza) holoAbrirGiroDePieza(pieza);
+            });
         }
 
         function holoAplicarColor(pieza, danado) {
@@ -10429,6 +10470,28 @@
         function holoCerrarGiro() {
             const m = document.getElementById('modal-holo-giro');
             if (m) m.style.display = 'none';
+        }
+
+        // Abre el giro de UNA pieza concreta: si ya tiene la vuelta grabada la muestra
+        // lista para arrastrar; si no, deja todo preparado para grabarla.
+        function holoAbrirGiroDePieza(piezaKey) {
+            const p = holoParts[piezaKey];
+            const nombre = p ? p.nombre : piezaKey;
+            holoAbrirGiro();
+            const inp = document.getElementById('holo-giro-pieza');
+            if (inp) inp.value = nombre;
+            const cuadros = (holoGiros[holoNormalizarPieza(nombre)] || []).filter(Boolean);
+            if (cuadros.length) {
+                holoGiroMostrar(cuadros);
+                showToast(`Giro de "${nombre}" (${cuadros.length} cuadros) — arrastra para girar`, 'success');
+            } else {
+                showToast(`"${nombre}" aún no tiene vuelta 360°. Sube un video girándola.`, 'info');
+            }
+        }
+
+        function holoGiroToggleAyuda() {
+            const a = document.getElementById('holo-giro-ayuda');
+            if (a) a.style.display = (a.style.display === 'none' || !a.style.display) ? 'block' : 'none';
         }
 
         async function holoGiroDesdeArchivo(input) {
