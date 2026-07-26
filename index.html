@@ -2779,6 +2779,10 @@
                         <p style="color:var(--text-muted); font-size:12px; margin-top:-6px;">Útil cuando el equipo actual todavía no tiene fotos: mira cómo son las piezas de un modelo parecido.</p>
                         <div style="display:flex; gap:8px; margin-bottom:12px;">
                             <input type="text" id="holo-similares-modelo-input" class="bh-input" placeholder="Ej: iPhone 13 Pro" style="margin:0;" onkeypress="if(event.key==='Enter') holoBuscarModelosSimilares()">
+                            <button type="button" class="bh-btn-white" onclick="abrirSelectorModelos('holo-similares-modelo-input', 'almacen')"
+                                style="padding:0 12px;" title="Elegir de mi catálogo de modelos">
+                                <i class='bx bx-mobile-alt'></i>
+                            </button>
                             <button class="bh-btn-purple" onclick="holoBuscarModelosSimilares()">Buscar</button>
                         </div>
                         <div id="holo-similares-resultados" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-height:320px; overflow-y:auto;"></div>
@@ -13333,6 +13337,9 @@
 
         function cambiarFuenteModelos(fuente) {
             fuenteModelos = fuente;
+            // Queda recordado: si el taller trabaja siempre con su propio catálogo, el selector
+            // le abre ahí desde cualquier pantalla, sin tener que cambiar de pestaña cada vez.
+            try { localStorage.setItem('bh_fuente_modelos', fuente); } catch (e) { }
             marcaActiva = '';
             document.getElementById('selector-busqueda').value = '';
             document.getElementById('tab-fuente-almacen').classList.toggle('active', fuente === 'almacen');
@@ -13413,8 +13420,14 @@
             document.getElementById('selector-busqueda').value = '';
             document.getElementById('modal-selector-modelos').style.display = 'flex';
 
-            // Desde Recepción se abre en "Mi almacén"; desde Inventario/compatibilidad sigue
-            // abriendo el catálogo general, que es lo que esas pantallas necesitaban siempre.
+            // Si la pantalla no pide una fuente en concreto se respeta la última que eligió el
+            // usuario, así el que trabaja siempre con su propio catálogo lo tiene en todos lados.
+            if (!fuente) {
+                try { fuente = localStorage.getItem('bh_fuente_modelos') || 'general'; } catch (e) { fuente = 'general'; }
+            }
+
+            // Recepción y el Holograma piden "Mi almacén" siempre; Inventario y los grupos de
+            // compatibilidad no piden ninguna, así que siguen la preferencia guardada arriba.
             if (fuente === 'almacen') {
                 almacenModelosCache = null;      // releer: el stock cambia todo el día
                 document.getElementById('selector-busqueda').focus();
@@ -13533,11 +13546,21 @@
             }
 
             const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            // Al buscar, la etiqueta lleva marca + modelo y no entra en las columnas angostas.
+            grid.style.gridTemplateColumns = query
+                ? 'repeat(auto-fill, minmax(180px, 1fr))'
+                : '';
+
             grid.innerHTML = mostrados.map(item => {
                 const badge = item.stock === null ? '' :
                     `<span class="stock-badge${item.stock > 0 ? '' : ' vacio'}">${item.stock > 0 ? item.stock : 0}</span>`;
+                // Buscando se mezclan marcas: varios equipos se llaman igual (el A54 existe en
+                // Samsung, Oppo y Honor), así que ahí el botón tiene que decir de quién es.
+                const etiqueta = query
+                    ? `<span style="opacity:.6;">${item.brand}</span> ${item.model}`
+                    : item.model;
                 return `<button type="button" class="model-btn" onclick="seleccionarModelo('${esc(item.fullName)}', '${esc(item.brand)}', '${esc(item.model)}')" title="${esc(item.fullName)}${item.stock === null ? '' : ` · ${item.stock} en stock`}">
-                            <i class='bx bx-mobile-vibration' style="color:var(--bh-purple); margin-right:5px;"></i>${item.model}${badge}
+                            <i class='bx bx-mobile-vibration' style="color:var(--bh-purple); margin-right:5px;"></i>${etiqueta}${badge}
                         </button>`;
             }).join('') + botonAgregar;
         }
@@ -13588,6 +13611,8 @@
                 }
                 // Recepción: mostrar de una los repuestos en stock que le sirven a ese equipo.
                 if (modelSelectorTargetId === 'mod') sugerirStockModelo(nombreCompleto);
+                // Holograma: buscar las piezas de ese modelo sin tener que tocar "Buscar".
+                if (modelSelectorTargetId === 'holo-similares-modelo-input') holoBuscarModelosSimilares();
                 // Disparar evento input para validaciones
                 targetInput.dispatchEvent(new Event('input', { bubbles: true }));
             }
