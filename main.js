@@ -731,6 +731,111 @@ ipcMain.on('sugerir-stock-modelo', async (event, modelo) => {
     }
 });
 
+// === MI CATÁLOGO DE MODELOS: marcas y modelos deducidos del propio almacén ===
+// El catálogo general (devices_cache.json) trae miles de equipos que el taller nunca ve.
+// Esto arma un catálogo corto con SOLO los modelos para los que el taller tiene repuesto,
+// para poder elegir de ahí al recepcionar en vez de escribir el modelo a mano.
+
+// Palabras que describen el TIPO de panel, no el equipo. Se quitan antes de partir por "/"
+// (importante: "C/M" = con marco, si no se quita primero deja una variante basura "M").
+// (INCELL viene escrito también como "INCEL", y "con marco" como "C/M" o suelto "cm").
+const RUIDO_PANEL = /\b(?:C\s*\/\s*M|S\s*\/\s*M|CM|CON\s+MARCO|SIN\s+MARCO|INCELL?|AMOLED|OLED|TFT|OGS|LCD|GX|ZY|JK|ORIG(?:INAL)?|COPIA|CALIDAD\s+\w+)\b/gi;
+// Prefijos de categoría con los que empieza el nombre del producto cuando no hay modelo_compatible.
+const PREFIJO_PIEZA = /^\s*(?:PANTALLA|MICA(?:\s+(?:CER[ÁA]MICA|TEMPLADA|HIDROGEL))?(?:\s+MATTE)?|BATER[ÍI]A|FLEX|T[AÁ]CTIL|TOUCH|DISPLAY|MODULO|M[ÓO]DULO)\s+/i;
+// Primera palabra -> marca real. Cubre también las submarcas y series (Galaxy=Samsung, Redmi=Xiaomi…).
+const MARCA_POR_PALABRA = {
+    SAMSUNG: 'Samsung', GALAXY: 'Samsung',
+    XIAOMI: 'Xiaomi', REDMI: 'Xiaomi', READMI: 'Xiaomi', POCO: 'Xiaomi', MI: 'Xiaomi', NOTE: 'Xiaomi',
+    MOTOROLA: 'Motorola', MOTO: 'Motorola',
+    HUAWEI: 'Huawei', MATE: 'Huawei', HONOR: 'Honor',
+    IPHONE: 'Apple', APPLE: 'Apple', IPAD: 'Apple',
+    OPPO: 'Oppo', RENO: 'Oppo',
+    VIVO: 'Vivo', REALME: 'Realme', ZTE: 'ZTE', LG: 'LG', NOKIA: 'Nokia',
+    TECNO: 'Tecno', INFINIX: 'Infinix', ALCATEL: 'Alcatel', SONY: 'Sony', BLU: 'Blu'
+};
+
+// Serie que la marca le pone a casi todos sus equipos y que el taller escribe o no según
+// el proveedor: "A31" y "Galaxy A31" son el mismo celular y deben quedar en una sola ficha.
+// Ojo: quitar "REDMI" es correcto y NO confunde al Redmi 8 con el Redmi Note 8, porque
+// "Redmi Note 8" queda como "NOTE 8" y "Redmi 8" como "8".
+const SERIE_DE_MARCA = { Samsung: /^GALAXY\s+/, Xiaomi: /^REDMI\s+/, Apple: /^IPHONE\s+/ };
+const claveModelo = (marca, modelo) => {
+    const up = modelo.toUpperCase();
+    const serie = SERIE_DE_MARCA[marca];
+    return serie ? up.replace(serie, '') : up;
+};
+
+// Deduce la marca mirando la primera palabra del texto; si no la reconoce devuelve ''.
+const marcaDeTexto = (txt) => {
+    const limpio = String(txt || '').replace(/[^\wÁÉÍÓÚÑáéíóúñ\s]/g, ' ').trim();
+    if (!limpio) return '';
+    const palabras = limpio.split(/\s+/);
+    // se prueba con las dos primeras palabras por si el nombre trae basura delante
+    for (const p of palabras.slice(0, 2)) {
+        const m = MARCA_POR_PALABRA[p.toUpperCase()];
+        if (m) return m;
+    }
+    return '';
+};
+
+ipcMain.on('obtener-modelos-almacen', async (event) => {
+    try {
+        const { data: prods, error } = await supabase.from('productos')
+            .select('nombre, categoria, modelo_compatible, stock')
+            .eq('empresa_id', empresaActual);
+        if (error) throw error;
+
+        // clave "Marca|MODELO" -> agregado, para no repetir el mismo equipo por cada repuesto
+        const mapa = new Map();
+
+        (prods || []).forEach(p => {
+            const base = String(p.modelo_compatible || '').trim() || String(p.nombre || '').replace(PREFIJO_PIEZA, '').trim();
+            if (!base) return;
+
+            const sinRuido = base.replace(RUIDO_PANEL, ' ').replace(/\s+/g, ' ').trim();
+            if (!sinRuido) return;
+
+            // La marca se deduce UNA vez por producto y se hereda a todas las variantes:
+            // "MOTOROLA G04 / G24 / E14" -> G24 y E14 también son Motorola.
+            const marca = marcaDeTexto(sinRuido) || marcaDeTexto(p.nombre) || 'Otros';
+
+            sinRuido.split('/').forEach(variante => {
+                let modelo = variante.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+                // quitar la marca del inicio: "SAMSUNG A36" -> "A36" (Galaxy/Redmi/Poco se dejan,
+                // porque forman parte del nombre con el que el técnico reconoce el equipo).
+                modelo = modelo.replace(/^(SAMSUNG|XIAOMI|MOTOROLA|HUAWEI|APPLE|OPPO|VIVO|REALME|ZTE|LG|NOKIA|TECNO|INFINIX|ALCATEL|SONY|BLU|HONOR)\s+/i, '').trim();
+                if (modelo.length < 2 || !/[A-Za-z0-9]/.test(modelo)) return;
+                // "IPHONE 12 / 12 PRO": la segunda variante queda como "12 PRO" y se leería mal
+                // suelta en la lista. Se le devuelve el "iPhone" para que todos se vean igual.
+                if (marca === 'Apple' && /^\d/.test(modelo)) modelo = 'iPhone ' + modelo;
+
+                const clave = marca + '|' + claveModelo(marca, modelo);
+                const acc = mapa.get(clave) || { marca, modelo, piezas: 0, stock: 0 };
+                acc.piezas += 1;
+                acc.stock += Number(p.stock) || 0;
+                // Entre "A31" y "Galaxy A31" se muestra el nombre más completo.
+                if (modelo.length > acc.modelo.length) acc.modelo = modelo;
+                mapa.set(clave, acc);
+            });
+        });
+
+        // Agrupar por marca: { Samsung: [{modelo, piezas, stock}, ...], ... }
+        const porMarca = {};
+        [...mapa.values()].forEach(m => {
+            (porMarca[m.marca] = porMarca[m.marca] || []).push({ modelo: m.modelo, piezas: m.piezas, stock: m.stock });
+        });
+        // Dentro de cada marca: primero lo que tiene stock, luego alfabético.
+        Object.values(porMarca).forEach(lista => lista.sort((a, b) =>
+            (b.stock > 0) - (a.stock > 0) || a.modelo.localeCompare(b.modelo, 'es', { numeric: true })
+        ));
+
+        event.reply('modelos-almacen-respuesta', { ok: true, marcas: porMarca });
+    } catch (e) {
+        console.warn('No se pudo armar el catálogo del almacén:', e.message);
+        event.reply('modelos-almacen-respuesta', { ok: false, msg: e.message, marcas: {} });
+    }
+});
+
 // === PROVEEDORES (PERSISTENCIA SEGURA EN SUPABASE + CONTROL DE FALLOS) ===
 ipcMain.on('guardar-proveedor-db', async (event, prov) => {
     try {
