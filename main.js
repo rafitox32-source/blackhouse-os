@@ -670,6 +670,46 @@ ipcMain.on('guardar-cliente', async (event, cliente) => {
     } catch (err) { event.reply('resultado-cliente', { success: false, msg: 'Error al guardar' }); }
 });
 
+// Corregir los datos de contacto de un cliente ya registrado (cambió de número, escribió mal
+// el nombre, etc.). SOLO toca la ficha del cliente: no roza las órdenes ni ningún importe.
+// Las órdenes ya emitidas guardan el nombre y teléfono con los que se recibió el equipo y así
+// se quedan, porque son el comprobante de ese trabajo.
+ipcMain.on('actualizar-cliente', async (event, cliente) => {
+    try {
+        const id = Number(cliente && cliente.id);
+        if (!id) return event.reply('cliente-actualizado', { success: false, msg: 'Cliente inválido' });
+
+        const nombre = String(cliente.nombre || '').trim();
+        const telefono = String(cliente.telefono || '').trim();
+        if (!nombre || !telefono) {
+            return event.reply('cliente-actualizado', { success: false, msg: 'El nombre y el teléfono son obligatorios' });
+        }
+
+        const cambios = {
+            nombre,
+            telefono,
+            email: String(cliente.email || '').trim() || null,
+            direccion: String(cliente.direccion || '').trim() || null
+        };
+
+        // Misma visibilidad que obtener-clientes: el técnico solo puede corregir sus clientes.
+        let q = supabase.from('clientes').update(cambios)
+            .eq('id', id)
+            .eq('empresa_id', empresaActual);
+        if (rolActual === 'tecnico') q = q.eq('tecnico_id', usuarioActual);
+
+        const { data, error } = await q.select('id');
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            return event.reply('cliente-actualizado', { success: false, msg: 'No se encontró ese cliente o no tienes permiso para editarlo' });
+        }
+        event.reply('cliente-actualizado', { success: true, msg: 'Datos del cliente actualizados' });
+    } catch (err) {
+        console.error('Error actualizando cliente:', err.message);
+        event.reply('cliente-actualizado', { success: false, msg: 'Error al actualizar: ' + err.message });
+    }
+});
+
 ipcMain.on('obtener-clientes', async (event) => {
     let query = supabase.from('clientes')
         .select('*')

@@ -3070,8 +3070,7 @@
                             <p style="margin:4px 0 0; color:#666; font-size:13px;">Base de datos de todos tus clientes
                                 registrados</p>
                         </div>
-                        <button class="bh-btn-purple"
-                            onclick="document.getElementById('modal-cliente').style.display='flex'">+ Nuevo
+                        <button class="bh-btn-purple" onclick="abrirModalCliente()">+ Nuevo
                             Cliente</button>
                     </div>
 
@@ -4151,7 +4150,15 @@
     </div>
     <div id="modal-cliente" class="modal-overlay">
         <div class="modal-content">
-            <h2 style="margin-top:0;">Registrar Nuevo Cliente</h2>
+            <h2 style="margin-top:0;" id="modal-cliente-titulo">Registrar Nuevo Cliente</h2>
+            <!-- Vacío = alta nueva; con id = se está corrigiendo la ficha de ese cliente. -->
+            <input type="hidden" id="edit-cli-id" value="">
+            <div id="modal-cliente-aviso"
+                style="display:none; margin-bottom:14px; padding:9px 12px; border-radius:8px; font-size:11px; line-height:1.5;
+                       background:rgba(124,58,237,0.08); border:1px dashed var(--bh-purple); color:var(--text-muted);">
+                Solo se corrigen los datos de contacto. Las órdenes ya registradas conservan el nombre y
+                el teléfono con los que se recibió el equipo, y ningún importe se toca.
+            </div>
             <div class="grid-inputs">
                 <div class="input-group"><label>Nombre Completo</label><input type="text" id="new-cli-nombre"
                         class="bh-input"></div>
@@ -4163,9 +4170,9 @@
                         id="new-cli-dir" class="bh-input"></div>
             </div>
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
-                <button class="bh-btn-white"
-                    onclick="document.getElementById('modal-cliente').style.display='none'">Cancelar</button>
-                <button class="bh-btn-purple" onclick="guardarCliente()">Guardar Cliente</button>
+                <button class="bh-btn-white" onclick="cerrarModalCliente()">Cancelar</button>
+                <button class="bh-btn-purple" id="modal-cliente-guardar" onclick="guardarCliente()">Guardar
+                    Cliente</button>
             </div>
         </div>
     </div>
@@ -6652,21 +6659,37 @@
 
         function guardarCliente() {
             const datosCliente = {
-                nombre: document.getElementById('new-cli-nombre').value,
-                telefono: document.getElementById('new-cli-tel').value,
-                email: document.getElementById('new-cli-email').value,
-                direccion: document.getElementById('new-cli-dir').value
+                nombre: document.getElementById('new-cli-nombre').value.trim(),
+                telefono: document.getElementById('new-cli-tel').value.trim(),
+                email: document.getElementById('new-cli-email').value.trim(),
+                direccion: document.getElementById('new-cli-dir').value.trim()
             };
             if (!datosCliente.nombre || !datosCliente.telefono) return showToast("Faltan datos", "warning");
-            ipcRenderer.send('guardar-cliente', datosCliente);
+
+            // El mismo modal sirve para dar de alta y para corregir: lo decide el id oculto.
+            const id = document.getElementById('edit-cli-id').value;
+            if (id) {
+                datosCliente.id = Number(id);
+                ipcRenderer.send('actualizar-cliente', datosCliente);
+            } else {
+                ipcRenderer.send('guardar-cliente', datosCliente);
+            }
         }
 
         ipcRenderer.on('resultado-cliente', (e, res) => {
             if (res.success) {
                 showToast(res.msg, 'success');
-                document.getElementById('modal-cliente').style.display = 'none';
+                cerrarModalCliente();
                 ipcRenderer.send('obtener-clientes');
             } else { showToast(res.msg, 'danger'); }
+        });
+
+        ipcRenderer.on('cliente-actualizado', (e, res) => {
+            if (res && res.success) {
+                showToast(res.msg, 'success');
+                cerrarModalCliente();
+                ipcRenderer.send('obtener-clientes');
+            } else { showToast((res && res.msg) || 'No se pudo actualizar', 'danger'); }
         });
 
         ipcRenderer.on('resultado-guardado', (e, datos) => {
@@ -7832,12 +7855,53 @@
             else { body.innerHTML = rows.map(c => `<tr><td>${c.nombre}</td><td>${c.ultima_visita || '-'}</td><td><button class="bh-btn-white">Enviar Promo</button></td></tr>`).join(''); }
         });
 
+        // Se guardan tal cual llegan para poder abrir la ficha a editar por id, sin tener que
+        // meter los datos del cliente dentro del HTML del onclick (ahí un apóstrofo en el
+        // nombre —"D'Angelo"— rompía el botón).
+        let clientesActuales = [];
+
+        const htmlSeguro = (txt) => String(txt == null ? '' : txt)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
         ipcRenderer.on('lista-de-clientes', (e, rows) => {
+            clientesActuales = rows || [];
             const tbody = document.getElementById('tabla-clientes');
             if (!tbody) return;
-            if (!rows || rows.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No hay clientes.</td></tr>'; }
-            else { tbody.innerHTML = rows.map(c => `<tr><td style="font-weight:bold; color:white;">${c.nombre || 'Sin Nombre'}</td><td>${c.telefono || '-'}</td><td>${c.email || '-'}</td><td><button class="bh-btn-white" onclick="window.open('https://wa.me/51${c.telefono}')">WhatsApp 💬</button></td></tr>`).join(''); }
+            if (clientesActuales.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No hay clientes.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = clientesActuales.map(c => `<tr>
+                    <td style="font-weight:bold; color:white;">${htmlSeguro(c.nombre) || 'Sin Nombre'}</td>
+                    <td>${htmlSeguro(c.telefono) || '-'}</td>
+                    <td>${htmlSeguro(c.email) || '-'}</td>
+                    <td style="text-align:right; padding-right:15px; white-space:nowrap;">
+                        <button class="bh-btn-white" onclick="abrirModalCliente(${c.id})" title="Corregir nombre, teléfono, email o dirección">✏️ Editar</button>
+                        <button class="bh-btn-white" onclick="window.open('https://wa.me/51${encodeURIComponent(c.telefono || '')}')">WhatsApp 💬</button>
+                    </td>
+                </tr>`).join('');
         });
+
+        // Abre el modal vacío (alta) o cargado con la ficha del cliente (corrección).
+        function abrirModalCliente(id) {
+            const c = id ? clientesActuales.find(x => x.id === id) : null;
+            document.getElementById('edit-cli-id').value = c ? c.id : '';
+            document.getElementById('new-cli-nombre').value = c ? (c.nombre || '') : '';
+            document.getElementById('new-cli-tel').value = c ? (c.telefono || '') : '';
+            document.getElementById('new-cli-email').value = c ? (c.email || '') : '';
+            document.getElementById('new-cli-dir').value = c ? (c.direccion || '') : '';
+            document.getElementById('modal-cliente-titulo').innerText = c ? 'Editar Datos del Cliente' : 'Registrar Nuevo Cliente';
+            document.getElementById('modal-cliente-guardar').innerText = c ? 'Guardar Cambios' : 'Guardar Cliente';
+            document.getElementById('modal-cliente-aviso').style.display = c ? 'block' : 'none';
+            document.getElementById('modal-cliente').style.display = 'flex';
+            document.getElementById('new-cli-nombre').focus();
+        }
+
+        function cerrarModalCliente() {
+            document.getElementById('modal-cliente').style.display = 'none';
+            document.getElementById('edit-cli-id').value = '';
+        }
 
         // Cache de técnicos de la empresa (para los desplegables de asignación).
         let todosLosTecnicos = [];
