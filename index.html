@@ -2944,7 +2944,8 @@
                             </div>
                             <div class="input-group"><label>Costo de Repuesto (S/)</label>
                                 <input type="number" id="cost-part" class="bh-input" placeholder="0.00"
-                                    oninput="calcularTotal()"></div>
+                                    title="Se llena solo al tocar un repuesto de la lista, pero lo puedes cambiar a mano"
+                                    oninput="costoRepuestoEditado()"></div>
                             <!-- La mano de obra ya no se escribe: sale de restarle el repuesto al total. -->
                             <div class="input-group"><label style="color:#0ea5e9;">Mano de Obra (S/)
                                     <span style="font-size:10px; color:#64748b; font-weight:normal;">· automático</span></label>
@@ -6471,17 +6472,66 @@
             if ((modelo || '').trim().length < 3) { if (hint) hint.style.display = 'none'; return; }
             timerStockModelo = setTimeout(() => ipcRenderer.send('sugerir-stock-modelo', modelo), 450);
         }
+        // Repuestos que le sirven al modelo que se está recibiendo. Se guardan para poder
+        // cobrarlos con un toque sin volver a consultar.
+        let repuestosSugeridos = [];
+        let repuestoElegido = null;
+
         ipcRenderer.on('stock-sugerido-modelo', (e, rows) => {
             const hint = document.getElementById('stock-modelo-hint');
             if (!hint) return;
-            if (!rows || !rows.length) { hint.style.display = 'none'; return; }
-            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-            hint.innerHTML = '<div style="font-weight:700; color:var(--success); font-size:12px; margin-bottom:6px;">✅ Tienes en stock para este modelo:</div>' +
-                rows.map(p => `<div style="display:flex; justify-content:space-between; gap:8px; padding:3px 0; font-size:12px;">
-                    <span style="color:#ddd;">${esc(p.nombre)}</span>
-                    <span style="color:#888; white-space:nowrap;">${p.stock} und · <b style="color:var(--success);">S/ ${(parseFloat(p.precio) || 0).toFixed(2)}</b></span></div>`).join('');
+            repuestosSugeridos = rows || [];
+            repuestoElegido = null;
+            if (!repuestosSugeridos.length) { hint.style.display = 'none'; return; }
+            pintarRepuestosSugeridos();
             hint.style.display = 'block';
         });
+
+        function pintarRepuestosSugeridos() {
+            const hint = document.getElementById('stock-modelo-hint');
+            if (!hint) return;
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            hint.innerHTML = '<div style="font-weight:700; color:var(--success); font-size:12px; margin-bottom:6px;">' +
+                '✅ Repuestos en stock para este modelo <span style="font-weight:400; color:var(--text-muted);">— toca uno para cobrarlo</span></div>' +
+                repuestosSugeridos.map((p, i) => {
+                    const activo = repuestoElegido === i;
+                    return `<div onclick="elegirRepuestoSugerido(${i})" title="Poner S/ ${(parseFloat(p.precio) || 0).toFixed(2)} como costo de repuesto"
+                        style="display:flex; justify-content:space-between; gap:8px; align-items:center; padding:5px 7px; margin:2px 0; font-size:12px;
+                               cursor:pointer; border-radius:6px; border:1px solid ${activo ? 'var(--success)' : 'transparent'};
+                               background:${activo ? 'rgba(16,185,129,0.14)' : 'transparent'};">
+                        <span style="color:#ddd;">${activo ? '✔ ' : ''}${esc(p.nombre)}</span>
+                        <span style="color:#888; white-space:nowrap;">${p.stock} und · <b style="color:var(--success);">S/ ${(parseFloat(p.precio) || 0).toFixed(2)}</b></span>
+                    </div>`;
+                }).join('');
+        }
+
+        // Pone el precio del repuesto en la orden. NO descuenta stock: la salida del almacén
+        // se sigue registrando en Laboratorio, como hasta ahora.
+        function elegirRepuestoSugerido(i) {
+            const p = repuestosSugeridos[i];
+            if (!p) return;
+            repuestoElegido = (repuestoElegido === i) ? null : i;   // volver a tocarlo lo suelta
+            const campo = document.getElementById('cost-part');
+            campo.value = repuestoElegido === null ? '' : (parseFloat(p.precio) || 0).toFixed(2);
+            calcularTotal();
+            pintarRepuestosSugeridos();
+            if (repuestoElegido !== null) showToast(`Repuesto: ${p.nombre} · S/ ${(parseFloat(p.precio) || 0).toFixed(2)}`, 'success');
+        }
+
+        // El costo se llena solo al tocar un repuesto, pero sigue siendo un campo normal: si el
+        // precio de ese equipo no es el de lista se escribe encima y el ✔ se suelta, para que la
+        // lista no quede diciendo que se está cobrando algo que ya no es.
+        function costoRepuestoEditado() {
+            if (repuestoElegido !== null) {
+                const p = repuestosSugeridos[repuestoElegido];
+                const puesto = parseFloat(document.getElementById('cost-part').value);
+                if (!p || puesto !== (parseFloat(p.precio) || 0)) {
+                    repuestoElegido = null;
+                    pintarRepuestosSugeridos();
+                }
+            }
+            calcularTotal();
+        }
 
         function guardarOrden() {
             const nombre = document.getElementById('cli').value;
@@ -13595,10 +13645,11 @@
 
             countLabel.innerText = `${totalEncontrados} encontrados` + (totalEncontrados > 100 ? ' (mostrando 100)' : '');
 
-            // "Agregar modelo nuevo" solo tiene sentido en el catálogo general: el de almacén se
-            // deduce del inventario, ahí un modelo aparece registrando su repuesto.
-            const botonAgregar = esAlmacen ? '' : `<button type="button" class="model-btn" onclick="agregarModeloNuevo()" style="border:1px dashed var(--bh-purple); color:var(--bh-purple);">
-                        <i class='bx bx-plus' style="margin-right:5px;"></i> Agregar modelo nuevo
+            // En "Mi almacén" la lista sale del inventario, así que un equipo del que no se tiene
+            // repuesto no puede estar. Igual llega a repararse, así que el botón también va ahí:
+            // lo agrega al catálogo general (queda guardado) y lo elige de una.
+            const botonAgregar = `<button type="button" class="model-btn" onclick="agregarModeloNuevo()" style="border:1px dashed var(--bh-purple); color:var(--bh-purple);">
+                        <i class='bx bx-plus' style="margin-right:5px;"></i> ${esAlmacen ? 'Otro modelo (sin repuesto en stock)' : 'Agregar modelo nuevo'}
                     </button>`;
 
             if (mostrados.length === 0) {
@@ -13641,6 +13692,15 @@
             if (!marcasModelosCache[marca]) marcasModelosCache[marca] = [];
             if (!marcasModelosCache[marca].includes(modelo)) marcasModelosCache[marca].push(modelo);
             ipcRenderer.send('agregar-modelo-nuevo', { marca, modelo });
+
+            // En "Mi almacén" el modelo recién agregado no puede aparecer en la lista (esa sale
+            // del inventario y todavía no hay repuesto), así que se elige directo: es el equipo
+            // que se está recibiendo ahora. Queda guardado en el catálogo general para después.
+            if (fuenteModelos === 'almacen') {
+                showToast(`Modelo "${modelo}" agregado a ${marca}`, 'success');
+                seleccionarModelo(`${marca} ${modelo}`, marca, modelo);
+                return;
+            }
 
             marcaActiva = marca;
             filtrarYRenderizarModelos();
