@@ -1642,6 +1642,47 @@
             color: white;
         }
 
+        /* Pestañas "Mi almacén" / "Catálogo general" del selector de modelos */
+        .fuente-btn {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 9px;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .fuente-btn:hover {
+            border-color: var(--bh-purple);
+            color: var(--text-main);
+        }
+
+        .fuente-btn.active {
+            background: linear-gradient(135deg, var(--bh-purple-dark) 0%, var(--bh-purple) 100%);
+            border-color: var(--bh-purple);
+            color: white;
+        }
+
+        /* Cuántas piezas hay en almacén para ese modelo */
+        .stock-badge {
+            float: right;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 20px;
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+        }
+
+        .stock-badge.vacio {
+            background: rgba(255, 255, 255, 0.06);
+            color: #888;
+        }
+
         /* === Modal de Importación Excel === */
         .excel-import-modal .modal-content {
             max-width: 700px;
@@ -2738,6 +2779,10 @@
                         <p style="color:var(--text-muted); font-size:12px; margin-top:-6px;">Útil cuando el equipo actual todavía no tiene fotos: mira cómo son las piezas de un modelo parecido.</p>
                         <div style="display:flex; gap:8px; margin-bottom:12px;">
                             <input type="text" id="holo-similares-modelo-input" class="bh-input" placeholder="Ej: iPhone 13 Pro" style="margin:0;" onkeypress="if(event.key==='Enter') holoBuscarModelosSimilares()">
+                            <button type="button" class="bh-btn-white" onclick="abrirSelectorModelos('holo-similares-modelo-input', 'almacen')"
+                                style="padding:0 12px;" title="Elegir de mi catálogo de modelos">
+                                <i class='bx bx-mobile-alt'></i>
+                            </button>
                             <button class="bh-btn-purple" onclick="holoBuscarModelosSimilares()">Buscar</button>
                         </div>
                         <div id="holo-similares-resultados" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-height:320px; overflow-y:auto;"></div>
@@ -2858,6 +2903,12 @@
                                 <div style="display:flex; gap:8px;">
                                     <input type="text" id="mod" class="bh-input" placeholder="Ej: iPhone 13 Pro"
                                         style="flex:1;" oninput="sugerirStockModelo(this.value)">
+                                    <button type="button" class="bh-btn-purple"
+                                        onclick="abrirSelectorModelos('mod', 'almacen')"
+                                        style="padding:0 15px; display:flex; align-items:center; justify-content:center;"
+                                        title="Elegir de mi catálogo (los modelos que tengo en almacén)">
+                                        <i class='bx bx-mobile-alt' style="font-size:18px;"></i>
+                                    </button>
                                 </div>
                                 <div id="stock-modelo-hint" style="display:none; margin-top:8px; padding:10px 12px; background:rgba(16,185,129,0.07); border:1px dashed var(--success); border-radius:8px;"></div>
                             </div>
@@ -2893,7 +2944,8 @@
                             </div>
                             <div class="input-group"><label>Costo de Repuesto (S/)</label>
                                 <input type="number" id="cost-part" class="bh-input" placeholder="0.00"
-                                    oninput="calcularTotal()"></div>
+                                    title="Se llena solo al tocar un repuesto de la lista, pero lo puedes cambiar a mano"
+                                    oninput="costoRepuestoEditado()"></div>
                             <!-- La mano de obra ya no se escribe: sale de restarle el repuesto al total. -->
                             <div class="input-group"><label style="color:#0ea5e9;">Mano de Obra (S/)
                                     <span style="font-size:10px; color:#64748b; font-weight:normal;">· automático</span></label>
@@ -3019,8 +3071,7 @@
                             <p style="margin:4px 0 0; color:#666; font-size:13px;">Base de datos de todos tus clientes
                                 registrados</p>
                         </div>
-                        <button class="bh-btn-purple"
-                            onclick="document.getElementById('modal-cliente').style.display='flex'">+ Nuevo
+                        <button class="bh-btn-purple" onclick="abrirModalCliente()">+ Nuevo
                             Cliente</button>
                     </div>
 
@@ -4100,7 +4151,15 @@
     </div>
     <div id="modal-cliente" class="modal-overlay">
         <div class="modal-content">
-            <h2 style="margin-top:0;">Registrar Nuevo Cliente</h2>
+            <h2 style="margin-top:0;" id="modal-cliente-titulo">Registrar Nuevo Cliente</h2>
+            <!-- Vacío = alta nueva; con id = se está corrigiendo la ficha de ese cliente. -->
+            <input type="hidden" id="edit-cli-id" value="">
+            <div id="modal-cliente-aviso"
+                style="display:none; margin-bottom:14px; padding:9px 12px; border-radius:8px; font-size:11px; line-height:1.5;
+                       background:rgba(124,58,237,0.08); border:1px dashed var(--bh-purple); color:var(--text-muted);">
+                Solo se corrigen los datos de contacto. Las órdenes ya registradas conservan el nombre y
+                el teléfono con los que se recibió el equipo, y ningún importe se toca.
+            </div>
             <div class="grid-inputs">
                 <div class="input-group"><label>Nombre Completo</label><input type="text" id="new-cli-nombre"
                         class="bh-input"></div>
@@ -4112,9 +4171,9 @@
                         id="new-cli-dir" class="bh-input"></div>
             </div>
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
-                <button class="bh-btn-white"
-                    onclick="document.getElementById('modal-cliente').style.display='none'">Cancelar</button>
-                <button class="bh-btn-purple" onclick="guardarCliente()">Guardar Cliente</button>
+                <button class="bh-btn-white" onclick="cerrarModalCliente()">Cancelar</button>
+                <button class="bh-btn-purple" id="modal-cliente-guardar" onclick="guardarCliente()">Guardar
+                    Cliente</button>
             </div>
         </div>
     </div>
@@ -4253,6 +4312,18 @@
                     style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✖</button>
             </div>
 
+            <!-- De dónde salen los modelos: el almacén propio o el catálogo mundial -->
+            <div style="display:flex; gap:8px; margin-bottom:15px;">
+                <button type="button" id="tab-fuente-almacen" class="fuente-btn"
+                    onclick="cambiarFuenteModelos('almacen')" title="Solo los modelos que manejas en tu almacén">
+                    🏷️ Mi almacén
+                </button>
+                <button type="button" id="tab-fuente-general" class="fuente-btn"
+                    onclick="cambiarFuenteModelos('general')" title="Catálogo mundial de equipos">
+                    🌐 Catálogo general
+                </button>
+            </div>
+
             <div style="margin-bottom: 15px;">
                 <input type="text" id="selector-busqueda" class="bh-input"
                     placeholder="🔍 Buscar marca o modelo (ej. iPhone 13, S23)..." oninput="filtrarYRenderizarModelos()"
@@ -4260,7 +4331,8 @@
             </div>
 
             <div style="text-align:left; margin-bottom:10px;">
-                <label style="color:#aaa; font-size:12px; font-weight:600;">MARCAS POPULARES</label>
+                <label style="color:#aaa; font-size:12px; font-weight:600;" id="selector-marcas-label">MARCAS
+                    POPULARES</label>
             </div>
 
             <!-- Grid de marcas comunes -->
@@ -5574,6 +5646,8 @@
         let marcasSeleccionadas = [];
         let marcaActiva = '';
         let modelSelectorTargetId = ''; // Almacena qué input recibirá el modelo seleccionado
+        let fuenteModelos = 'general';  // 'general' = devices_cache.json | 'almacen' = mi propio stock
+        let almacenModelosCache = null; // { Marca: [{modelo, piezas, stock}] } — null = aún no leído
         let todosLosProductos = []; // Almacena la lista de productos cargados
         let categoriaInventarioActiva = 'Todos'; // Categoría activa de las pestañas
 
@@ -6398,17 +6472,66 @@
             if ((modelo || '').trim().length < 3) { if (hint) hint.style.display = 'none'; return; }
             timerStockModelo = setTimeout(() => ipcRenderer.send('sugerir-stock-modelo', modelo), 450);
         }
+        // Repuestos que le sirven al modelo que se está recibiendo. Se guardan para poder
+        // cobrarlos con un toque sin volver a consultar.
+        let repuestosSugeridos = [];
+        let repuestoElegido = null;
+
         ipcRenderer.on('stock-sugerido-modelo', (e, rows) => {
             const hint = document.getElementById('stock-modelo-hint');
             if (!hint) return;
-            if (!rows || !rows.length) { hint.style.display = 'none'; return; }
-            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-            hint.innerHTML = '<div style="font-weight:700; color:var(--success); font-size:12px; margin-bottom:6px;">✅ Tienes en stock para este modelo:</div>' +
-                rows.map(p => `<div style="display:flex; justify-content:space-between; gap:8px; padding:3px 0; font-size:12px;">
-                    <span style="color:#ddd;">${esc(p.nombre)}</span>
-                    <span style="color:#888; white-space:nowrap;">${p.stock} und · <b style="color:var(--success);">S/ ${(parseFloat(p.precio) || 0).toFixed(2)}</b></span></div>`).join('');
+            repuestosSugeridos = rows || [];
+            repuestoElegido = null;
+            if (!repuestosSugeridos.length) { hint.style.display = 'none'; return; }
+            pintarRepuestosSugeridos();
             hint.style.display = 'block';
         });
+
+        function pintarRepuestosSugeridos() {
+            const hint = document.getElementById('stock-modelo-hint');
+            if (!hint) return;
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            hint.innerHTML = '<div style="font-weight:700; color:var(--success); font-size:12px; margin-bottom:6px;">' +
+                '✅ Repuestos en stock para este modelo <span style="font-weight:400; color:var(--text-muted);">— toca uno para cobrarlo</span></div>' +
+                repuestosSugeridos.map((p, i) => {
+                    const activo = repuestoElegido === i;
+                    return `<div onclick="elegirRepuestoSugerido(${i})" title="Poner S/ ${(parseFloat(p.precio) || 0).toFixed(2)} como costo de repuesto"
+                        style="display:flex; justify-content:space-between; gap:8px; align-items:center; padding:5px 7px; margin:2px 0; font-size:12px;
+                               cursor:pointer; border-radius:6px; border:1px solid ${activo ? 'var(--success)' : 'transparent'};
+                               background:${activo ? 'rgba(16,185,129,0.14)' : 'transparent'};">
+                        <span style="color:#ddd;">${activo ? '✔ ' : ''}${esc(p.nombre)}</span>
+                        <span style="color:#888; white-space:nowrap;">${p.stock} und · <b style="color:var(--success);">S/ ${(parseFloat(p.precio) || 0).toFixed(2)}</b></span>
+                    </div>`;
+                }).join('');
+        }
+
+        // Pone el precio del repuesto en la orden. NO descuenta stock: la salida del almacén
+        // se sigue registrando en Laboratorio, como hasta ahora.
+        function elegirRepuestoSugerido(i) {
+            const p = repuestosSugeridos[i];
+            if (!p) return;
+            repuestoElegido = (repuestoElegido === i) ? null : i;   // volver a tocarlo lo suelta
+            const campo = document.getElementById('cost-part');
+            campo.value = repuestoElegido === null ? '' : (parseFloat(p.precio) || 0).toFixed(2);
+            calcularTotal();
+            pintarRepuestosSugeridos();
+            if (repuestoElegido !== null) showToast(`Repuesto: ${p.nombre} · S/ ${(parseFloat(p.precio) || 0).toFixed(2)}`, 'success');
+        }
+
+        // El costo se llena solo al tocar un repuesto, pero sigue siendo un campo normal: si el
+        // precio de ese equipo no es el de lista se escribe encima y el ✔ se suelta, para que la
+        // lista no quede diciendo que se está cobrando algo que ya no es.
+        function costoRepuestoEditado() {
+            if (repuestoElegido !== null) {
+                const p = repuestosSugeridos[repuestoElegido];
+                const puesto = parseFloat(document.getElementById('cost-part').value);
+                if (!p || puesto !== (parseFloat(p.precio) || 0)) {
+                    repuestoElegido = null;
+                    pintarRepuestosSugeridos();
+                }
+            }
+            calcularTotal();
+        }
 
         function guardarOrden() {
             const nombre = document.getElementById('cli').value;
@@ -6586,21 +6709,37 @@
 
         function guardarCliente() {
             const datosCliente = {
-                nombre: document.getElementById('new-cli-nombre').value,
-                telefono: document.getElementById('new-cli-tel').value,
-                email: document.getElementById('new-cli-email').value,
-                direccion: document.getElementById('new-cli-dir').value
+                nombre: document.getElementById('new-cli-nombre').value.trim(),
+                telefono: document.getElementById('new-cli-tel').value.trim(),
+                email: document.getElementById('new-cli-email').value.trim(),
+                direccion: document.getElementById('new-cli-dir').value.trim()
             };
             if (!datosCliente.nombre || !datosCliente.telefono) return showToast("Faltan datos", "warning");
-            ipcRenderer.send('guardar-cliente', datosCliente);
+
+            // El mismo modal sirve para dar de alta y para corregir: lo decide el id oculto.
+            const id = document.getElementById('edit-cli-id').value;
+            if (id) {
+                datosCliente.id = Number(id);
+                ipcRenderer.send('actualizar-cliente', datosCliente);
+            } else {
+                ipcRenderer.send('guardar-cliente', datosCliente);
+            }
         }
 
         ipcRenderer.on('resultado-cliente', (e, res) => {
             if (res.success) {
                 showToast(res.msg, 'success');
-                document.getElementById('modal-cliente').style.display = 'none';
+                cerrarModalCliente();
                 ipcRenderer.send('obtener-clientes');
             } else { showToast(res.msg, 'danger'); }
+        });
+
+        ipcRenderer.on('cliente-actualizado', (e, res) => {
+            if (res && res.success) {
+                showToast(res.msg, 'success');
+                cerrarModalCliente();
+                ipcRenderer.send('obtener-clientes');
+            } else { showToast((res && res.msg) || 'No se pudo actualizar', 'danger'); }
         });
 
         ipcRenderer.on('resultado-guardado', (e, datos) => {
@@ -7766,12 +7905,53 @@
             else { body.innerHTML = rows.map(c => `<tr><td>${c.nombre}</td><td>${c.ultima_visita || '-'}</td><td><button class="bh-btn-white">Enviar Promo</button></td></tr>`).join(''); }
         });
 
+        // Se guardan tal cual llegan para poder abrir la ficha a editar por id, sin tener que
+        // meter los datos del cliente dentro del HTML del onclick (ahí un apóstrofo en el
+        // nombre —"D'Angelo"— rompía el botón).
+        let clientesActuales = [];
+
+        const htmlSeguro = (txt) => String(txt == null ? '' : txt)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
         ipcRenderer.on('lista-de-clientes', (e, rows) => {
+            clientesActuales = rows || [];
             const tbody = document.getElementById('tabla-clientes');
             if (!tbody) return;
-            if (!rows || rows.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No hay clientes.</td></tr>'; }
-            else { tbody.innerHTML = rows.map(c => `<tr><td style="font-weight:bold; color:white;">${c.nombre || 'Sin Nombre'}</td><td>${c.telefono || '-'}</td><td>${c.email || '-'}</td><td><button class="bh-btn-white" onclick="window.open('https://wa.me/51${c.telefono}')">WhatsApp 💬</button></td></tr>`).join(''); }
+            if (clientesActuales.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">No hay clientes.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = clientesActuales.map(c => `<tr>
+                    <td style="font-weight:bold; color:white;">${htmlSeguro(c.nombre) || 'Sin Nombre'}</td>
+                    <td>${htmlSeguro(c.telefono) || '-'}</td>
+                    <td>${htmlSeguro(c.email) || '-'}</td>
+                    <td style="text-align:right; padding-right:15px; white-space:nowrap;">
+                        <button class="bh-btn-white" onclick="abrirModalCliente(${c.id})" title="Corregir nombre, teléfono, email o dirección">✏️ Editar</button>
+                        <button class="bh-btn-white" onclick="window.open('https://wa.me/51${encodeURIComponent(c.telefono || '')}')">WhatsApp 💬</button>
+                    </td>
+                </tr>`).join('');
         });
+
+        // Abre el modal vacío (alta) o cargado con la ficha del cliente (corrección).
+        function abrirModalCliente(id) {
+            const c = id ? clientesActuales.find(x => x.id === id) : null;
+            document.getElementById('edit-cli-id').value = c ? c.id : '';
+            document.getElementById('new-cli-nombre').value = c ? (c.nombre || '') : '';
+            document.getElementById('new-cli-tel').value = c ? (c.telefono || '') : '';
+            document.getElementById('new-cli-email').value = c ? (c.email || '') : '';
+            document.getElementById('new-cli-dir').value = c ? (c.direccion || '') : '';
+            document.getElementById('modal-cliente-titulo').innerText = c ? 'Editar Datos del Cliente' : 'Registrar Nuevo Cliente';
+            document.getElementById('modal-cliente-guardar').innerText = c ? 'Guardar Cambios' : 'Guardar Cliente';
+            document.getElementById('modal-cliente-aviso').style.display = c ? 'block' : 'none';
+            document.getElementById('modal-cliente').style.display = 'flex';
+            document.getElementById('new-cli-nombre').focus();
+        }
+
+        function cerrarModalCliente() {
+            document.getElementById('modal-cliente').style.display = 'none';
+            document.getElementById('edit-cli-id').value = '';
+        }
 
         // Cache de técnicos de la empresa (para los desplegables de asignación).
         let todosLosTecnicos = [];
@@ -13215,6 +13395,7 @@
             console.log("✨ [Catálogo] Renderer recibió marcas-modelos:", !!cache, cache ? Object.keys(cache).length : 0);
             if (cache && Object.keys(cache).length > 0) {
                 marcasModelosCache = cache;
+                if (fuenteModelos !== 'general') return;   // el modal está mostrando "Mi almacén"
                 marcasSeleccionadas = Object.keys(cache).sort();
                 inicializarSelectorMarcas();
 
@@ -13240,9 +13421,93 @@
             }
         });
 
+        // === MI CATÁLOGO: los modelos salen del propio almacén ===
+        // "Mi almacén" arma la lista con los modelos que el taller realmente maneja (deducidos de
+        // modelo_compatible de cada repuesto), en vez del catálogo mundial de miles de equipos.
+        ipcRenderer.on('modelos-almacen-respuesta', (e, res) => {
+            almacenModelosCache = (res && res.marcas) || {};
+            if (fuenteModelos !== 'almacen') return;
+            if (document.getElementById('modal-selector-modelos').style.display !== 'flex') return;
+
+            marcasSeleccionadas = Object.keys(almacenModelosCache).sort();
+            inicializarSelectorMarcas();
+
+            if (marcasSeleccionadas.length === 0) {
+                const grid = document.getElementById('selector-modelos-grid');
+                if (grid) {
+                    grid.innerHTML = `
+                        <div style="grid-column: 1/-1; text-align:center; color:var(--text-muted); padding:24px; line-height:1.5;">
+                            Todavía no hay modelos en tu almacén.<br>
+                            <span style="font-size:11px;">Registra repuestos en Inventario con su modelo compatible y aparecerán aquí solos.</span>
+                        </div>`;
+                }
+                return;
+            }
+            // Arrancar en la marca con más modelos: es la que más va a usar el que recepciona.
+            const principal = marcasSeleccionadas.slice().sort((a, b) =>
+                (almacenModelosCache[b] || []).length - (almacenModelosCache[a] || []).length)[0];
+            seleccionarMarca(principal, document.querySelector(`.brand-btn[data-brand="${principal}"]`));
+        });
+
+        function cambiarFuenteModelos(fuente) {
+            fuenteModelos = fuente;
+            // Queda recordado: si el taller trabaja siempre con su propio catálogo, el selector
+            // le abre ahí desde cualquier pantalla, sin tener que cambiar de pestaña cada vez.
+            try { localStorage.setItem('bh_fuente_modelos', fuente); } catch (e) { }
+            marcaActiva = '';
+            document.getElementById('selector-busqueda').value = '';
+            document.getElementById('tab-fuente-almacen').classList.toggle('active', fuente === 'almacen');
+            document.getElementById('tab-fuente-general').classList.toggle('active', fuente === 'general');
+
+            const etiqueta = document.getElementById('selector-marcas-label');
+            if (etiqueta) etiqueta.innerText = fuente === 'almacen' ? 'MARCAS DE MI ALMACÉN' : 'MARCAS POPULARES';
+
+            const grid = document.getElementById('selector-modelos-grid');
+            if (fuente === 'almacen') {
+                if (almacenModelosCache === null) {
+                    if (grid) {
+                        grid.innerHTML = `
+                            <div style="grid-column:1/-1; text-align:center; color:var(--text-muted); padding:30px;">
+                                <i class='bx bx-loader-alt bx-spin' style="font-size:24px; color:var(--bh-purple);"></i>
+                                <br>Leyendo tu almacén...
+                            </div>`;
+                    }
+                    document.getElementById('selector-marcas-grid').innerHTML = '';
+                    if (isElectron) ipcRenderer.send('obtener-modelos-almacen');
+                    return;
+                }
+                marcasSeleccionadas = Object.keys(almacenModelosCache).sort();
+            } else {
+                marcasSeleccionadas = Object.keys(marcasModelosCache).sort();
+            }
+
+            inicializarSelectorMarcas();
+            if (marcasSeleccionadas.length > 0) {
+                const preferida = fuente === 'almacen'
+                    ? marcasSeleccionadas.slice().sort((a, b) =>
+                        (almacenModelosCache[b] || []).length - (almacenModelosCache[a] || []).length)[0]
+                    : (marcasSeleccionadas.includes('Apple') ? 'Apple' : marcasSeleccionadas[0]);
+                seleccionarMarca(preferida, document.querySelector(`.brand-btn[data-brand="${preferida}"]`));
+            } else {
+                filtrarYRenderizarModelos();
+            }
+        }
+
         function inicializarSelectorMarcas() {
             const grid = document.getElementById('selector-marcas-grid');
             if (!grid) return;
+
+            // En "Mi almacén" las marcas se muestran tal cual vienen del inventario, con la
+            // cantidad de modelos de cada una; no hay lista de "populares" que valga.
+            if (fuenteModelos === 'almacen') {
+                grid.innerHTML = marcasSeleccionadas.map(marca => {
+                    const n = (almacenModelosCache[marca] || []).length;
+                    return `<button type="button" class="brand-btn" data-brand="${marca}" onclick="seleccionarMarca('${marca}', this)">
+                                ${marca}<br><span style="font-size:10px; opacity:.65; font-weight:400;">${n} modelo${n === 1 ? '' : 's'}</span>
+                            </button>`;
+                }).join('');
+                return;
+            }
 
             // Marcas populares recomendadas en el tope
             const populares = ['Apple', 'Samsung', 'Xiaomi', 'Motorola', 'Huawei', 'Oppo', 'Vivo', 'Realme', 'Infinix', 'Google'];
@@ -13264,10 +13529,26 @@
             grid.innerHTML = html;
         }
 
-        function abrirSelectorModelos(targetId) {
+        function abrirSelectorModelos(targetId, fuente) {
             modelSelectorTargetId = targetId;
             document.getElementById('selector-busqueda').value = '';
             document.getElementById('modal-selector-modelos').style.display = 'flex';
+
+            // Si la pantalla no pide una fuente en concreto se respeta la última que eligió el
+            // usuario, así el que trabaja siempre con su propio catálogo lo tiene en todos lados.
+            if (!fuente) {
+                try { fuente = localStorage.getItem('bh_fuente_modelos') || 'general'; } catch (e) { fuente = 'general'; }
+            }
+
+            // Recepción y el Holograma piden "Mi almacén" siempre; Inventario y los grupos de
+            // compatibilidad no piden ninguna, así que siguen la preferencia guardada arriba.
+            if (fuente === 'almacen') {
+                almacenModelosCache = null;      // releer: el stock cambia todo el día
+                document.getElementById('selector-busqueda').focus();
+                cambiarFuenteModelos('almacen');
+                return;
+            }
+            cambiarFuenteModelos('general');
 
             // Re-solicitar el catálogo para asegurar que esté al día
             if (isElectron) {
@@ -13329,16 +13610,25 @@
             if (!grid) return;
 
             let modelosAMostrar = [];
+            const esAlmacen = fuenteModelos === 'almacen';
+            const fuente = esAlmacen ? (almacenModelosCache || {}) : marcasModelosCache;
+
+            // En "Mi almacén" cada entrada es {modelo, piezas, stock}; en el general es un string.
+            const aItem = (brand, entrada) => {
+                const model = esAlmacen ? entrada.modelo : entrada;
+                return {
+                    brand, model,
+                    fullName: `${brand} ${model}`,
+                    stock: esAlmacen ? entrada.stock : null
+                };
+            };
 
             if (query) {
                 // Búsqueda global (ignora marca activa)
                 marcasSeleccionadas.forEach(brand => {
-                    const list = marcasModelosCache[brand] || [];
-                    list.forEach(model => {
-                        const fullName = `${brand} ${model}`;
-                        if (fullName.toLowerCase().includes(query)) {
-                            modelosAMostrar.push({ brand, model, fullName });
-                        }
+                    (fuente[brand] || []).forEach(entrada => {
+                        const item = aItem(brand, entrada);
+                        if (item.fullName.toLowerCase().includes(query)) modelosAMostrar.push(item);
                     });
                 });
 
@@ -13346,14 +13636,7 @@
                 document.querySelectorAll('.brand-btn').forEach(btn => btn.classList.remove('active'));
             } else if (marcaActiva) {
                 // Mostrar modelos de la marca activa
-                const list = marcasModelosCache[marcaActiva] || [];
-                list.forEach(model => {
-                    modelosAMostrar.push({
-                        brand: marcaActiva,
-                        model: model,
-                        fullName: `${marcaActiva} ${model}`
-                    });
-                });
+                (fuente[marcaActiva] || []).forEach(entrada => modelosAMostrar.push(aItem(marcaActiva, entrada)));
             }
 
             // Limitar a máximo 100 resultados para no sobrecargar el DOM
@@ -13362,18 +13645,37 @@
 
             countLabel.innerText = `${totalEncontrados} encontrados` + (totalEncontrados > 100 ? ' (mostrando 100)' : '');
 
+            // En "Mi almacén" la lista sale del inventario, así que un equipo del que no se tiene
+            // repuesto no puede estar. Igual llega a repararse, así que el botón también va ahí:
+            // lo agrega al catálogo general (queda guardado) y lo elige de una.
             const botonAgregar = `<button type="button" class="model-btn" onclick="agregarModeloNuevo()" style="border:1px dashed var(--bh-purple); color:var(--bh-purple);">
-                        <i class='bx bx-plus' style="margin-right:5px;"></i> Agregar modelo nuevo
+                        <i class='bx bx-plus' style="margin-right:5px;"></i> ${esAlmacen ? 'Otro modelo (sin repuesto en stock)' : 'Agregar modelo nuevo'}
                     </button>`;
 
             if (mostrados.length === 0) {
-                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color:#777; padding: 20px;">No se encontraron modelos.</div>' + botonAgregar;
+                const vacio = esAlmacen
+                    ? 'No hay repuestos de ese modelo en tu almacén.'
+                    : 'No se encontraron modelos.';
+                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color:#777; padding: 20px;">${vacio}</div>` + botonAgregar;
                 return;
             }
 
+            const esc = (s) => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            // Al buscar, la etiqueta lleva marca + modelo y no entra en las columnas angostas.
+            grid.style.gridTemplateColumns = query
+                ? 'repeat(auto-fill, minmax(180px, 1fr))'
+                : '';
+
             grid.innerHTML = mostrados.map(item => {
-                return `<button type="button" class="model-btn" onclick="seleccionarModelo('${item.fullName}', '${item.brand}', '${item.model}')" title="${item.fullName}">
-                            <i class='bx bx-mobile-vibration' style="color:var(--bh-purple); margin-right:5px;"></i> ${item.model}
+                const badge = item.stock === null ? '' :
+                    `<span class="stock-badge${item.stock > 0 ? '' : ' vacio'}">${item.stock > 0 ? item.stock : 0}</span>`;
+                // Buscando se mezclan marcas: varios equipos se llaman igual (el A54 existe en
+                // Samsung, Oppo y Honor), así que ahí el botón tiene que decir de quién es.
+                const etiqueta = query
+                    ? `<span style="opacity:.6;">${item.brand}</span> ${item.model}`
+                    : item.model;
+                return `<button type="button" class="model-btn" onclick="seleccionarModelo('${esc(item.fullName)}', '${esc(item.brand)}', '${esc(item.model)}')" title="${esc(item.fullName)}${item.stock === null ? '' : ` · ${item.stock} en stock`}">
+                            <i class='bx bx-mobile-vibration' style="color:var(--bh-purple); margin-right:5px;"></i>${etiqueta}${badge}
                         </button>`;
             }).join('') + botonAgregar;
         }
@@ -13390,6 +13692,15 @@
             if (!marcasModelosCache[marca]) marcasModelosCache[marca] = [];
             if (!marcasModelosCache[marca].includes(modelo)) marcasModelosCache[marca].push(modelo);
             ipcRenderer.send('agregar-modelo-nuevo', { marca, modelo });
+
+            // En "Mi almacén" el modelo recién agregado no puede aparecer en la lista (esa sale
+            // del inventario y todavía no hay repuesto), así que se elige directo: es el equipo
+            // que se está recibiendo ahora. Queda guardado en el catálogo general para después.
+            if (fuenteModelos === 'almacen') {
+                showToast(`Modelo "${modelo}" agregado a ${marca}`, 'success');
+                seleccionarModelo(`${marca} ${modelo}`, marca, modelo);
+                return;
+            }
 
             marcaActiva = marca;
             filtrarYRenderizarModelos();
@@ -13422,6 +13733,10 @@
                     // Revisar si este modelo ya pertenece a un grupo de compatibilidad conocido
                     revisarSugerenciaCompatibilidad(marca || '', modelo || nombreCompleto);
                 }
+                // Recepción: mostrar de una los repuestos en stock que le sirven a ese equipo.
+                if (modelSelectorTargetId === 'mod') sugerirStockModelo(nombreCompleto);
+                // Holograma: buscar las piezas de ese modelo sin tener que tocar "Buscar".
+                if (modelSelectorTargetId === 'holo-similares-modelo-input') holoBuscarModelosSimilares();
                 // Disparar evento input para validaciones
                 targetInput.dispatchEvent(new Event('input', { bubbles: true }));
             }

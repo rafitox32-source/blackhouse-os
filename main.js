@@ -670,6 +670,46 @@ ipcMain.on('guardar-cliente', async (event, cliente) => {
     } catch (err) { event.reply('resultado-cliente', { success: false, msg: 'Error al guardar' }); }
 });
 
+// Corregir los datos de contacto de un cliente ya registrado (cambió de número, escribió mal
+// el nombre, etc.). SOLO toca la ficha del cliente: no roza las órdenes ni ningún importe.
+// Las órdenes ya emitidas guardan el nombre y teléfono con los que se recibió el equipo y así
+// se quedan, porque son el comprobante de ese trabajo.
+ipcMain.on('actualizar-cliente', async (event, cliente) => {
+    try {
+        const id = Number(cliente && cliente.id);
+        if (!id) return event.reply('cliente-actualizado', { success: false, msg: 'Cliente inválido' });
+
+        const nombre = String(cliente.nombre || '').trim();
+        const telefono = String(cliente.telefono || '').trim();
+        if (!nombre || !telefono) {
+            return event.reply('cliente-actualizado', { success: false, msg: 'El nombre y el teléfono son obligatorios' });
+        }
+
+        const cambios = {
+            nombre,
+            telefono,
+            email: String(cliente.email || '').trim() || null,
+            direccion: String(cliente.direccion || '').trim() || null
+        };
+
+        // Misma visibilidad que obtener-clientes: el técnico solo puede corregir sus clientes.
+        let q = supabase.from('clientes').update(cambios)
+            .eq('id', id)
+            .eq('empresa_id', empresaActual);
+        if (rolActual === 'tecnico') q = q.eq('tecnico_id', usuarioActual);
+
+        const { data, error } = await q.select('id');
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            return event.reply('cliente-actualizado', { success: false, msg: 'No se encontró ese cliente o no tienes permiso para editarlo' });
+        }
+        event.reply('cliente-actualizado', { success: true, msg: 'Datos del cliente actualizados' });
+    } catch (err) {
+        console.error('Error actualizando cliente:', err.message);
+        event.reply('cliente-actualizado', { success: false, msg: 'Error al actualizar: ' + err.message });
+    }
+});
+
 ipcMain.on('obtener-clientes', async (event) => {
     let query = supabase.from('clientes')
         .select('*')
@@ -702,32 +742,156 @@ ipcMain.on('buscar-clientes', async (event, texto) => {
     }
 });
 
-// Sugerir repuestos EN STOCK compatibles con el modelo del equipo que se está recibiendo.
-// Matching de solo lectura (no toca nada): por modelo_compatible (variantes separadas por "/")
-// o por tokens del modelo contenidos en el nombre del producto. Reusa normalizarModeloCompat.
+// Sugerir repuestos EN STOCK que le sirven al equipo que se está recibiendo. Solo lectura:
+// no descuenta nada, la salida del almacén se sigue registrando en Laboratorio.
+//
+// Usa las MISMAS variantes con las que se arma el catálogo de modelos (variantesDeModelo), así
+// lo que el usuario elige en el selector y lo que se le encuentra después siempre coinciden.
+// El comparador viejo era por substring y fallaba de tres formas distintas:
+//   · "C/M" (con marco) se partía por "/" y dejaba la variante "M", que estaba contenida en
+//     casi cualquier modelo: esa pantalla salía en todas las búsquedas;
+//   · "MOTOROLA G2" estaba contenido en "MOTOROLA G24", así que traía la pantalla equivocada;
+//   · "Galaxy A31" no encontraba "SAMSUNG A31" porque el texto no coincidía, aunque son el
+//     mismo equipo.
 ipcMain.on('sugerir-stock-modelo', async (event, modelo) => {
     try {
-        const norm = normalizarModeloCompat(modelo);
-        if (norm.length < 3) return event.reply('stock-sugerido-modelo', []);
+        if (String(modelo || '').trim().length < 3) return event.reply('stock-sugerido-modelo', []);
+        const buscadas = variantesDeModelo(modelo);
+        if (!buscadas.length) return event.reply('stock-sugerido-modelo', []);
+
         const { data: prods } = await supabase.from('productos')
             .select('id, nombre, categoria, precio, stock, modelo_compatible')
             .eq('empresa_id', empresaActual)
             .gt('stock', 0);
-        const tokens = norm.split(' ').filter(t => t.length > 1);
-        const coincide = (p) => {
-            const compat = normalizarModeloCompat(p.modelo_compatible);
-            if (compat) {
-                const variantes = compat.split('/').map(v => v.trim()).filter(Boolean);
-                if (variantes.some(v => norm.includes(v) || v.includes(norm))) return true;
-            }
-            const nombreN = normalizarModeloCompat(p.nombre);
-            return tokens.length > 0 && tokens.every(t => nombreN.includes(t));
-        };
+
+        const coincide = (p) => variantesDeModelo(p.modelo_compatible || p.nombre, p.nombre)
+            .some(a => buscadas.some(b => a.clave === b.clave && marcaCompatible(a.marca, b.marca)));
+
         const matches = (prods || []).filter(coincide).slice(0, 6)
             .map(p => ({ id: p.id, nombre: p.nombre, categoria: p.categoria, precio: p.precio, stock: p.stock }));
         event.reply('stock-sugerido-modelo', matches);
     } catch (e) {
+        console.warn('No se pudieron sugerir repuestos:', e.message);
         event.reply('stock-sugerido-modelo', []);
+    }
+});
+
+// === MI CATÁLOGO DE MODELOS: marcas y modelos deducidos del propio almacén ===
+// El catálogo general (devices_cache.json) trae miles de equipos que el taller nunca ve.
+// Esto arma un catálogo corto con SOLO los modelos para los que el taller tiene repuesto,
+// para poder elegir de ahí al recepcionar en vez de escribir el modelo a mano.
+
+// Palabras que describen el TIPO de panel, no el equipo. Se quitan antes de partir por "/"
+// (importante: "C/M" = con marco, si no se quita primero deja una variante basura "M").
+// (INCELL viene escrito también como "INCEL", y "con marco" como "C/M" o suelto "cm").
+const RUIDO_PANEL = /\b(?:C\s*\/\s*M|S\s*\/\s*M|CM|CON\s+MARCO|SIN\s+MARCO|INCELL?|AMOLED|OLED|TFT|OGS|LCD|GX|ZY|JK|ORIG(?:INAL)?|COPIA|CALIDAD\s+\w+)\b/gi;
+// Prefijos de categoría con los que empieza el nombre del producto cuando no hay modelo_compatible.
+const PREFIJO_PIEZA = /^\s*(?:PANTALLA|MICA(?:\s+(?:CER[ÁA]MICA|TEMPLADA|HIDROGEL))?(?:\s+MATTE)?|BATER[ÍI]A|FLEX|T[AÁ]CTIL|TOUCH|DISPLAY|MODULO|M[ÓO]DULO)\s+/i;
+// Primera palabra -> marca real. Cubre también las submarcas y series (Galaxy=Samsung, Redmi=Xiaomi…).
+const MARCA_POR_PALABRA = {
+    SAMSUNG: 'Samsung', GALAXY: 'Samsung',
+    XIAOMI: 'Xiaomi', REDMI: 'Xiaomi', READMI: 'Xiaomi', POCO: 'Xiaomi', MI: 'Xiaomi', NOTE: 'Xiaomi',
+    MOTOROLA: 'Motorola', MOTO: 'Motorola',
+    HUAWEI: 'Huawei', MATE: 'Huawei', HONOR: 'Honor',
+    IPHONE: 'Apple', APPLE: 'Apple', IPAD: 'Apple',
+    OPPO: 'Oppo', RENO: 'Oppo',
+    VIVO: 'Vivo', REALME: 'Realme', ZTE: 'ZTE', LG: 'LG', NOKIA: 'Nokia',
+    TECNO: 'Tecno', INFINIX: 'Infinix', ALCATEL: 'Alcatel', SONY: 'Sony', BLU: 'Blu'
+};
+
+// Serie que la marca le pone a casi todos sus equipos y que el taller escribe o no según
+// el proveedor: "A31" y "Galaxy A31" son el mismo celular y deben quedar en una sola ficha.
+// Ojo: quitar "REDMI" es correcto y NO confunde al Redmi 8 con el Redmi Note 8, porque
+// "Redmi Note 8" queda como "NOTE 8" y "Redmi 8" como "8".
+const SERIE_DE_MARCA = { Samsung: /^GALAXY\s+/, Xiaomi: /^REDMI\s+/, Apple: /^IPHONE\s+/ };
+const claveModelo = (marca, modelo) => {
+    const up = modelo.toUpperCase();
+    const serie = SERIE_DE_MARCA[marca];
+    return serie ? up.replace(serie, '') : up;
+};
+
+// Deduce la marca mirando la primera palabra del texto; si no la reconoce devuelve ''.
+const marcaDeTexto = (txt) => {
+    const limpio = String(txt || '').replace(/[^\wÁÉÍÓÚÑáéíóúñ\s]/g, ' ').trim();
+    if (!limpio) return '';
+    const palabras = limpio.split(/\s+/);
+    // se prueba con las dos primeras palabras por si el nombre trae basura delante
+    for (const p of palabras.slice(0, 2)) {
+        const m = MARCA_POR_PALABRA[p.toUpperCase()];
+        if (m) return m;
+    }
+    return '';
+};
+
+const MARCA_AL_INICIO = /^(?:SAMSUNG|XIAOMI|MOTOROLA|HUAWEI|APPLE|OPPO|VIVO|REALME|ZTE|LG|NOKIA|TECNO|INFINIX|ALCATEL|SONY|BLU|HONOR)\s+/i;
+
+// Descompone el texto de un equipo en sus variantes limpias. Es la pieza que comparten el
+// catálogo de modelos y la búsqueda de repuestos, para que no se puedan desincronizar.
+//   "PANTALLA SAMSUNG A31 AMOLED"        -> [{marca:'Samsung', modelo:'A31',  clave:'A31'}]
+//   "MOTOROLA G04 / G24 / E14"           -> G04, G24 y E14, los tres como Motorola
+//   "Galaxy A31"                         -> clave 'A31', o sea el mismo equipo que el primero
+const variantesDeModelo = (txt, textoParaMarca) => {
+    const base = String(txt || '').replace(PREFIJO_PIEZA, '').trim();
+    const sinRuido = base.replace(RUIDO_PANEL, ' ').replace(/\s+/g, ' ').trim();
+    if (!sinRuido) return [];
+
+    // La marca se deduce UNA vez y se hereda a todas las variantes: en
+    // "MOTOROLA G04 / G24 / E14" solo la primera la trae escrita.
+    const marca = marcaDeTexto(sinRuido) || marcaDeTexto(textoParaMarca) || 'Otros';
+
+    const out = [];
+    sinRuido.split('/').forEach(v => {
+        let modelo = v.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim()
+            .replace(MARCA_AL_INICIO, '').trim();
+        if (modelo.length < 2 || !/[A-Za-z0-9]/.test(modelo)) return;
+        // "IPHONE 12 / 12 PRO": la segunda variante queda como "12 PRO" y se leería mal
+        // suelta en la lista. Se le devuelve el "iPhone" para que todos se vean igual.
+        if (marca === 'Apple' && /^\d/.test(modelo)) modelo = 'iPhone ' + modelo;
+        out.push({ marca, modelo, clave: claveModelo(marca, modelo) });
+    });
+    return out;
+};
+
+// Dos textos pueden hablar del mismo equipo aunque uno no diga la marca ("A54" a secas).
+// Solo se descarta cuando ambos la traen y son distintas: el A54 de Samsung no es el de Oppo.
+const marcaCompatible = (a, b) => !a || !b || a === 'Otros' || b === 'Otros' || a === b;
+
+ipcMain.on('obtener-modelos-almacen', async (event) => {
+    try {
+        const { data: prods, error } = await supabase.from('productos')
+            .select('nombre, categoria, modelo_compatible, stock')
+            .eq('empresa_id', empresaActual);
+        if (error) throw error;
+
+        // clave "Marca|MODELO" -> agregado, para no repetir el mismo equipo por cada repuesto
+        const mapa = new Map();
+
+        (prods || []).forEach(p => {
+            variantesDeModelo(p.modelo_compatible || p.nombre, p.nombre).forEach(v => {
+                const clave = v.marca + '|' + v.clave;
+                const acc = mapa.get(clave) || { marca: v.marca, modelo: v.modelo, piezas: 0, stock: 0 };
+                acc.piezas += 1;
+                acc.stock += Number(p.stock) || 0;
+                // Entre "A31" y "Galaxy A31" se muestra el nombre más completo.
+                if (v.modelo.length > acc.modelo.length) acc.modelo = v.modelo;
+                mapa.set(clave, acc);
+            });
+        });
+
+        // Agrupar por marca: { Samsung: [{modelo, piezas, stock}, ...], ... }
+        const porMarca = {};
+        [...mapa.values()].forEach(m => {
+            (porMarca[m.marca] = porMarca[m.marca] || []).push({ modelo: m.modelo, piezas: m.piezas, stock: m.stock });
+        });
+        // Dentro de cada marca: primero lo que tiene stock, luego alfabético.
+        Object.values(porMarca).forEach(lista => lista.sort((a, b) =>
+            (b.stock > 0) - (a.stock > 0) || a.modelo.localeCompare(b.modelo, 'es', { numeric: true })
+        ));
+
+        event.reply('modelos-almacen-respuesta', { ok: true, marcas: porMarca });
+    } catch (e) {
+        console.warn('No se pudo armar el catálogo del almacén:', e.message);
+        event.reply('modelos-almacen-respuesta', { ok: false, msg: e.message, marcas: {} });
     }
 });
 
