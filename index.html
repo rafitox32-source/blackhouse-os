@@ -6060,6 +6060,9 @@
             const empId = localStorage.getItem('miEmpresaId');
             if (empId && empId !== 'null' && empId !== 'undefined' && typeof ipcRenderer !== 'undefined') {
                 ipcRenderer.send('pedir-datos-empresa', { id: empId });
+                // Y de paso los colores propios del taller, si tiene. La pantalla ya está
+                // pintada con lo guardado: esto solo la pone al día si algo cambió.
+                if (typeof pedirTemaEmpresa === 'function') pedirTemaEmpresa();
             }
         }
 
@@ -6105,6 +6108,154 @@
         const TEMAS_CLAROS = ['blanco', 'doha'];   // temas de fondo claro
         const TEMAS_NOMBRES = { original: 'Original', negro: 'Negro', blanco: 'Blanco', doha: 'Doha-cell', premium: 'Premium' };
 
+        // ================= TEMA PROPIO DE LA EMPRESA (marca blanca) =====================
+        // Los cinco temas de arriba son los de fábrica y siguen funcionando igual. Esto es lo
+        // que se le suma encima: una empresa puede guardar SUS colores en la base y el
+        // programa se los pinta al entrar.
+        //
+        // Mientras la empresa no tenga colores guardados, esto no hace absolutamente nada y
+        // la app se ve exactamente como hoy.
+        //
+        // REGLA DE ORO: estos valores vienen de la base, o sea que los escribió alguien. Se
+        // tratan como si vinieran de un desconocido. Nunca se arma CSS pegando texto ni se
+        // usa innerHTML: se aplican con setProperty(), que es una API que recibe el nombre y
+        // el valor por separado y no se deja engañar.
+
+        // Los mismos 34 nombres que valida el servidor. Si no está en esta lista, no se aplica.
+        const TOKENS_CONOCIDOS = [
+            '--bh-purple', '--bh-purple-dark', '--bh-accent-2', '--bh-purple-glow',
+            '--bh-accent-soft', '--bh-accent-softer', '--bh-on-accent',
+            '--bh-bg-dark', '--bh-bg-gradient', '--bh-card-bg',
+            '--bh-surface', '--bh-surface-2', '--bh-surface-3',
+            '--bh-border', '--bh-border-strong', '--bh-input-bg', '--bh-scroll-thumb',
+            '--text-main', '--text-soft', '--text-muted', '--text-dim', '--text-faint',
+            '--text-invert',
+            '--success', '--success-soft', '--danger', '--danger-soft',
+            '--warning', '--warning-soft', '--info', '--info-soft',
+            '--bh-holo-ok', '--bh-holo-bad', '--bh-bot'
+        ];
+
+        // Copia de la misma comprobación que hace la base. Se repite a propósito: si algún día
+        // alguien escribe en la tabla saltándose la RPC, el programa igual no se lo traga.
+        const RUIDO_CSS = /(url\s*\(|;|\}|\{|<|>|\\|javascript:|expression|@import|\/\*)/i;
+        function valorCssValido(v) {
+            if (typeof v !== 'string') return false;
+            const s = v.trim().toLowerCase();
+            if (!s || s.length > 200) return false;
+            if (RUIDO_CSS.test(s)) return false;
+            return /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/.test(s)
+                || /^(rgb|rgba|hsl|hsla)\(\s*[0-9.,%\s/-]+\)$/.test(s)
+                || /^(linear|radial)-gradient\([0-9a-z.,%\s#()/-]+\)$/.test(s)
+                || ['transparent', 'currentcolor', 'inherit', 'none'].includes(s);
+        }
+
+        // ¿El usuario de este equipo eligió un tema a mano? Si lo hizo, su elección manda
+        // sobre la de la empresa. Es la misma regla que ya seguía empresas.tema.
+        function eligioTemaEnEsteEquipo() {
+            try { return !!localStorage.getItem('appTheme'); } catch (e) { return false; }
+        }
+
+        // Qué tokens dejamos puestos ahora mismo, para poder quitarlos al cambiar de tema.
+        // Sin esto, pasar de un tema dorado a uno azul dejaría dorados sueltos por la pantalla.
+        let tokensAplicados = [];
+
+        function limpiarTokensEmpresa() {
+            const donde = [document.documentElement, document.body].filter(Boolean);
+            tokensAplicados.forEach(t => donde.forEach(el => el.style.removeProperty(t)));
+            tokensAplicados = [];
+        }
+
+        // Devuelve cuántos aplicó, para poder avisar si el tema venía a medias.
+        function aplicarTokensEmpresa(tokens) {
+            limpiarTokensEmpresa();
+            if (!tokens || typeof tokens !== 'object') return 0;
+
+            // Se pintan EN LÍNEA sobre el <body>. Es a propósito: un estilo en línea le gana a
+            // cualquier regla de la hoja de estilos, así que los colores de la empresa mandan
+            // sobre el body[data-theme="..."] del preset. En <html> también, para lo poco que
+            // se pinta fuera del body (la barra de desplazamiento).
+            const donde = [document.documentElement, document.body].filter(Boolean);
+            let puestos = 0;
+
+            Object.keys(tokens).forEach(nombre => {
+                if (!TOKENS_CONOCIDOS.includes(nombre)) return;      // nombre inventado
+                if (!valorCssValido(tokens[nombre])) return;         // valor sospechoso
+                donde.forEach(el => el.style.setProperty(nombre, tokens[nombre]));
+                tokensAplicados.push(nombre);
+                puestos++;
+            });
+
+            // El holograma 3D no lee CSS: hay que avisarle.
+            if (typeof refrescarColoresHolo === 'function') {
+                try { refrescarColoresHolo(); } catch (e) {}
+            }
+            return puestos;
+        }
+
+        // --- Guardado local -------------------------------------------------------------
+        // Para que el programa abra con los colores correctos SIN internet, y sin el parpadeo
+        // de arrancar en morado y cambiar medio segundo después.
+        const CLAVE_TEMA_EMPRESA = 'temaEmpresa';
+
+        function guardarTemaEmpresaLocal(cfg) {
+            try { localStorage.setItem(CLAVE_TEMA_EMPRESA, JSON.stringify(cfg)); } catch (e) {}
+        }
+        function leerTemaEmpresaLocal() {
+            try {
+                const crudo = localStorage.getItem(CLAVE_TEMA_EMPRESA);
+                if (!crudo) return null;
+                const cfg = JSON.parse(crudo);
+                return (cfg && typeof cfg === 'object') ? cfg : null;
+            } catch (e) {
+                return null;   // se guardó mal o alguien lo manoseó: se ignora
+            }
+        }
+        function olvidarTemaEmpresaLocal() {
+            try { localStorage.removeItem(CLAVE_TEMA_EMPRESA); } catch (e) {}
+            limpiarTokensEmpresa();
+        }
+
+        // Aplica una configuración completa: el preset de base y encima los colores propios.
+        function aplicarTemaEmpresa(cfg) {
+            if (!cfg) return false;
+            const preset = TEMAS_VALIDOS.includes(cfg.preset) ? cfg.preset : 'original';
+            _pintarTema(preset);
+            if (cfg.es_claro === true) document.body.classList.add('tema-claro');
+            const tokens = (cfg.tema && cfg.tema.tokens) || null;
+            return aplicarTokensEmpresa(tokens) > 0;
+        }
+
+        // --- Traerlo de la base ----------------------------------------------------------
+        // Se pide DESPUÉS de pintar lo que había guardado, no antes. Así la pantalla nunca
+        // espera a la red: si hay internet se actualiza sola, y si no, se queda con lo último
+        // que se supo. Si algo falla, no se toca nada y queda el tema de fábrica.
+        function pedirTemaEmpresa() {
+            if (typeof ipcRenderer === 'undefined') return;
+            try { ipcRenderer.send('obtener-tema-empresa'); } catch (e) {}
+        }
+
+        if (typeof ipcRenderer !== 'undefined') {
+            ipcRenderer.on('tema-empresa-respuesta', (e, res) => {
+                // res.motivo === 'sin-tabla' es lo normal mientras la migración 028 no esté
+                // aplicada. No es un error: significa que esta empresa todavía no usa colores
+                // propios, y el tema de fábrica es la respuesta correcta.
+                if (!res || !res.success || !res.data) return;
+                const cfg = res.data;
+                if (cfg.origen !== 'configuracion_visual') {
+                    // La empresa no tiene colores propios. Si antes sí tenía, hay que soltarlos.
+                    olvidarTemaEmpresaLocal();
+                    return;
+                }
+                // Se guarda siempre, aunque ahora no se pinte: si el equipo suelta su elección
+                // más adelante, los colores de la empresa ya están aquí y funcionan sin internet.
+                guardarTemaEmpresaLocal(cfg);
+                // Misma regla que ya tenía el tema de empresa: la elección de ESTE equipo gana.
+                if (!eligioTemaEnEsteEquipo()) aplicarTemaEmpresa(cfg);
+            });
+        }
+
+        // ================= FIN TEMA PROPIO DE LA EMPRESA ================================
+
         // Aplica el tema al <body>: pone data-theme y la clase tema-claro (para los
         // retoques de estilos en línea de los temas claros) y marca la tarjeta activa.
         function _pintarTema(tema) {
@@ -6128,6 +6279,9 @@
 
         function aplicarTema(tema) {
             if (!TEMAS_VALIDOS.includes(tema)) tema = 'original';
+            // Elegir un tema a mano es decir "quiero ESTE": se sueltan los colores de la
+            // empresa, si no quedarían pintados encima y se vería una mezcla de los dos.
+            limpiarTokensEmpresa();
             _pintarTema(tema);
             try { localStorage.setItem('appTheme', tema); } catch (e) {}
             if (typeof showToast === 'function' && document.getElementById('app-content')?.style.display !== 'none') {
@@ -6142,6 +6296,14 @@
             try { t = localStorage.getItem('appTheme') || 'original'; } catch (e) {}
             if (!TEMAS_VALIDOS.includes(t)) t = 'original';
             _pintarTema(t);
+
+            // Si en este equipo nadie eligió tema, se pintan los colores de la empresa que
+            // quedaron guardados de la última vez. Esto pasa ANTES de hablar con la red: por
+            // eso el programa abre ya con los colores correctos aunque no haya internet, y
+            // no se ve el parpadeo de arrancar en morado y cambiar medio segundo después.
+            if (!eligioTemaEnEsteEquipo()) {
+                try { aplicarTemaEmpresa(leerTemaEmpresaLocal()); } catch (e) {}
+            }
         }
         if (document.body) cargarTemaGuardado();
         else document.addEventListener('DOMContentLoaded', cargarTemaGuardado);

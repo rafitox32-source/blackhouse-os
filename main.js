@@ -3597,6 +3597,40 @@ ipcMain.on('pedir-datos-empresa', async (event, data) => {
     }
 });
 
+// === TEMA PROPIO DE LA EMPRESA (marca blanca) ===
+// La RPC no recibe el empresa_id: lo saca de quién preguntó, con la sesión de Supabase Auth.
+// Así el programa no puede pedir la configuración de otro taller ni equivocándose.
+//
+// Mientras la migración 028 no esté aplicada la función no existe todavía. Eso NO es un
+// error: se responde 'sin-tabla' y el programa sigue con el tema de fábrica, que es
+// exactamente lo que se ve hoy.
+ipcMain.on('obtener-tema-empresa', async (event) => {
+    try {
+        if (!empresaActual) return;   // sin sesión no hay nada que pintar
+
+        const { data, error } = await supabase.rpc('tema_de_mi_empresa');
+
+        if (error) {
+            // 42883 = la función no existe (falta correr la migración 028).
+            // PGRST202 = PostgREST no la encuentra en su caché de esquema.
+            const faltaMigracion = error.code === '42883' || error.code === 'PGRST202'
+                || /does not exist|could not find/i.test(error.message || '');
+            if (!faltaMigracion) console.error('Error al pedir el tema de la empresa:', error.message);
+            event.reply('tema-empresa-respuesta', {
+                success: false,
+                motivo: faltaMigracion ? 'sin-tabla' : 'error'
+            });
+            return;
+        }
+
+        event.reply('tema-empresa-respuesta', { success: true, data: data || null });
+    } catch (e) {
+        // Sin internet se llega aquí. No se avisa al usuario: el programa ya está pintado con
+        // lo que guardó la última vez, así que no hay nada que arreglar ni nada que contarle.
+        event.reply('tema-empresa-respuesta', { success: false, motivo: 'sin-red' });
+    }
+});
+
 // === 10. GENERADOR AUTOMÁTICO DE LICENCIAS (SÓLO ADMIN) ===
 ipcMain.on('crear-codigo-automatico', async (event, data) => {
     try {
