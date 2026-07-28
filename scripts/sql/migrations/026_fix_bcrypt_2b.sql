@@ -1,0 +1,26 @@
+-- Migración 026: arreglo — pgcrypto no entiende los hash $2b$
+-- Motor: PostgreSQL (Supabase, proyecto flfhpffslhjcuvhxsnjz)
+--
+-- BUG INTRODUCIDO EN LA 021:
+--   Al mover la validación de contraseña a la base (login_verificar), los usuarios con hash
+--   $2b$ dejaron de poder entrar. pgcrypto solo entiende $2a$: con el MISMO hash y la MISMA
+--   contraseña, crypt() acierta si el prefijo dice $2a$ y falla si dice $2b$, sin dar error.
+--   En este sistema son 8 de 10 usuarios, admin incluido. El código anterior usaba bcryptjs,
+--   que acepta las dos variantes, por eso nunca se había notado.
+--
+-- ARREGLO:
+--   $2a$ y $2b$ son idénticos criptográficamente. La revisión "b" solo corrigió un
+--   desbordamiento con contraseñas de 255 bytes o más; para cualquier contraseña normal el
+--   hash es el mismo byte a byte. Así que se verifica reetiquetando el prefijo al comparar.
+--   No se reescribe ningún hash guardado.
+--
+--   Del lado de Supabase Auth no hay problema: GoTrue usa la implementación de Go, que sí
+--   soporta $2b$ nativamente.
+--
+-- Se agrega verificar_password(plano, hash), que además conserva el caso de las cuentas viejas
+-- con la contraseña en texto plano, y la usan login_verificar y login_vincular_auth.
+--
+-- Probado creando un usuario con hash $2b$ a propósito: la clave buena entra, la mala no, y
+-- crypt() a secas sobre ese mismo hash sigue fallando, que era el bug.
+--
+-- El contenido exacto está aplicado en la base; este archivo queda como registro.
