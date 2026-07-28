@@ -26,6 +26,33 @@ const supabase = createClient(
     process.env.SUPABASE_KEY || 'missing-supabase-key'
 );
 
+// === SESIÓN DE SUPABASE AUTH (paso previo a sacar la service_role del instalador) ==========
+// Hoy el .exe lleva la clave service_role adentro, que se salta el RLS: quien desempaqueta el
+// instalador puede leer y escribir los datos de TODOS los talleres. La salida es que la app use
+// la clave pública y que sea Postgres el que recorte cada consulta (migraciones 021-023).
+//
+// Para que el RLS sepa quién pregunta hace falta una sesión de Auth. Cada usuario del programa
+// tiene su cuenta espejo <usuario>@blackhouse.local, creada con el MISMO hash bcrypt que ya
+// tenía, así que nadie cambió de contraseña ni tuvo que confirmar ningún correo.
+//
+// De momento esto es informativo: mientras SUPABASE_KEY siga siendo la service_role, la app
+// funciona igual aunque falle. Cuando se cambie a la clave pública, pasa a ser obligatorio.
+const correoDe = (usuario) => `${String(usuario || '').trim().toLowerCase()}@blackhouse.local`;
+
+async function abrirSesionAuth(usuario, password) {
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: correoDe(usuario), password
+        });
+        if (error) throw error;
+        console.log('Sesión Supabase Auth abierta para', usuario);
+        return data.session || null;
+    } catch (e) {
+        console.warn('No se pudo abrir sesión de Supabase Auth para', usuario, '->', e.message);
+        return null;
+    }
+}
+
 const DURACION_SESION_RECORDADA_DIAS = 30;
 async function emitirTokenSesion(usuarioId) {
     const token = crypto.randomBytes(32).toString('hex');
@@ -446,7 +473,11 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
        // 5. VERIFICACIÓN DE IP (desactivada: la licencia ya no se ata a una ubicación/red fija)
 
         console.log("=== LOGIN EXITOSO ===");
-        
+
+        // Abre además la sesión de Supabase Auth, que es la que le dice al RLS quién pregunta.
+        // Todavía no se exige: si falla, el login sigue como siempre y queda el aviso en el log.
+        await abrirSesionAuth(users.usuario, data.password);
+
         // Establecer las variables de estado global de la sesión en el main.js
         empresaActual = users.empresa_id;
         rolActual = users.rol;
