@@ -6008,7 +6008,11 @@
                 ['nav-dash', 'nav-clientes', 'nav-inv', 'nav-ventas'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
                 if (document.getElementById('btn-add-prod')) document.getElementById('btn-add-prod').style.display = 'none';
             } else if (rol === 'tecnico') {
-                ['nav-dash', 'nav-recep', 'nav-taller', 'nav-inv', 'nav-ventas'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
+                // Clientes: ve SOLO los suyos. El filtro por tecnico_id ya existía en el
+                // backend (obtener-clientes, buscar-clientes y actualizar-cliente), y de hecho
+                // el técnico ya caía en esta pantalla al registrar un cliente desde Recepción;
+                // lo único que faltaba era el acceso en el menú.
+                ['nav-dash', 'nav-recep', 'nav-taller', 'nav-clientes', 'nav-inv', 'nav-ventas'].forEach(i => { if (document.getElementById(i)) document.getElementById(i).style.display = 'flex'; });
                 if (document.getElementById('btn-add-prod')) document.getElementById('btn-add-prod').style.display = 'none';
                 // El técnico NO ve métricas ni comprobantes en el dashboard, pero SÍ puede cerrar caja.
                 setVis('dash-acc-metricas', false);
