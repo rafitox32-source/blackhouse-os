@@ -1,0 +1,18 @@
+-- Migración 025: panel de licencias para la casa matriz
+-- Motor: PostgreSQL (Supabase, proyecto flfhpffslhjcuvhxsnjz)
+--
+-- Va por funciones y no por acceso directo a la tabla porque las columnas de licencia están
+-- revocadas a propósito (migración 023): así ningún taller puede correrse su propio
+-- vencimiento, y a la vez la matriz sí puede administrarlas. Funciona igual con la clave de
+-- servicio y con la pública.
+--
+--   licencias_panel()         -> talleres con su estado y días restantes, más los códigos
+--   licencia_actualizar()     -> cambiar vencimiento, plan o límite; o sumar días
+--   licencia_borrar_codigo()  -> borrar un código que no se llegó a usar
+--
+-- Las tres comprueban soy_matriz() antes de hacer nada.
+--
+-- Detalle de sumar_dias: cuenta desde HOY si el taller ya venció, y desde el vencimiento si
+-- todavía no. Renovar a alguien vencido no debería regalarle los días que estuvo sin pagar.
+--
+-- El contenido exacto está aplicado en la base; este archivo queda como registro.

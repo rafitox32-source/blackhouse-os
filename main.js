@@ -3624,6 +3624,50 @@ ipcMain.on('crear-codigo-automatico', async (event, data) => {
     }
 });
 
+// === 10B. PANEL DE LICENCIAS (solo casa matriz) ===
+// Todo pasa por funciones de la base que comprueban soy_matriz(), no por acceso directo a la
+// tabla: las columnas de licencia están revocadas a propósito (migración 023) para que ningún
+// taller pueda correrse su propio vencimiento.
+ipcMain.on('obtener-panel-licencias', async (event) => {
+    try {
+        const { data, error } = await supabase.rpc('licencias_panel');
+        if (error) throw error;
+        event.reply('panel-licencias-respuesta', data || { ok: false, msg: 'Sin respuesta' });
+    } catch (e) {
+        console.error('Error al leer el panel de licencias:', e.message);
+        event.reply('panel-licencias-respuesta', { ok: false, msg: e.message });
+    }
+});
+
+ipcMain.on('actualizar-licencia', async (event, d) => {
+    try {
+        const { data, error } = await supabase.rpc('licencia_actualizar', {
+            p_empresa_id: Number(d.empresa_id),
+            p_vence: d.vence || null,
+            p_plan: d.plan || null,
+            p_limite: d.limite || null,
+            p_sumar_dias: d.sumar_dias || null
+        });
+        if (error) throw error;
+        event.reply('licencia-actualizada', data || { ok: false, msg: 'Sin respuesta' });
+    } catch (e) {
+        console.error('Error al actualizar licencia:', e.message);
+        event.reply('licencia-actualizada', { ok: false, msg: e.message });
+    }
+});
+
+ipcMain.on('borrar-codigo-licencia', async (event, d) => {
+    try {
+        const { data, error } = await supabase.rpc('licencia_borrar_codigo', { p_id: Number(d.id) });
+        if (error) throw error;
+        event.reply('licencia-actualizada', data && data.ok
+            ? { ok: true, nombre: 'Código', fecha_de_vencimiento: 'borrado' }
+            : (data || { ok: false, msg: 'Sin respuesta' }));
+    } catch (e) {
+        event.reply('licencia-actualizada', { ok: false, msg: e.message });
+    }
+});
+
 // === 11. REGISTRO SAAS CON VALIDACIÓN DE LICENCIA Y FECHA ===
 ipcMain.on('registrar-nuevo-cliente-saas', async (event, data) => {
     try {
