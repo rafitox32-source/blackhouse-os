@@ -51,6 +51,46 @@
             --danger: #ef4444;
             --warning: #e2950f;
             --info: #3b82f6;
+
+            /* ---------- TOKENS AGREGADOS (Fase 1) ----------
+               Ninguno de estos es un color inventado: todos salen de contar los colores
+               que ya estaban escritos a mano dentro del archivo. Ejemplo: "#aaa" aparece
+               96 veces como color de texto y "#333" 31 veces como borde. Al no tener
+               nombre, ningun tema podia cambiarlos, y por eso existe mas abajo el bloque
+               body.tema-claro: 78 lineas de parches con !important que solo estan ahi
+               para tapar esos colores cuando el fondo es claro.
+               Estos tokens le ponen nombre a cada uno para que el tema si pueda moverlos.
+               Cambiarlos aqui NO cambia nada todavia: la sustitucion va modulo por modulo.
+               ------------------------------------------------------------------------ */
+
+            /* Escalera de texto, de mas fuerte a mas apagado.
+               Hoy en el archivo: #ccc/#ddd, #aaa (el mas usado), #888/#999/#777, #666/#555 */
+            --text-soft: #cccccc;        /* secundario todavia legible */
+            --text-dim: #888888;         /* terciario: pistas, notas al pie */
+            --text-faint: #666666;       /* casi apagado: placeholders, deshabilitado */
+            --text-invert: #ffffff;      /* texto sobre un fondo de acento solido */
+
+            /* Superficies y bordes */
+            --bh-bg: var(--bh-surface);  /* alias. Ver nota de abajo: se usaba sin existir */
+            --bh-surface-3: #222222;     /* hoy #222 y #1a1a1a, 54 fondos */
+            --bh-border-strong: #333333; /* separadores de tabla y divisores, hoy #333 */
+
+            /* Variantes del acento */
+            --bh-accent-soft: #a78bfa;   /* morado claro sobre fondo oscuro */
+            --bh-accent-softer: #d8b4fe;
+            --bh-on-accent: #ffffff;     /* que color va ENCIMA del acento */
+
+            /* Estados en su version suave (texto e iconos, no fondos) */
+            --success-soft: #34d399;
+            --danger-soft: #f87171;
+            --warning-soft: #fbbf24;
+            --info-soft: #0ea5e9;
+
+            /* Laboratorio 3D y mascota del chat.
+               --bh-holo-* tambien los lee three.js, que necesita 0x en vez de #. */
+            --bh-holo-ok: #3fd8ff;
+            --bh-holo-bad: #ff3b4e;
+            --bh-bot: #22d3ee;
         }
 
         /* ---- TEMA NEGRO: negro puro, alto contraste, mismo acento morado ---- */
@@ -65,6 +105,12 @@
             --bh-scroll-thumb: #444;
             --text-main: #f5f5f5;
             --text-muted: #a0a0a0;
+            /* Fase 1: mismo fondo oscuro, solo un punto mas de contraste */
+            --text-soft: #d4d4d4;
+            --text-dim: #8a8a8a;
+            --text-faint: #6a6a6a;
+            --bh-surface-3: #1a1a1a;
+            --bh-border-strong: #3a3a3a;
         }
 
         /* ---- TEMA BLANCO: claro, para quienes no soportan el fondo negro ---- */
@@ -80,6 +126,20 @@
             --bh-scroll-thumb: #c3c3cf;
             --text-main: #1a1a2e;
             --text-muted: #5b5b6b;
+            /* Fase 1: la escalera se DA VUELTA. Sobre blanco, un #aaa no se lee;
+               por eso hoy hace falta el bloque body.tema-claro lleno de !important. */
+            --text-soft: #3a3a4a;
+            --text-dim: #6b6b7b;
+            --text-faint: #8a8a99;
+            --text-invert: #ffffff;
+            --bh-surface-3: #e9e9f0;
+            --bh-border-strong: #d4d4de;
+            --bh-accent-soft: #6d28d9;      /* mas oscuro: sobre blanco tiene que contrastar */
+            --bh-accent-softer: #7c3aed;
+            --success-soft: #059669;
+            --danger-soft: #dc2626;
+            --warning-soft: #b45309;
+            --info-soft: #0369a1;
         }
 
         /* ---- TEMA DOHA-CELL: colores de la marca (azul → verde), fondo claro y lectura nítida ---- */
@@ -98,6 +158,19 @@
             --bh-scroll-thumb: #94a3b8;
             --text-main: #0f172a;        /* negro/slate ultra oscuro para máxima legibilidad */
             --text-muted: #334155;       /* texto secundario nítido de alto contraste */
+            /* Fase 1: escalera clara, en la gama slate de la marca */
+            --text-soft: #1e293b;
+            --text-dim: #475569;
+            --text-faint: #64748b;
+            --text-invert: #ffffff;
+            --bh-surface-3: #e2e8f0;
+            --bh-border-strong: #cbd5e1;
+            --bh-accent-soft: #0369a1;      /* azul de marca, oscurecido para fondo claro */
+            --bh-accent-softer: #0284c7;
+            --success-soft: #15803d;
+            --danger-soft: #b91c1c;
+            --warning-soft: #b45309;
+            --info-soft: #0369a1;
         }
 
         /* ---- TEMA PREMIUM: Alta gama, slate oscuro y dorado, 3D y glassmorfismo ---- */
@@ -116,6 +189,15 @@
             --bh-scroll-thumb: #475569;
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
+            /* Fase 1: slate oscuro, y el acento suave pasa a dorado */
+            --text-soft: #cbd5e1;
+            --text-dim: #94a3b8;
+            --text-faint: #64748b;
+            --bh-surface-3: #1e293b;
+            --bh-border-strong: rgba(212, 175, 55, 0.35);
+            --bh-accent-soft: #e8c766;
+            --bh-accent-softer: #f3dda0;
+            --bh-on-accent: #1a1508;        /* sobre dorado, texto oscuro: el blanco no se lee */
         }
 
         /* Efectos 3D y Glassmorfismo para Tema Premium */
@@ -5984,6 +6066,41 @@
         // ===================== TEMAS / APARIENCIA =====================
         // "original" es el diseño por defecto (sin atributo). "negro" y "blanco"
         // se activan poniendo data-theme en <body>. Se recuerda en localStorage.
+
+        // ---- Puente entre el tema y lo que NO es HTML (three.js, canvas) ----------------
+        // El CSS resuelve var(--lo-que-sea) solo; el holograma 3D y los graficos no. Ellos
+        // necesitan el valor ya calculado. Estas dos funciones son el unico lugar donde se
+        // hace esa traduccion, para que no aparezcan colores sueltos repartidos por el JS.
+        //
+        //   tokenColor('--bh-purple')            -> "#7c3aed"   (para fillStyle de canvas)
+        //   tokenNumero('--bh-holo-ok', 0x3fd8ff) -> 4184831     (para three.js)
+        //
+        // Siempre con valor de respaldo: si el tema no define el token, o el navegador
+        // devuelve algo raro, se usa el respaldo y no se rompe nada.
+        function tokenColor(nombre, respaldo) {
+            respaldo = respaldo || '';
+            try {
+                const base = document.body || document.documentElement;
+                if (!base) return respaldo;
+                const v = getComputedStyle(base).getPropertyValue(nombre).trim();
+                return v || respaldo;
+            } catch (e) {
+                return respaldo;
+            }
+        }
+
+        // three.js quiere un numero (0x3fd8ff), no un texto. Solo acepta hexadecimal:
+        // un degradado o un rgba() no se pueden convertir, y ahi se usa el respaldo.
+        function tokenNumero(nombre, respaldo) {
+            const v = tokenColor(nombre, '');
+            const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(v);
+            if (!m) return respaldo;
+            const hex = m[1].length === 3
+                ? m[1].split('').map(c => c + c).join('')
+                : m[1];
+            return parseInt(hex, 16);
+        }
+
         const TEMAS_VALIDOS = ['original', 'negro', 'blanco', 'doha', 'premium'];
         const TEMAS_CLAROS = ['blanco', 'doha'];   // temas de fondo claro
         const TEMAS_NOMBRES = { original: 'Original', negro: 'Negro', blanco: 'Blanco', doha: 'Doha-cell', premium: 'Premium' };
@@ -9971,8 +10088,16 @@
         const holoDanado = {};
         const holoNormalizarPieza = (txt) => String(txt || '').replace(/\s+/g, ' ').trim().toUpperCase();
 
-        const HOLO_COLOR_OK = 0x3fd8ff;
-        const HOLO_COLOR_BAD = 0xff3b4e;
+        // El holograma no es HTML: es WebGL, y three.js no entiende var(--bh-holo-ok), solo
+        // numeros tipo 0x3fd8ff. Los valores de arranque son los mismos de siempre; cuando el
+        // laboratorio se abre, refrescarColoresHolo() los vuelve a leer del tema activo.
+        let HOLO_COLOR_OK = 0x3fd8ff;
+        let HOLO_COLOR_BAD = 0xff3b4e;
+
+        function refrescarColoresHolo() {
+            HOLO_COLOR_OK = tokenNumero('--bh-holo-ok', 0x3fd8ff);
+            HOLO_COLOR_BAD = tokenNumero('--bh-holo-bad', 0xff3b4e);
+        }
 
         function holoRoundedRectShape(w, h, r) {
             const s = new THREE.Shape();
@@ -9999,6 +10124,8 @@
             const wrap = document.getElementById('holo-canvas-wrap');
             const canvas = document.getElementById('holo-canvas');
             if (!wrap || !canvas || typeof THREE === 'undefined') return;
+
+            refrescarColoresHolo();   // el tema puede haber cambiado desde el arranque
 
             if (!holoInit) {
                 holoInit = true;
