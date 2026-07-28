@@ -784,7 +784,13 @@ ipcMain.on('sugerir-stock-modelo', async (event, modelo) => {
 // Palabras que describen el TIPO de panel, no el equipo. Se quitan antes de partir por "/"
 // (importante: "C/M" = con marco, si no se quita primero deja una variante basura "M").
 // (INCELL viene escrito también como "INCEL", y "con marco" como "C/M" o suelto "cm").
-const RUIDO_PANEL = /\b(?:C\s*\/\s*M|S\s*\/\s*M|CM|CON\s+MARCO|SIN\s+MARCO|INCELL?|AMOLED|OLED|TFT|OGS|LCD|GX|ZY|JK|ORIG(?:INAL)?|COPIA|CALIDAD\s+\w+)\b/gi;
+// También se va el color y el detalle físico de la pieza: "J3 DORADA", "A34 BORDE GRUESO" y
+// "E5 PLAY FLEX LARGO" son la misma pantalla descrita distinto, no tres equipos distintos.
+const RUIDO_PANEL = /\b(?:C\s*\/\s*M|S\s*\/\s*M|CM|CON\s+MARCO|SIN\s+MARCO|INCELL?|AMOLED|OLED|TFT|OGS|LCD|GX|ZY|JK|ORIG(?:INAL)?|COPIA|CALIDAD\s+\w+|BORDE\s+\w+|(?:DOBLE\s+)?FLEX(?:\s+(?:LARGO|CORTO))?|BLANC[OA]|NEGR[OA]|DORAD[OA]|PLATEAD[OA]|AZUL|ROJ[OA]|VERDE|GRIS|ROSAD?[OA]?|MORAD[OA])\b/gi;
+// Restos de una descripción cortada: "A01 SIN MARCO" -> "A01 SIN" -> "A01".
+// Ojo: aquí NO van letras sueltas. "Moto C" y "Moto E" son equipos reales y una regla que
+// borrara la última letra los dejaba en "Moto".
+const RUIDO_COLGANDO = /\s+(?:SIN|CON|DE|PARA|Y)$/i;
 // Prefijos de categoría con los que empieza el nombre del producto cuando no hay modelo_compatible.
 const PREFIJO_PIEZA = /^\s*(?:PANTALLA|MICA(?:\s+(?:CER[ÁA]MICA|TEMPLADA|HIDROGEL))?(?:\s+MATTE)?|BATER[ÍI]A|FLEX|T[AÁ]CTIL|TOUCH|DISPLAY|MODULO|M[ÓO]DULO)\s+/i;
 // Primera palabra -> marca real. Cubre también las submarcas y series (Galaxy=Samsung, Redmi=Xiaomi…).
@@ -831,7 +837,13 @@ const MARCA_AL_INICIO = /^(?:SAMSUNG|XIAOMI|MOTOROLA|HUAWEI|APPLE|OPPO|VIVO|REAL
 //   "MOTOROLA G04 / G24 / E14"           -> G04, G24 y E14, los tres como Motorola
 //   "Galaxy A31"                         -> clave 'A31', o sea el mismo equipo que el primero
 const variantesDeModelo = (txt, textoParaMarca) => {
-    const base = String(txt || '').replace(PREFIJO_PIEZA, '').trim();
+    // La puntuación suelta se va ANTES de calcular nada: si no, "ZTE , A56PRO5G" generaba la
+    // clave ", A56PRO5G" y ese equipo no casaba con el mismo escrito limpio.
+    const base = String(txt || '')
+        .replace(/[,;:_*"'()\[\]]/g, ' ')
+        .replace(PREFIJO_PIEZA, '')
+        .replace(/\s+/g, ' ')
+        .trim();
     const sinRuido = base.replace(RUIDO_PANEL, ' ').replace(/\s+/g, ' ').trim();
     if (!sinRuido) return [];
 
@@ -843,6 +855,9 @@ const variantesDeModelo = (txt, textoParaMarca) => {
     sinRuido.split('/').forEach(v => {
         let modelo = v.replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim()
             .replace(MARCA_AL_INICIO, '').trim();
+        // se repite hasta que deje de sobrar: "A01 SIN CON" -> "A01"
+        let antes;
+        do { antes = modelo; modelo = modelo.replace(RUIDO_COLGANDO, '').trim(); } while (modelo !== antes);
         if (modelo.length < 2 || !/[A-Za-z0-9]/.test(modelo)) return;
         // "IPHONE 12 / 12 PRO": la segunda variante queda como "12 PRO" y se leería mal
         // suelta en la lista. Se le devuelve el "iPhone" para que todos se vean igual.
@@ -856,32 +871,250 @@ const variantesDeModelo = (txt, textoParaMarca) => {
 // Solo se descarta cuando ambos la traen y son distintas: el A54 de Samsung no es el de Oppo.
 const marcaCompatible = (a, b) => !a || !b || a === 'Otros' || b === 'Otros' || a === b;
 
+// === PORTERO 1: la forma del nombre =========================================================
+// Rechaza de entrada lo que no puede ser un modelo de equipo. Es barato, instantáneo y no
+// depende de internet. Probado contra los 398 modelos reales del sistema: acepta 395, manda 1
+// a revisión y rechaza 2, que son basura de verdad ("MARCO" y "chip bitel").
+const NOMBRE_ES_PIEZA   = /\b(PANTALLA|MICA|BATER[IÍ]A|T[AÁ]CTIL|TOUCH|DISPLAY|M[OÓ]DULO|INCELL?|AMOLED|OLED|TFT|LCD|OGS|MARCO|ORIGINAL|COPIA|GEN[EÉ]RICO|GENERICO)\b/i;
+const NOMBRE_NO_ES_EQUIPO = /\b(CHIP|CABLE|CARGADOR|AUD[IÍ]FONO|AUDIFONO|FUNDA|PROTECTOR|VIDRIO|ACCESORIO|SIM|BITEL|CLARO|MOVISTAR|ENTEL|PRUEBA|TEST|ASDF?)\b/i;
+// Palabras de serie: dejan pasar modelos legítimos que no llevan número (iPhone XR, X PLAY...).
+const NOMBRE_CALIFICA   = /\b(PLAY|MAX|PRO|PLUS|LITE|ULTRA|MINI|FOLD|FLIP|NOTE|SE|FE|MACRO|SMART|POWER|STYLE|PRIME|NEO|EDGE|ONE|MOTO|XR|XS|X)\b/i;
+const NOMBRE_CHARSET    = /^[A-Za-z0-9ÑÁÉÍÓÚñáéíóú][A-Za-z0-9ÑÁÉÍÓÚñáéíóú .+\/-]*$/;
+
+// Se limpia antes de juzgar: una coma perdida no debería costarle el modelo al taller
+// ("ZTE , A56PRO5G" -> "ZTE A56PRO5G").
+const limpiarNombreModelo = (txt) => String(txt || '')
+    .replace(/[,;:_*"'()\[\]]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[.\-\/+ ]+|[.\-\/+ ]+$/g, '')
+    .trim();
+
+function validarFormatoModelo(marca, modeloCrudo) {
+    const m = limpiarNombreModelo(modeloCrudo);
+    if (m.length < 2)   return { ok: false, motivo: 'Es demasiado corto', limpio: m };
+    if (m.length > 40)  return { ok: false, motivo: 'Es demasiado largo', limpio: m };
+    if (!NOMBRE_CHARSET.test(m))    return { ok: false, motivo: 'Tiene caracteres raros', limpio: m };
+    if (m.split(' ').length > 5)    return { ok: false, motivo: 'Tiene demasiadas palabras', limpio: m };
+    if (NOMBRE_ES_PIEZA.test(m))    return { ok: false, motivo: 'Eso es una pieza, no un equipo', limpio: m };
+    if (NOMBRE_NO_ES_EQUIPO.test(m))return { ok: false, motivo: 'Eso no es un equipo', limpio: m };
+    if (/(.)\1{3,}/.test(m))        return { ok: false, motivo: 'Parece tecleo al azar', limpio: m };
+    // Un modelo real casi siempre trae número; si no, trae una palabra de serie conocida.
+    if (!/\d/.test(m) && !NOMBRE_CALIFICA.test(m)) return { ok: false, motivo: 'No parece el nombre de un modelo', limpio: m };
+    if (!marca || marca === 'Otros') return { ok: 'revisar', motivo: 'No reconozco esa marca', limpio: m };
+    return { ok: true, limpio: m };
+}
+
+// === PORTERO 2: la IA ========================================================================
+// El formato no puede detectar un nombre que PARECE correcto pero no existe ("Mate note 10").
+//
+// La clave para que sea estable es NO pedirle a la IA que recuerde de memoria: un modelo chico
+// "corrige" un Honor X6b real hacia el X6 famoso, y eso es peor que el error de tipeo. En vez
+// de eso se le entregan los modelos parecidos de NUESTRO propio catálogo y se le pide que elija
+// entre ellos o que diga que ninguno sirve. Recordar es difícil; reconocer es fácil.
+
+// Distancia de edición: cuántos caracteres hay que cambiar para pasar de un texto al otro.
+function distanciaEdicion(a, b) {
+    a = String(a).toUpperCase(); b = String(b).toUpperCase();
+    const m = a.length, n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) {
+        const cur = [i];
+        for (let j = 1; j <= n; j++) {
+            cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        }
+        prev = cur;
+    }
+    return prev[n];
+}
+
+// Los modelos ya verificados que se parecen a lo que se escribió. Se mide contra el nombre
+// visible y contra la clave: quien escribe "A31" no debería quedarse sin encontrar "Galaxy
+// A31", que es el mismo equipo.
+async function candidatosDelCatalogo(marca, escrito, limite = 6) {
+    try {
+        let q = supabase.from('modelos_dispositivos').select('marca, modelo, clave').eq('estado', 'verificado');
+        if (marca && marca !== 'Otros') q = q.eq('marca', marca);
+        const { data } = await q.limit(2000);
+
+        const esc = String(escrito || '');
+        return (data || [])
+            .map(c => {
+                let d = Math.min(distanciaEdicion(esc, c.modelo), distanciaEdicion(esc, c.clave));
+                // "P. HONOR X8A" trae basura delante y la distancia se dispara, pero el modelo
+                // real está ahí dentro: si la clave aparece completa, es candidato igual.
+                if (c.clave.length >= 3) {
+                    const re = new RegExp('(^|[^A-Z0-9])' + c.clave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Z0-9]|$)', 'i');
+                    if (re.test(esc)) d = Math.min(d, 1);
+                }
+                return { ...c, d };
+            })
+            .filter(c => c.d <= Math.max(2, Math.ceil(Math.min(
+                Math.max(esc.length, c.modelo.length),
+                Math.max(esc.length, c.clave.length)) * 0.45)))
+            .sort((a, b) => a.d - b.d)
+            .slice(0, limite);
+    } catch (e) {
+        return [];
+    }
+}
+
+// Se intenta primero con el modelo grande, que reconoce muchos más equipos; si la cuenta no lo
+// tiene habilitado se cae al mismo que ya usa el resto del programa.
+const MODELOS_IA_CATALOGO = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+
+const PROMPT_CATALOGO = `Eres el control de calidad del catálogo de equipos de una cadena de talleres de celulares.
+Recibes lo que escribió un técnico y decides si es un equipo real y con qué nombre debe quedar guardado.
+
+Respondes SOLO con este JSON, sin texto alrededor, sin \`\`\` y sin explicaciones:
+{"veredicto":"real|dudoso|inexistente","confianza":"alta|media|baja","nombre":"","motivo":""}
+
+- "real": es un equipo que existe.
+- "dudoso": podría existir, pero no estás seguro o el nombre está incompleto.
+- "inexistente": no es un equipo (es una pieza, un accesorio, un chip de operadora o texto sin sentido).
+- "nombre": el nombre con el que debe quedar guardado, SIN la marca. Si lo escrito ya está bien, repítelo igual.
+
+REGLAS QUE NO PUEDES ROMPER:
+1. En los celulares un solo carácter cambia el equipo: A21, A31 y A51 son tres teléfonos
+   distintos. NUNCA cambies un número del modelo para parecerte a otro equipo. Corrige solo lo
+   que es claramente un error de tipeo en una palabra (la marca, la serie), jamás en la parte
+   numérica.
+2. Si te doy MODELOS CONOCIDOS, elige uno solo cuando sea evidentemente el mismo equipo. Si
+   dudas, no elijas ninguno y deja el nombre como estaba.
+3. Nunca inventes un equipo que no te consta. Ante la duda: "dudoso" con confianza "baja".
+4. Quita del nombre lo que describe el repuesto y no el equipo: INCELL, AMOLED, OLED, C/M, con
+   marco, sin marco, colores, "borde grueso", "flex largo".
+5. Conserva el 4G / 5G cuando venga: son variantes distintas del mismo equipo.
+6. "motivo": máximo 12 palabras, en español.
+
+EJEMPLOS:
+Marca: Huawei | Escrito: "Mate note 10" | Conocidos: Mate 10, Mate 20 lite
+{"veredicto":"dudoso","confianza":"media","nombre":"Mate 10","motivo":"Sobra 'note'; el equipo es el Mate 10"}
+
+Marca: Honor | Escrito: "P. HONOR X8A" | Conocidos: X8A, X8B, X8
+{"veredicto":"real","confianza":"alta","nombre":"X8A","motivo":"El 'P.' viene del listado del proveedor"}
+
+Marca: Samsung | Escrito: "A31" | Conocidos: Galaxy A31, A21, A30, A32
+{"veredicto":"real","confianza":"alta","nombre":"Galaxy A31","motivo":"Es el Galaxy A31"}
+
+Marca: Samsung | Escrito: "A34 BORDE GRUESO" | Conocidos: A34, A33
+{"veredicto":"real","confianza":"alta","nombre":"A34","motivo":"'Borde grueso' describe la pantalla"}
+
+Marca: Samsung | Escrito: "chip bitel" | Conocidos: (ninguno)
+{"veredicto":"inexistente","confianza":"alta","nombre":"","motivo":"Es un chip de operadora"}`;
+
+async function verificarModeloConIA(marca, modelo, candidatos) {
+    const conocidos = (candidatos || []).map(c => c.modelo).join(', ') || '(ninguno)';
+    let ultimoError = null;
+
+    for (const modeloIA of MODELOS_IA_CATALOGO) {
+        try {
+            const result = await openai.chat.completions.create({
+                model: modeloIA,
+                temperature: 0,          // misma pregunta, misma respuesta
+                max_tokens: 200,
+                messages: [
+                    { role: "system", content: PROMPT_CATALOGO },
+                    { role: "user", content: `Marca: ${marca} | Escrito: "${modelo}" | Conocidos: ${conocidos}` }
+                ]
+            });
+
+            const txt = (result.choices?.[0]?.message?.content || '').trim();
+            // A veces envuelve el JSON en ``` o le pone texto delante: se recorta.
+            const j = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+
+            const veredicto = ['real', 'dudoso', 'inexistente'].includes(j.veredicto) ? j.veredicto : null;
+            if (!veredicto) throw new Error('veredicto no reconocido');
+            const propuesto = limpiarNombreModelo(j.nombre).slice(0, 60);
+
+            return {
+                veredicto,
+                confianza: ['alta', 'media', 'baja'].includes(j.confianza) ? j.confianza : 'baja',
+                motivo: String(j.motivo || '').slice(0, 200) || null,
+                // Solo cuenta como sugerencia si de verdad cambia algo.
+                sugerencia: (propuesto && propuesto.toUpperCase() !== String(modelo).toUpperCase()) ? propuesto : null,
+                motor: modeloIA
+            };
+        } catch (e) {
+            ultimoError = e;    // p. ej. el modelo grande no está habilitado en la cuenta
+        }
+    }
+
+    // Sin internet, sin clave o con una respuesta ilegible: se sigue sin IA y el modelo queda en
+    // la cola. Nunca se descarta por no haber podido preguntar.
+    console.warn('No se pudo verificar el modelo con IA:', ultimoError && ultimoError.message);
+    return { veredicto: null, confianza: null, motivo: null, sugerencia: null, motor: null };
+}
+
+// Cuánto stock tiene ESTA empresa de cada modelo, indexado por la clave canónica, para poder
+// cruzarlo con el catálogo compartido. Reusa variantesDeModelo, así la clave de un producto y
+// la de una ficha del catálogo se calculan igual y siempre casan.
+async function stockPorModeloDeEmpresa() {
+    const { data: prods, error } = await supabase.from('productos')
+        .select('nombre, modelo_compatible, stock')
+        .eq('empresa_id', empresaActual);
+    if (error) throw error;
+
+    const mapa = new Map();     // 'Marca|CLAVE' -> {piezas, stock}
+    (prods || []).forEach(p => {
+        variantesDeModelo(p.modelo_compatible || p.nombre, p.nombre).forEach(v => {
+            const k = v.marca + '|' + v.clave;
+            const acc = mapa.get(k) || { piezas: 0, stock: 0 };
+            acc.piezas += 1;
+            acc.stock += Number(p.stock) || 0;
+            mapa.set(k, acc);
+        });
+    });
+    return mapa;
+}
+
+// Deja registrado qué modelos maneja esta empresa. Es lo que permite contar "cuántos talleres
+// distintos lo usan" en la cola de revisión, que es la señal más fuerte de que un modelo es
+// real. Cada taller registra lo suyo desde su propia instalación; se hace una vez por sesión
+// porque recorrer el inventario entero en cada apertura del selector sería un desperdicio.
+let usoModelosSincronizado = false;
+async function sincronizarUsoModelos() {
+    if (usoModelosSincronizado || !empresaActual) return;
+    usoModelosSincronizado = true;
+    try {
+        const stock = await stockPorModeloDeEmpresa();
+        if (!stock.size) return;
+        const { data: fichas } = await supabase.from('modelos_dispositivos').select('id, marca, clave');
+        const filas = (fichas || [])
+            .filter(f => stock.has(f.marca + '|' + f.clave))
+            .map(f => ({ modelo_id: f.id, empresa_id: empresaActual }));
+        for (let i = 0; i < filas.length; i += 200) {
+            await supabase.from('modelos_uso')
+                .upsert(filas.slice(i, i + 200), { onConflict: 'modelo_id,empresa_id', ignoreDuplicates: true });
+        }
+    } catch (e) {
+        console.warn('No se pudo sincronizar el uso de modelos:', e.message);
+        usoModelosSincronizado = false;   // que lo reintente en la próxima apertura
+    }
+}
+
+// El catálogo que ve el taller: los modelos verificados (que son de todos) más los que él
+// mismo propuso y siguen en la cola. Una empresa recién creada ya ve la lista completa, con
+// 0 en todo, y puede recepcionar cualquier equipo desde el primer día.
 ipcMain.on('obtener-modelos-almacen', async (event) => {
     try {
-        const { data: prods, error } = await supabase.from('productos')
-            .select('nombre, categoria, modelo_compatible, stock')
-            .eq('empresa_id', empresaActual);
+        sincronizarUsoModelos();     // en segundo plano: no debe demorar la apertura
+        const [{ data: fichas, error }, stock] = await Promise.all([
+            supabase.from('modelos_dispositivos')
+                .select('marca, modelo, clave, estado')
+                .or(`estado.eq.verificado,and(estado.eq.pendiente,creado_por.eq.${empresaActual})`),
+            stockPorModeloDeEmpresa()
+        ]);
         if (error) throw error;
 
-        // clave "Marca|MODELO" -> agregado, para no repetir el mismo equipo por cada repuesto
-        const mapa = new Map();
-
-        (prods || []).forEach(p => {
-            variantesDeModelo(p.modelo_compatible || p.nombre, p.nombre).forEach(v => {
-                const clave = v.marca + '|' + v.clave;
-                const acc = mapa.get(clave) || { marca: v.marca, modelo: v.modelo, piezas: 0, stock: 0 };
-                acc.piezas += 1;
-                acc.stock += Number(p.stock) || 0;
-                // Entre "A31" y "Galaxy A31" se muestra el nombre más completo.
-                if (v.modelo.length > acc.modelo.length) acc.modelo = v.modelo;
-                mapa.set(clave, acc);
-            });
-        });
-
-        // Agrupar por marca: { Samsung: [{modelo, piezas, stock}, ...], ... }
         const porMarca = {};
-        [...mapa.values()].forEach(m => {
-            (porMarca[m.marca] = porMarca[m.marca] || []).push({ modelo: m.modelo, piezas: m.piezas, stock: m.stock });
+        (fichas || []).forEach(f => {
+            const s = stock.get(f.marca + '|' + f.clave) || { piezas: 0, stock: 0 };
+            (porMarca[f.marca] = porMarca[f.marca] || []).push({
+                modelo: f.modelo, piezas: s.piezas, stock: s.stock,
+                pendiente: f.estado === 'pendiente'
+            });
         });
         // Dentro de cada marca: primero lo que tiene stock, luego alfabético.
         Object.values(porMarca).forEach(lista => lista.sort((a, b) =>
@@ -890,8 +1123,141 @@ ipcMain.on('obtener-modelos-almacen', async (event) => {
 
         event.reply('modelos-almacen-respuesta', { ok: true, marcas: porMarca });
     } catch (e) {
-        console.warn('No se pudo armar el catálogo del almacén:', e.message);
+        console.warn('No se pudo armar el catálogo de modelos:', e.message);
         event.reply('modelos-almacen-respuesta', { ok: false, msg: e.message, marcas: {} });
+    }
+});
+
+// Proponer un modelo que todavía no está en el catálogo. Pasa por el portero de formato y,
+// si lo cruza, por la IA. El taller lo usa DE INMEDIATO aunque quede pendiente: la
+// verificación es para el catálogo compartido, no para su trabajo del día.
+ipcMain.on('proponer-modelo', async (event, { marca, modelo }) => {
+    try {
+        const marcaLimpia = limpiarNombreModelo(marca);
+        const fmt = validarFormatoModelo(marcaLimpia, modelo);
+        if (fmt.ok === false) {
+            return event.reply('modelo-propuesto', { success: false, msg: fmt.motivo });
+        }
+
+        // Se calcula la clave con la misma pieza que usa todo lo demás, para que "A31" y
+        // "Galaxy A31" no terminen siendo dos fichas distintas.
+        const v = variantesDeModelo(`${marcaLimpia} ${fmt.limpio}`)[0]
+               || variantesDeModelo(fmt.limpio)[0];
+        if (!v) return event.reply('modelo-propuesto', { success: false, msg: 'No pude interpretar ese modelo' });
+
+        // ¿Ya existe? Entonces no se propone nada: se usa el que hay.
+        const { data: yaEsta } = await supabase.from('modelos_dispositivos')
+            .select('id, modelo, estado').eq('marca', v.marca).eq('clave', v.clave).maybeSingle();
+        if (yaEsta) {
+            if (yaEsta.estado === 'rechazado') {
+                return event.reply('modelo-propuesto', { success: false, msg: 'Ese modelo ya se revisó y se descartó' });
+            }
+            await supabase.from('modelos_uso')
+                .upsert({ modelo_id: yaEsta.id, empresa_id: empresaActual }, { onConflict: 'modelo_id,empresa_id' });
+            return event.reply('modelo-propuesto', { success: true, yaExistia: true, marca: v.marca, modelo: yaEsta.modelo });
+        }
+
+        // Se le pasan los modelos parecidos del catálogo para que elija entre equipos reales en
+        // vez de recordar de memoria, que es donde un modelo chico inventa.
+        const candidatos = await candidatosDelCatalogo(v.marca, v.modelo);
+        const ia = await verificarModeloConIA(v.marca, v.modelo, candidatos);
+
+        // Si la IA corrige hacia un equipo que YA está en el catálogo, no se crea nada nuevo:
+        // el error de tipeo se absorbe en la ficha que ya existe. Es el mejor final posible.
+        if (ia.sugerencia) {
+            const corregido = variantesDeModelo(`${v.marca} ${ia.sugerencia}`)[0];
+            const yaCatalogado = corregido && candidatos.find(c => c.clave === corregido.clave);
+            if (yaCatalogado) {
+                const { data: ficha } = await supabase.from('modelos_dispositivos')
+                    .select('id, modelo').eq('marca', yaCatalogado.marca).eq('clave', yaCatalogado.clave).maybeSingle();
+                if (ficha) {
+                    await supabase.from('modelos_uso')
+                        .upsert({ modelo_id: ficha.id, empresa_id: empresaActual }, { onConflict: 'modelo_id,empresa_id' });
+                    return event.reply('modelo-propuesto', {
+                        success: true, yaExistia: true, marca: yaCatalogado.marca, modelo: ficha.modelo,
+                        msg: `Se usó "${yaCatalogado.marca} ${ficha.modelo}", que ya estaba en el catálogo`
+                    });
+                }
+            }
+        }
+
+        // Solo entra directo lo que el formato aprobó Y la IA reconoce con seguridad. Todo lo
+        // demás va a la cola: la IA no rechaza sola, solo deja su opinión escrita.
+        const estado = (fmt.ok === true && ia.veredicto === 'real' && ia.confianza === 'alta')
+            ? 'verificado' : 'pendiente';
+
+        const { data: creado, error } = await supabase.from('modelos_dispositivos').insert([{
+            marca: v.marca, modelo: v.modelo, clave: v.clave, estado, origen: 'taller',
+            ia_veredicto: ia.veredicto, ia_confianza: ia.confianza,
+            ia_motivo: ia.motivo, ia_sugerencia: ia.sugerencia,
+            creado_por: empresaActual
+        }]).select('id').single();
+        if (error) throw error;
+
+        await supabase.from('modelos_uso').insert([{ modelo_id: creado.id, empresa_id: empresaActual }]);
+
+        event.reply('modelo-propuesto', {
+            success: true, marca: v.marca, modelo: v.modelo, estado,
+            msg: estado === 'verificado'
+                ? `"${v.marca} ${v.modelo}" quedó en el catálogo`
+                : `"${v.marca} ${v.modelo}" ya lo puedes usar; queda en revisión para el resto de talleres`
+        });
+    } catch (e) {
+        console.error('Error proponiendo modelo:', e.message);
+        event.reply('modelo-propuesto', { success: false, msg: 'No se pudo agregar: ' + e.message });
+    }
+});
+
+// === COLA DE APROBACIÓN (solo la casa matriz) ===============================================
+// El catálogo es compartido entre talleres distintos, así que quien aprueba es BlackHouse, no
+// el dueño de cada taller: un descuido ajeno ensuciaría el catálogo de todos. Se usa el mismo
+// criterio que ya rige para el generador de licencias y los distribuidores: la empresa 1.
+const EMPRESA_MATRIZ = '1';
+const puedeAprobarModelos = () => String(empresaActual) === EMPRESA_MATRIZ;
+
+ipcMain.on('obtener-modelos-pendientes', async (event) => {
+    try {
+        if (!puedeAprobarModelos()) return event.reply('modelos-pendientes-respuesta', { ok: false, msg: 'Sin permiso', filas: [] });
+        const { data, error } = await supabase.from('modelos_dispositivos')
+            .select('id, marca, modelo, ia_veredicto, ia_confianza, ia_motivo, ia_sugerencia, creado_por, creado_en')
+            .eq('estado', 'pendiente')
+            .order('creado_en', { ascending: false })
+            .limit(300);
+        if (error) throw error;
+
+        // Cuántos talleres distintos ya lo manejan: es la señal más fuerte de que es real.
+        const ids = (data || []).map(m => m.id);
+        const conteo = {};
+        if (ids.length) {
+            const { data: usos } = await supabase.from('modelos_uso').select('modelo_id').in('modelo_id', ids);
+            (usos || []).forEach(u => { conteo[u.modelo_id] = (conteo[u.modelo_id] || 0) + 1; });
+        }
+        event.reply('modelos-pendientes-respuesta', {
+            ok: true,
+            filas: (data || []).map(m => ({ ...m, talleres: conteo[m.id] || 0 }))
+        });
+    } catch (e) {
+        event.reply('modelos-pendientes-respuesta', { ok: false, msg: e.message, filas: [] });
+    }
+});
+
+ipcMain.on('resolver-modelo', async (event, { id, accion, nombre }) => {
+    try {
+        if (!puedeAprobarModelos()) return event.reply('modelo-resuelto', { success: false, msg: 'Sin permiso' });
+        if (!['verificado', 'rechazado'].includes(accion)) {
+            return event.reply('modelo-resuelto', { success: false, msg: 'Acción inválida' });
+        }
+        const cambios = { estado: accion, resuelto_por: usuarioActual, resuelto_en: new Date().toISOString() };
+        // Al aprobar se puede corregir el nombre (por ejemplo aceptando lo que sugirió la IA).
+        if (accion === 'verificado' && nombre && String(nombre).trim()) {
+            cambios.modelo = limpiarNombreModelo(nombre);
+        }
+        const { data, error } = await supabase.from('modelos_dispositivos')
+            .update(cambios).eq('id', Number(id)).select('id').single();
+        if (error) throw error;
+        event.reply('modelo-resuelto', { success: true, id: data.id, accion });
+    } catch (e) {
+        event.reply('modelo-resuelto', { success: false, msg: e.message });
     }
 });
 

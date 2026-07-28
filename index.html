@@ -3593,6 +3593,11 @@
                             <div class="config-item" id="config-item-resellers" style="display:none;"
                                 onclick="showConfigSection('conf-resellers', this); cargarResellersAdmin();">
                                 Distribuidores</div>
+                            <div class="config-item" id="config-item-modelos" style="display:none;"
+                                onclick="showConfigSection('conf-modelos', this); cargarModelosPendientes();">
+                                Modelos por revisar <span id="badge-modelos-pendientes"
+                                    style="display:none; background:var(--warning); color:#111; border-radius:20px; padding:1px 7px; font-size:10px; font-weight:700; margin-left:6px;"></span>
+                            </div>
                         </div>
 
                         <div class="config-content">
@@ -3990,6 +3995,34 @@
                                         <tbody id="tabla-resellers">
                                             <!-- Se poblará dinámicamente -->
                                         </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- COLA DE REVISIÓN DEL CATÁLOGO COMPARTIDO DE MODELOS -->
+                            <div id="conf-modelos" class="config-section">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                    <h2 style="margin:0;">Modelos por revisar</h2>
+                                    <button class="bh-btn-white" onclick="cargarModelosPendientes()">↻ Actualizar</button>
+                                </div>
+                                <p style="color:var(--text-muted); font-size:12px; line-height:1.5; margin:0 0 15px;">
+                                    El catálogo de modelos es <b>compartido por todos los talleres</b>. Cuando alguien
+                                    usa un modelo que no estaba, entra aquí antes de quedar visible para el resto.
+                                    Mientras tanto ese taller ya lo puede usar con normalidad.<br>
+                                    La <b>IA</b> revisa cada uno y deja su opinión, pero <b>no decide</b>: se equivoca con
+                                    equipos poco conocidos, así que la última palabra es tuya.
+                                </p>
+                                <div class="bh-card" style="padding:0; overflow:hidden;">
+                                    <table style="width:100%">
+                                        <thead style="background:rgba(255,255,255,0.03);">
+                                            <tr>
+                                                <th>Modelo</th>
+                                                <th>Qué dice la IA</th>
+                                                <th style="text-align:center;">Talleres</th>
+                                                <th style="text-align:right; padding-right:15px;">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabla-modelos-pendientes"></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -5989,10 +6022,15 @@
             const tabResellers = document.getElementById('config-item-resellers');
             if (btnGenerador) btnGenerador.style.display = 'none';
             if (tabResellers) tabResellers.style.display = 'none';
+            // El catálogo de modelos también es de la casa matriz: lo aprueba BlackHouse, no
+            // el dueño de cada taller, porque la lista la comparten todos.
+            const tabModelos = document.getElementById('config-item-modelos');
+            if (tabModelos) tabModelos.style.display = 'none';
             const miEmpresa = localStorage.getItem('miEmpresaId');
             if (miEmpresa === '1') {
                 if (btnGenerador) btnGenerador.style.display = 'inline-flex';
                 if (tabResellers) tabResellers.style.display = 'block';
+                if (tabModelos) { tabModelos.style.display = 'block'; ipcRenderer.send('obtener-modelos-pendientes'); }
             }
         }
 
@@ -13693,12 +13731,11 @@
             if (!marcasModelosCache[marca].includes(modelo)) marcasModelosCache[marca].push(modelo);
             ipcRenderer.send('agregar-modelo-nuevo', { marca, modelo });
 
-            // En "Mi almacén" el modelo recién agregado no puede aparecer en la lista (esa sale
-            // del inventario y todavía no hay repuesto), así que se elige directo: es el equipo
-            // que se está recibiendo ahora. Queda guardado en el catálogo general para después.
+            // En "Mi almacén" el modelo va al catálogo compartido: pasa por el filtro de nombre
+            // y por la IA. Si no lo cruza, el programa lo dice y no se elige nada.
             if (fuenteModelos === 'almacen') {
-                showToast(`Modelo "${modelo}" agregado a ${marca}`, 'success');
-                seleccionarModelo(`${marca} ${modelo}`, marca, modelo);
+                showToast('Revisando el modelo…', 'info');
+                ipcRenderer.send('proponer-modelo', { marca, modelo });
                 return;
             }
 
@@ -15069,6 +15106,98 @@
         }
 
         // --- LOGICA DE DISTRIBUIDORES (RESELLERS) ---
+        // Respuesta a "agregar un modelo que no está en el catálogo".
+        ipcRenderer.on('modelo-propuesto', (e, res) => {
+            if (!res || !res.success) {
+                // El filtro de nombre lo rechazó (era una pieza, un accesorio, tecleo al azar…):
+                // se avisa el motivo y NO se elige nada, para que el usuario lo escriba bien.
+                return showToast((res && res.msg) || 'No se pudo agregar el modelo', 'danger');
+            }
+            if (res.msg) showToast(res.msg, 'success');
+            almacenModelosCache = null;      // que la próxima apertura lo traiga ya incluido
+            seleccionarModelo(`${res.marca} ${res.modelo}`, res.marca, res.modelo);
+        });
+
+        // === COLA DE REVISIÓN DEL CATÁLOGO DE MODELOS (casa matriz) ===
+        let modelosPendientes = [];
+
+        function cargarModelosPendientes() {
+            const tbody = document.getElementById('tabla-modelos-pendientes');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:18px; color:#888;">Cargando…</td></tr>';
+            ipcRenderer.send('obtener-modelos-pendientes');
+        }
+
+        ipcRenderer.on('modelos-pendientes-respuesta', (e, res) => {
+            modelosPendientes = (res && res.filas) || [];
+
+            // Contador en el menú, para no tener que entrar a mirar si hay algo.
+            const badge = document.getElementById('badge-modelos-pendientes');
+            if (badge) {
+                badge.innerText = modelosPendientes.length;
+                badge.style.display = modelosPendientes.length ? 'inline-block' : 'none';
+            }
+
+            const tbody = document.getElementById('tabla-modelos-pendientes');
+            if (!tbody) return;
+            if (!res || !res.ok) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:18px; color:var(--danger);">${htmlSeguro((res && res.msg) || 'No se pudo cargar')}</td></tr>`;
+                return;
+            }
+            if (!modelosPendientes.length) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:22px; color:#888;">No hay modelos esperando revisión. 👌</td></tr>';
+                return;
+            }
+
+            const colorIA = { real: 'var(--success)', dudoso: 'var(--warning)', inexistente: 'var(--danger)' };
+            tbody.innerHTML = modelosPendientes.map((m, i) => {
+                const ia = m.ia_veredicto
+                    ? `<b style="color:${colorIA[m.ia_veredicto] || '#888'};">${m.ia_veredicto}</b>`
+                      + (m.ia_confianza ? ` <span style="color:#777;">(${m.ia_confianza})</span>` : '')
+                      + (m.ia_motivo ? `<br><span style="color:#888; font-size:11px;">${htmlSeguro(m.ia_motivo)}</span>` : '')
+                      + (m.ia_sugerencia ? `<br><span style="font-size:11px;">sugiere: <b>${htmlSeguro(m.ia_sugerencia)}</b>
+                            <button class="bh-btn-white" style="padding:1px 6px; font-size:10px;" onclick="usarSugerenciaIA(${i})">usar</button></span>` : '')
+                    : '<span style="color:#777;">sin revisar</span>';
+                return `<tr>
+                    <td><input id="mod-nombre-${m.id}" class="bh-input" style="margin:0; padding:6px 8px; font-size:12px; width:190px;"
+                               value="${htmlSeguro(m.marca + ' ' + m.modelo)}" title="Puedes corregir el nombre antes de aprobarlo"></td>
+                    <td style="font-size:12px; min-width:230px; line-height:1.45;">${ia}</td>
+                    <td style="text-align:center; font-weight:700; color:${m.talleres >= 2 ? 'var(--success)' : '#888'};">${m.talleres}</td>
+                    <td style="text-align:right; padding-right:15px; white-space:nowrap;">
+                        <button class="bh-btn-purple" style="padding:5px 10px; font-size:12px;" onclick="resolverModelo(${m.id}, 'verificado')">✔ Aprobar</button>
+                        <button class="bh-btn-white" style="padding:5px 10px; font-size:12px;" onclick="resolverModelo(${m.id}, 'rechazado')">✘ Descartar</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        });
+
+        function usarSugerenciaIA(i) {
+            const m = modelosPendientes[i];
+            if (!m || !m.ia_sugerencia) return;
+            const campo = document.getElementById('mod-nombre-' + m.id);
+            if (campo) campo.value = `${m.marca} ${m.ia_sugerencia}`;
+        }
+
+        function resolverModelo(id, accion) {
+            const campo = document.getElementById('mod-nombre-' + id);
+            const m = modelosPendientes.find(x => x.id === id);
+            // Del campo se descuenta la marca: en la tabla se muestra "Samsung Galaxy A31" pero
+            // la ficha guarda la marca aparte.
+            let nombre = campo ? campo.value.trim() : '';
+            if (m && nombre.toLowerCase().startsWith(m.marca.toLowerCase() + ' ')) {
+                nombre = nombre.slice(m.marca.length).trim();
+            }
+            ipcRenderer.send('resolver-modelo', { id, accion, nombre });
+        }
+
+        ipcRenderer.on('modelo-resuelto', (e, res) => {
+            if (res && res.success) {
+                showToast(res.accion === 'verificado' ? 'Modelo aprobado' : 'Modelo descartado', 'success');
+                cargarModelosPendientes();
+            } else {
+                showToast((res && res.msg) || 'No se pudo resolver', 'danger');
+            }
+        });
+
         function cargarResellersAdmin() {
             if (isElectron) ipcRenderer.send('obtener-resellers-admin');
         }
