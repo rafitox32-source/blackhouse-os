@@ -3593,6 +3593,11 @@
                             <div class="config-item" id="config-item-resellers" style="display:none;"
                                 onclick="showConfigSection('conf-resellers', this); cargarResellersAdmin();">
                                 Distribuidores</div>
+                            <div class="config-item" id="config-item-licencias" style="display:none;"
+                                onclick="showConfigSection('conf-licencias', this); cargarPanelLicencias();">
+                                Licencias <span id="badge-licencias"
+                                    style="display:none; background:var(--danger); color:white; border-radius:20px; padding:1px 7px; font-size:10px; font-weight:700; margin-left:6px;"></span>
+                            </div>
                             <div class="config-item" id="config-item-modelos" style="display:none;"
                                 onclick="showConfigSection('conf-modelos', this); cargarModelosPendientes();">
                                 Modelos por revisar <span id="badge-modelos-pendientes"
@@ -3995,6 +4000,53 @@
                                         <tbody id="tabla-resellers">
                                             <!-- Se poblará dinámicamente -->
                                         </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- PANEL DE LICENCIAS (solo casa matriz) -->
+                            <div id="conf-licencias" class="config-section">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                    <h2 style="margin:0;">Licencias de los talleres</h2>
+                                    <div style="display:flex; gap:8px;">
+                                        <button class="bh-btn-white" onclick="cargarPanelLicencias()">↻ Actualizar</button>
+                                        <button class="bh-btn-purple" onclick="abrirGeneradorLicencia()">+ Generar código</button>
+                                    </div>
+                                </div>
+                                <p style="color:var(--text-muted); font-size:12px; margin:0 0 15px;">
+                                    Cambia el vencimiento, el plan o el límite de usuarios de cualquier taller.
+                                    Los atajos suman días <b>desde hoy</b> si ya venció, para no regalarle el tiempo que
+                                    estuvo sin pagar.
+                                </p>
+
+                                <div class="bh-card" style="padding:0; overflow:hidden; margin-bottom:20px;">
+                                    <table style="width:100%">
+                                        <thead style="background:rgba(255,255,255,0.03);">
+                                            <tr>
+                                                <th>Taller</th>
+                                                <th>Vence</th>
+                                                <th style="text-align:center;">Días</th>
+                                                <th style="text-align:center;">Usuarios</th>
+                                                <th>Plan</th>
+                                                <th style="text-align:right; padding-right:15px;">Renovar</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabla-licencias"></tbody>
+                                    </table>
+                                </div>
+
+                                <h3 style="margin:0 0 8px; font-size:14px; color:var(--text-muted);">CÓDIGOS GENERADOS</h3>
+                                <div class="bh-card" style="padding:0; overflow:hidden;">
+                                    <table style="width:100%">
+                                        <thead style="background:rgba(255,255,255,0.03);">
+                                            <tr>
+                                                <th>Código</th>
+                                                <th>Duración</th>
+                                                <th>Estado</th>
+                                                <th style="text-align:right; padding-right:15px;">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabla-codigos-licencia"></tbody>
                                     </table>
                                 </div>
                             </div>
@@ -6029,12 +6081,16 @@
             // El catálogo de modelos también es de la casa matriz: lo aprueba BlackHouse, no
             // el dueño de cada taller, porque la lista la comparten todos.
             const tabModelos = document.getElementById('config-item-modelos');
+            const tabLicencias = document.getElementById('config-item-licencias');
             if (tabModelos) tabModelos.style.display = 'none';
+            if (tabLicencias) tabLicencias.style.display = 'none';
             const miEmpresa = localStorage.getItem('miEmpresaId');
             if (miEmpresa === '1') {
                 if (btnGenerador) btnGenerador.style.display = 'inline-flex';
                 if (tabResellers) tabResellers.style.display = 'block';
                 if (tabModelos) { tabModelos.style.display = 'block'; ipcRenderer.send('obtener-modelos-pendientes'); }
+                // El contador de licencias vencidas o por vencer se trae al entrar.
+                if (tabLicencias) { tabLicencias.style.display = 'block'; ipcRenderer.send('obtener-panel-licencias'); }
             }
         }
 
@@ -15125,6 +15181,102 @@
             if (res.msg) showToast(res.msg, 'success');
             almacenModelosCache = null;      // que la próxima apertura lo traiga ya incluido
             seleccionarModelo(`${res.marca} ${res.modelo}`, res.marca, res.modelo);
+        });
+
+        // === PANEL DE LICENCIAS (casa matriz) ===
+        function cargarPanelLicencias() {
+            const t = document.getElementById('tabla-licencias');
+            if (t) t.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:18px; color:#888;">Cargando…</td></tr>';
+            ipcRenderer.send('obtener-panel-licencias');
+        }
+
+        const COLOR_ESTADO = {
+            vencida: 'var(--danger)', por_vencer: 'var(--warning)',
+            activa: 'var(--success)', matriz: 'var(--bh-purple)', sin_vencimiento: '#888'
+        };
+
+        ipcRenderer.on('panel-licencias-respuesta', (e, res) => {
+            const tT = document.getElementById('tabla-licencias');
+            const tC = document.getElementById('tabla-codigos-licencia');
+            if (!tT || !tC) return;
+
+            if (!res || !res.ok) {
+                tT.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:18px; color:var(--danger);">${htmlSeguro((res && res.msg) || 'No se pudo cargar')}</td></tr>`;
+                return;
+            }
+
+            const talleres = res.talleres || [];
+            // Aviso en el menú de los que ya vencieron o están por vencer.
+            const alerta = talleres.filter(t => t.estado === 'vencida' || t.estado === 'por_vencer').length;
+            const badge = document.getElementById('badge-licencias');
+            if (badge) { badge.innerText = alerta; badge.style.display = alerta ? 'inline-block' : 'none'; }
+
+            tT.innerHTML = talleres.map(t => `<tr>
+                <td>
+                    <b style="color:white;">${htmlSeguro(t.nombre)}</b>
+                    <div style="font-size:10px; color:${COLOR_ESTADO[t.estado] || '#888'}; text-transform:uppercase; letter-spacing:.5px;">
+                        ${t.estado.replace('_', ' ')} · #${t.id} · ${t.ordenes} órdenes
+                    </div>
+                </td>
+                <td><input type="date" id="lic-vence-${t.id}" class="bh-input"
+                           style="margin:0; padding:5px 7px; font-size:12px; width:135px;"
+                           value="${t.fecha_de_vencimiento || ''}"
+                           onchange="guardarLicencia(${t.id})"></td>
+                <td style="text-align:center; font-weight:700; color:${COLOR_ESTADO[t.estado] || '#888'};">
+                    ${t.dias_restantes === null ? '—' : t.dias_restantes}</td>
+                <td style="text-align:center;">
+                    ${t.usuarios} / <input type="number" min="1" id="lic-limite-${t.id}" class="bh-input"
+                           style="margin:0; padding:4px; font-size:12px; width:52px; display:inline-block;"
+                           value="${t.limite_de_usuario || 3}" onchange="guardarLicencia(${t.id})"></td>
+                <td><input type="text" id="lic-plan-${t.id}" class="bh-input" placeholder="—"
+                           style="margin:0; padding:5px 7px; font-size:12px; width:100px;"
+                           value="${htmlSeguro(t.plan_actual || '')}" onchange="guardarLicencia(${t.id})"></td>
+                <td style="text-align:right; padding-right:15px; white-space:nowrap;">
+                    <button class="bh-btn-white" style="padding:4px 8px; font-size:11px;" onclick="sumarDiasLicencia(${t.id}, 7)">+7d</button>
+                    <button class="bh-btn-white" style="padding:4px 8px; font-size:11px;" onclick="sumarDiasLicencia(${t.id}, 30)">+1m</button>
+                    <button class="bh-btn-white" style="padding:4px 8px; font-size:11px;" onclick="sumarDiasLicencia(${t.id}, 365)">+1a</button>
+                </td>
+            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center; padding:18px; color:#888;">Sin talleres.</td></tr>';
+
+            const codigos = res.codigos || [];
+            tC.innerHTML = codigos.map(c => {
+                const dur = c.dias_duracion ? `${c.dias_duracion} días` : `${c.meses_duracion || 1} mes(es)`;
+                return `<tr style="${c.usada ? 'opacity:.5;' : ''}">
+                    <td style="font-family:monospace; font-weight:700; color:white; user-select:text;">${htmlSeguro(c.codigo)}</td>
+                    <td>${dur}</td>
+                    <td style="color:${c.usada ? '#888' : 'var(--success)'};">${c.usada ? 'usado' : 'libre'}</td>
+                    <td style="text-align:right; padding-right:15px;">
+                        ${c.usada ? '' : `<button class="bh-btn-white" style="padding:4px 8px; font-size:11px;" onclick="borrarCodigoLicencia(${c.id})">🗑️ Borrar</button>`}
+                    </td>
+                </tr>`;
+            }).join('') || '<tr><td colspan="4" style="text-align:center; padding:18px; color:#888;">Sin códigos generados.</td></tr>';
+        });
+
+        function guardarLicencia(id) {
+            ipcRenderer.send('actualizar-licencia', {
+                empresa_id: id,
+                vence: document.getElementById('lic-vence-' + id).value || null,
+                plan: document.getElementById('lic-plan-' + id).value,
+                limite: parseInt(document.getElementById('lic-limite-' + id).value, 10) || null
+            });
+        }
+
+        function sumarDiasLicencia(id, dias) {
+            ipcRenderer.send('actualizar-licencia', { empresa_id: id, sumar_dias: dias });
+        }
+
+        function borrarCodigoLicencia(id) {
+            ipcRenderer.send('borrar-codigo-licencia', { id });
+        }
+
+        ipcRenderer.on('licencia-actualizada', (e, res) => {
+            if (res && res.ok) {
+                showToast(`${res.nombre}: vence ${res.fecha_de_vencimiento}`, 'success');
+                cargarPanelLicencias();
+            } else {
+                showToast((res && res.msg) || 'No se pudo actualizar', 'danger');
+                cargarPanelLicencias();
+            }
         });
 
         // === COLA DE REVISIÓN DEL CATÁLOGO DE MODELOS (casa matriz) ===

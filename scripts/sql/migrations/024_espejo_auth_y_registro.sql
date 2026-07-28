@@ -1,0 +1,17 @@
+-- Migración 024: cuenta espejo automática y registro de talleres del lado del servidor
+-- Motor: PostgreSQL (Supabase, proyecto flfhpffslhjcuvhxsnjz)
+--
+-- Dos huecos que impedían cambiar la clave del instalador:
+--
+-- 1) Las 10 cuentas espejo de auth.users se crearon a mano, pero eso no servía para las que
+--    vinieran: un usuario creado desde Ajustes, o el dueño de un taller nuevo, se quedaba sin
+--    cuenta y NO PODRÍA ENTRAR nunca con la clave pública. Se resuelve con un disparador en
+--    usuarios, para que valga por igual en todos los caminos sin depender de que la app se
+--    acuerde. También sincroniza la contraseña cuando la cambian en el programa.
+--
+-- 2) El registro de un taller creaba la empresa desde el cliente. Con la clave pública queda
+--    bloqueado, y además permitía crear una empresa sin gastar el código. Ahora el canje entero
+--    ocurre dentro de la base, en una sola operación.
+--
+-- El contenido exacto está aplicado en la base; este archivo queda como registro.
+-- Ver docs/SACAR_SERVICE_ROLE_DEL_INSTALADOR.md

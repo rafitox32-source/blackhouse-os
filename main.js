@@ -26,16 +26,68 @@ const supabase = createClient(
     process.env.SUPABASE_KEY || 'missing-supabase-key'
 );
 
-const DURACION_SESION_RECORDADA_DIAS = 30;
-async function emitirTokenSesion(usuarioId) {
-    const token = crypto.randomBytes(32).toString('hex');
-    const expira = new Date(Date.now() + DURACION_SESION_RECORDADA_DIAS * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase.from('usuarios').update({ session_token: token, session_expira: expira }).eq('id', usuarioId);
-    if (error) {
-        console.error('No se pudo guardar el token de sesión recordada:', error.message);
+// === SESIÓN DE SUPABASE AUTH (paso previo a sacar la service_role del instalador) ==========
+// Hoy el .exe lleva la clave service_role adentro, que se salta el RLS: quien desempaqueta el
+// instalador puede leer y escribir los datos de TODOS los talleres. La salida es que la app use
+// la clave pública y que sea Postgres el que recorte cada consulta (migraciones 021-023).
+//
+// Para que el RLS sepa quién pregunta hace falta una sesión de Auth. Cada usuario del programa
+// tiene su cuenta espejo <usuario>@blackhouse.local, creada con el MISMO hash bcrypt que ya
+// tenía, así que nadie cambió de contraseña ni tuvo que confirmar ningún correo.
+//
+// De momento esto es informativo: mientras SUPABASE_KEY siga siendo la service_role, la app
+// funciona igual aunque falle. Cuando se cambie a la clave pública, pasa a ser obligatorio.
+const correoDe = (usuario) => `${String(usuario || '').trim().toLowerCase()}@blackhouse.local`;
+
+// El refresh token se guarda en la carpeta de datos del usuario para poder recuperar la sesión
+// cuando entra con "recordarme", donde ya no hay contraseña que reusar.
+const rutaRefreshAuth = () => path.join(app.getPath('userData'), 'bh_auth.json');
+
+function guardarRefreshAuth(token) {
+    try {
+        if (token) fs.writeFileSync(rutaRefreshAuth(), JSON.stringify({ refresh_token: token }));
+    } catch (e) { console.warn('No se pudo guardar la sesión de Auth:', e.message); }
+}
+
+function leerRefreshAuth() {
+    try {
+        const j = JSON.parse(fs.readFileSync(rutaRefreshAuth(), 'utf8'));
+        return j && j.refresh_token;
+    } catch (e) { return null; }
+}
+
+function borrarRefreshAuth() {
+    try { fs.unlinkSync(rutaRefreshAuth()); } catch (e) { /* no existía */ }
+}
+
+async function abrirSesionAuth(usuario, password) {
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: correoDe(usuario), password
+        });
+        if (error) throw error;
+        console.log('Sesión Supabase Auth abierta para', usuario);
+        if (data.session) guardarRefreshAuth(data.session.refresh_token);
+        return data.session || null;
+    } catch (e) {
+        console.warn('No se pudo abrir sesión de Supabase Auth para', usuario, '->', e.message);
         return null;
     }
-    return token;
+}
+
+const DURACION_SESION_RECORDADA_DIAS = 30;
+async function emitirTokenSesion(usuarioId) {
+    // El token lo genera y guarda la base (emitir_token_sesion), no el cliente: así funciona
+    // igual con la clave pública, donde escribir en usuarios sin sesión está bloqueado.
+    const { data, error } = await supabase.rpc('emitir_token_sesion', {
+        p_usuario_id: usuarioId,
+        p_dias: DURACION_SESION_RECORDADA_DIAS
+    });
+    if (error || !data) {
+        console.error('No se pudo guardar el token de sesión recordada:', error && error.message);
+        return null;
+    }
+    return data;
 }
 
 const fs = require('fs');
@@ -370,102 +422,57 @@ ipcMain.on('agregar-modelo-nuevo', (event, { marca, modelo }) => {
 // === 2. LOGIN INTELIGENTE (FILTRA POR EMPRESA Y FECHA) ===
 ipcMain.on('iniciar-sesion', async (event, data) => {
     try {
-        console.log("=== INICIO DE LOGIN ===");
-        console.log("Intentando entrar con usuario:", data.usuario);
+        console.log("=== INICIO DE LOGIN ===", data.usuario);
 
-        // 1. Buscamos al usuario
-        console.log("Paso 1: Buscando en tabla usuarios...");
-        const { data: users, error } = await supabase
-            .from('usuarios')
-            .select('*')
-            .eq('usuario', data.usuario)
-            .eq('estado', 'activo')
-            .single();
+        // La comprobación de usuario, contraseña y licencia corre DENTRO de la base
+        // (login_verificar, migración 021). Antes se leía la tabla usuarios directamente, cosa
+        // que con la clave pública queda bloqueada por RLS: todavía no hay sesión, así que no
+        // hay a quién recortarle nada. Además la licencia ya no se revisa del lado del cliente,
+        // donde cualquiera podía saltársela.
+        const { data: res, error } = await supabase.rpc('login_verificar', {
+            p_usuario: data.usuario,
+            p_password: data.password
+        });
 
-        if (error && error.code !== 'PGRST116') {
-            // Error real de conexion/consulta (red, DNS, Supabase caido, etc.), no un simple "no existe".
-            console.error('Login query error - fallo de conexion (Paso 1):', error);
-            return event.reply('login-respuesta', { success: false, msg: `🌐 No se pudo conectar con el servidor. Verifica tu conexión a internet o la fecha/hora del sistema. (${error.message || error.code || 'error desconocido'})` });
+        if (error) {
+            console.error('Login: fallo de conexión ->', error);
+            return event.reply('login-respuesta', {
+                success: false,
+                msg: `🌐 No se pudo conectar con el servidor. Verifica tu conexión a internet o la fecha/hora del sistema. (${error.message || error.code || 'error desconocido'})`
+            });
         }
 
-        if (error || !users) {
-            console.error('Login query error - usuario no encontrado (Paso 1):', error);
-            return event.reply('login-respuesta', { success: false, msg: 'Usuario no encontrado o inactivo' });
-        }
-        
-        console.log("Usuario encontrado:", users.usuario, "Empresa ID:", users.empresa_id);
-
-        // 2. Validamos la contraseña
-        console.log("Paso 2: Validando contraseña...");
-        const eraTextoPlano = data.password === users.password;
-        const contrasenaValida = eraTextoPlano || await bcrypt.compare(data.password, users.password).catch(() => false);
-
-        if (!contrasenaValida) {
-            console.log("Error: Contraseña incorrecta");
-            return event.reply('login-respuesta', { success: false, msg: 'Contraseña incorrecta' });
+        if (!res || !res.ok) {
+            console.warn('Login rechazado:', res && res.msg);
+            return event.reply('login-respuesta', { success: false, msg: (res && res.msg) || 'No se pudo iniciar sesión' });
         }
 
-        console.log("Contraseña correcta.");
-
-        // Migración transparente: si la contraseña seguía en texto plano, la hasheamos ahora
-        if (eraTextoPlano) {
-            const hashMigrado = await bcrypt.hash(data.password, 10);
-            await supabase.from('usuarios').update({ password: hashMigrado }).eq('id', users.id);
+        // Sesión de Supabase Auth: es la que le dice al RLS quién pregunta. Sin ella, con la
+        // clave pública, el programa entraría pero no vería ningún dato.
+        const sesion = await abrirSesionAuth(res.usuario, data.password);
+        if (!sesion) {
+            console.warn('Login: sin sesión de Auth. Si la app usa la clave pública, no habrá datos.');
         }
 
-        // 3. Verificamos el estado de la suscripción de su empresa
-        console.log("Paso 3: Verificando empresa", users.empresa_id);
-        const { data: empresaData, error: errEmpresa } = await supabase
-            .from('empresas')
-            .select('fecha_de_vencimiento')
-            .eq('id', users.empresa_id)
-            .single();
+        console.log("=== LOGIN EXITOSO ===", res.usuario, "empresa", res.empresa_id);
 
-        if (errEmpresa || !empresaData) {
-            console.error("Error al verificar empresa:", errEmpresa);
-            return event.reply('login-respuesta', { success: false, msg: 'Error al verificar la licencia del taller.' });
-        }
-
-        console.log("Empresa verificada. Fecha de vencimiento:", empresaData.fecha_de_vencimiento);
-
-        // 4. EL BLOQUEO: Comparamos las fechas
-        if (users.empresa_id !== 1 && empresaData.fecha_de_vencimiento) {
-            console.log("Paso 4: Validando fechas...");
-            const fechaVencimiento = new Date(empresaData.fecha_de_vencimiento);
-            const hoy = new Date();
-
-            if (hoy > fechaVencimiento) {
-                console.log("Error: Licencia vencida");
-                return event.reply('login-respuesta', {
-                    success: false,
-                    msg: `⛔ Licencia Vencida. Tu acceso caducó el ${empresaData.fecha_de_vencimiento}. Escríbenos al WhatsApp para renovar.`
-                });
-            }
-        }
-
-       // 5. VERIFICACIÓN DE IP (desactivada: la licencia ya no se ata a una ubicación/red fija)
-
-        console.log("=== LOGIN EXITOSO ===");
-        
-        // Establecer las variables de estado global de la sesión en el main.js
-        empresaActual = users.empresa_id;
-        rolActual = users.rol;
-        usuarioActual = users.usuario;
+        empresaActual = res.empresa_id;
+        rolActual = res.rol;
+        usuarioActual = res.usuario;
 
         let sessionToken = null;
         if (data.recordar) {
-            sessionToken = await emitirTokenSesion(users.id);
+            sessionToken = await emitirTokenSesion(res.id);
         }
 
-        // 6. Login Directo
         event.reply('login-respuesta', {
             success: true,
-            usuario: users.usuario,
-            rol: users.rol,
-            empresa_id: users.empresa_id,
-            nombre_completo: users.nombre_completo || '',
-            nickname: users.nickname || users.usuario,
-            avatar: users.avatar || '',
+            usuario: res.usuario,
+            rol: res.rol,
+            empresa_id: res.empresa_id,
+            nombre_completo: res.nombre_completo || '',
+            nickname: res.nickname || res.usuario,
+            avatar: res.avatar || '',
             sessionToken
         });
 
@@ -478,63 +485,49 @@ ipcMain.on('iniciar-sesion', async (event, data) => {
 // === 2.0B LOGIN AUTOMATICO CON TOKEN DE SESION RECORDADA ===
 ipcMain.on('iniciar-sesion-token', async (event, data) => {
     try {
-        const token = data && data.token;
-        if (!token) {
-            return event.reply('login-respuesta', { success: false, msg: 'Sin token' });
+        // Igual que el login normal: la comprobación del token y de la licencia corre dentro de
+        // la base (login_por_token), porque leer usuarios sin sesión está bloqueado por RLS.
+        const { data: res, error } = await supabase.rpc('login_por_token', { p_token: data && data.token });
+
+        if (error) {
+            console.error('Login por token: fallo de conexión ->', error);
+            return event.reply('login-respuesta', { success: false, msg: 'Error de conexión al servidor' });
+        }
+        if (!res || !res.ok) {
+            return event.reply('login-respuesta', { success: false, msg: (res && res.msg) || 'Sesión guardada no válida' });
         }
 
-        const { data: users, error } = await supabase
-            .from('usuarios')
-            .select('*')
-            .eq('session_token', token)
-            .eq('estado', 'activo')
-            .single();
-
-        if (error || !users) {
-            return event.reply('login-respuesta', { success: false, msg: 'Sesión guardada no válida' });
-        }
-
-        if (!users.session_expira || new Date() > new Date(users.session_expira)) {
-            await supabase.from('usuarios').update({ session_token: null, session_expira: null }).eq('id', users.id);
-            return event.reply('login-respuesta', { success: false, msg: 'Sesión guardada expirada' });
-        }
-
-        // Verificamos vencimiento de licencia de la empresa (mismo criterio que el login normal)
-        const { data: empresaData, error: errEmpresa } = await supabase
-            .from('empresas')
-            .select('fecha_de_vencimiento')
-            .eq('id', users.empresa_id)
-            .single();
-
-        if (errEmpresa || !empresaData) {
-            return event.reply('login-respuesta', { success: false, msg: 'Error al verificar la licencia del taller.' });
-        }
-
-        if (users.empresa_id !== 1 && empresaData.fecha_de_vencimiento) {
-            if (new Date() > new Date(empresaData.fecha_de_vencimiento)) {
-                return event.reply('login-respuesta', {
-                    success: false,
-                    msg: `⛔ Licencia Vencida. Tu acceso caducó el ${empresaData.fecha_de_vencimiento}. Escríbenos al WhatsApp para renovar.`
-                });
+        // Aquí no hay contraseña que reusar, así que la sesión de Auth se recupera con el
+        // refresh token que dejó el último login normal. Si ya caducó, se pide entrar a mano:
+        // es preferible a dejar al usuario adentro sin poder ver nada.
+        let sesionOk = false;
+        try {
+            const guardado = leerRefreshAuth();
+            if (guardado) {
+                const { data: s, error: e2 } = await supabase.auth.refreshSession({ refresh_token: guardado });
+                if (!e2 && s && s.session) { guardarRefreshAuth(s.session.refresh_token); sesionOk = true; }
             }
+        } catch (e) {
+            console.warn('No se pudo recuperar la sesión de Auth guardada:', e.message);
+        }
+        if (!sesionOk) {
+            console.warn('Sesión recordada sin sesión de Auth: se pedirá entrar con contraseña.');
+            return event.reply('login-respuesta', { success: false, msg: 'Vuelve a entrar con tu contraseña' });
         }
 
-        empresaActual = users.empresa_id;
-        rolActual = users.rol;
-        usuarioActual = users.usuario;
-
-        // Rotamos el token en cada login automático (mitiga robo/reuso del token guardado)
-        const nuevoToken = await emitirTokenSesion(users.id);
+        empresaActual = res.empresa_id;
+        rolActual = res.rol;
+        usuarioActual = res.usuario;
 
         event.reply('login-respuesta', {
             success: true,
-            usuario: users.usuario,
-            rol: users.rol,
-            empresa_id: users.empresa_id,
-            nombre_completo: users.nombre_completo || '',
-            nickname: users.nickname || users.usuario,
-            avatar: users.avatar || '',
-            sessionToken: nuevoToken
+            usuario: res.usuario,
+            rol: res.rol,
+            empresa_id: res.empresa_id,
+            nombre_completo: res.nombre_completo || '',
+            nickname: res.nickname || res.usuario,
+            avatar: res.avatar || '',
+            sessionToken: data.token
         });
     } catch (err) {
         console.error('Error en login por token:', err);
@@ -545,12 +538,14 @@ ipcMain.on('iniciar-sesion-token', async (event, data) => {
 // === 2.0C CERRAR SESIÓN RECORDADA (invalida el token guardado) ===
 ipcMain.on('cerrar-sesion-token', async (event, data) => {
     try {
-        const token = data && data.token;
-        if (token) {
-            await supabase.from('usuarios').update({ session_token: null, session_expira: null }).eq('session_token', token);
-        }
+        // Va por RPC porque esto puede pasar SIN sesion activa (desde la propia pantalla de
+        // login). Con la clave publica el UPDATE directo quedaba bloqueado y el token
+        // sobrevivia, asi que al reabrir el programa volvia a entrar solo.
+        await supabase.rpc('cerrar_sesion_recordada', { p_token: data && data.token });
+        try { await supabase.auth.signOut(); } catch (e) { /* no había sesión abierta */ }
+        borrarRefreshAuth();
     } catch (e) {
-        console.warn('No se pudo invalidar el token de sesión:', e.message);
+        console.warn('No se pudo cerrar la sesión recordada:', e.message);
     }
     // location.reload() en el renderer NO reinicia main.js (sigue siendo el mismo proceso Electron
     // en ejecución) — sin esto, empresaActual/rolActual se quedaban apuntando al usuario anterior
@@ -560,6 +555,7 @@ ipcMain.on('cerrar-sesion-token', async (event, data) => {
     empresaActual = null;
     rolActual = null;
     usuarioActual = null;
+    usoModelosSincronizado = false;
 });
 
 // === 2.1 VERIFICACIÓN DE 2FA (SEGUNDO PASO DE ACCESO) ===
@@ -3635,70 +3631,71 @@ ipcMain.on('crear-codigo-automatico', async (event, data) => {
     }
 });
 
+// === 10B. PANEL DE LICENCIAS (solo casa matriz) ===
+// Todo pasa por funciones de la base que comprueban soy_matriz(), no por acceso directo a la
+// tabla: las columnas de licencia están revocadas a propósito (migración 023) para que ningún
+// taller pueda correrse su propio vencimiento.
+ipcMain.on('obtener-panel-licencias', async (event) => {
+    try {
+        const { data, error } = await supabase.rpc('licencias_panel');
+        if (error) throw error;
+        event.reply('panel-licencias-respuesta', data || { ok: false, msg: 'Sin respuesta' });
+    } catch (e) {
+        console.error('Error al leer el panel de licencias:', e.message);
+        event.reply('panel-licencias-respuesta', { ok: false, msg: e.message });
+    }
+});
+
+ipcMain.on('actualizar-licencia', async (event, d) => {
+    try {
+        const { data, error } = await supabase.rpc('licencia_actualizar', {
+            p_empresa_id: Number(d.empresa_id),
+            p_vence: d.vence || null,
+            p_plan: d.plan || null,
+            p_limite: d.limite || null,
+            p_sumar_dias: d.sumar_dias || null
+        });
+        if (error) throw error;
+        event.reply('licencia-actualizada', data || { ok: false, msg: 'Sin respuesta' });
+    } catch (e) {
+        console.error('Error al actualizar licencia:', e.message);
+        event.reply('licencia-actualizada', { ok: false, msg: e.message });
+    }
+});
+
+ipcMain.on('borrar-codigo-licencia', async (event, d) => {
+    try {
+        const { data, error } = await supabase.rpc('licencia_borrar_codigo', { p_id: Number(d.id) });
+        if (error) throw error;
+        event.reply('licencia-actualizada', data && data.ok
+            ? { ok: true, nombre: 'Código', fecha_de_vencimiento: 'borrado' }
+            : (data || { ok: false, msg: 'Sin respuesta' }));
+    } catch (e) {
+        event.reply('licencia-actualizada', { ok: false, msg: e.message });
+    }
+});
+
 // === 11. REGISTRO SAAS CON VALIDACIÓN DE LICENCIA Y FECHA ===
 ipcMain.on('registrar-nuevo-cliente-saas', async (event, data) => {
     try {
-        const { data: licenciaData, error: errLic } = await supabase
-            .from('licencias')
-            .select('*')
-            .eq('codigo', data.codigo)
-            .eq('usada', false)
-            .single();
+        // Todo el canje corre dentro de la base (registrar_taller): validar el codigo, crear la
+        // empresa con su vencimiento, crear al dueño y marcar el codigo como usado, en una sola
+        // operacion. Antes se hacia desde el cliente, cosa que con la clave publica queda
+        // bloqueada, y que ademas permitia crear una empresa sin gastar el codigo.
+        const { data: res, error } = await supabase.rpc('registrar_taller', {
+            p_codigo: data.codigo,
+            p_empresa: data.empresa,
+            p_usuario: data.usuario,
+            p_password: data.password
+        });
 
-        if (errLic || !licenciaData) {
+        if (error) throw error;
+        if (!res || !res.success) {
             return event.reply('registro-saas-respuesta', {
-                success: false,
-                msg: 'Código de licencia inválido, inexistente o ya usado.'
+                success: false, msg: (res && res.msg) || 'No se pudo registrar el taller'
             });
         }
-
-        // Una licencia de prueba trae los días; las de siempre, los meses. Si vienen las dos,
-        // mandan los días, que es lo que distingue a una demo.
-        const fechaVencimiento = new Date();
-        if (licenciaData.dias_duracion > 0) {
-            fechaVencimiento.setDate(fechaVencimiento.getDate() + licenciaData.dias_duracion);
-        } else {
-            fechaVencimiento.setMonth(fechaVencimiento.getMonth() + (licenciaData.meses_duracion || 1));
-        }
-        const fechaSQL = fechaVencimiento.toISOString().split('T')[0];
-
-        const { data: nuevaEmpresa, error: errEmpresa } = await supabase
-            .from('empresas')
-            .insert([{
-                nombre: data.empresa,
-                limite_de_usuario: 3,
-                fecha_de_vencimiento: fechaSQL
-            }])
-            .select();
-
-        if (errEmpresa) throw errEmpresa;
-        const idGenerado = nuevaEmpresa[0].id;
-
-        // 🚨 NUEVO: Encriptamos la contraseña del administrador del nuevo taller
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(data.password, salt);
-
-        const { error: errUser } = await supabase
-            .from('usuarios')
-            .insert([{
-                usuario: data.usuario,
-                password: hashedPassword, // Se guarda encriptada
-                rol: 'dueno',
-                estado: 'activo',
-                empresa_id: idGenerado
-            }]);
-
-        if (errUser) throw errUser;
-
-        const { error: errUpdateLic } = await supabase
-            .from('licencias')
-            .update({ usada: true })
-            .eq('id', licenciaData.id);
-
-        if (errUpdateLic) throw errUpdateLic;
-
         event.reply('registro-saas-respuesta', { success: true });
-
     } catch (err) {
         console.error("Error en el registro:", err);
         event.reply('registro-saas-respuesta', { success: false, msg: err.message });
