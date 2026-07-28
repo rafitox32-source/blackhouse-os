@@ -23,6 +23,7 @@
     <!-- Holograma 3D del Laboratorio: three.js incluido localmente (assets/vendor/three) para que funcione sin internet -->
     <script src="assets/vendor/three/three.min.js"></script>
     <script src="assets/vendor/three/OrbitControls.js"></script>
+    <script src="assets/vendor/avatar.js"></script>
 
     <style>
         /* ===================== SISTEMA DE TEMAS =====================
@@ -4355,7 +4356,7 @@
                 <div class="input-group">
                     <label>Foto de Perfil (URL Opcional)</label>
                     <input type="text" id="reseller-avatar" class="bh-input"
-                        placeholder="https://ui-avatars.com/api/?name=Juan+Perez">
+                        placeholder="Dejar vacío para usar las iniciales">
                 </div>
                 <div class="input-group">
                     <label>País</label>
@@ -6034,7 +6035,7 @@
             document.getElementById('welcome-msg').innerText = `Sesión iniciada como: ${usuario}`;
 
             // NUEVO: Avatar Global
-            const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(usuario)}&background=7c3aed&color=fff&bold=true`;
+            const avatarUrl = avatarLocal(usuario, { fondo: '7c3aed', texto: 'fff' });
             localStorage.setItem('userAvatar', avatarUrl);
             const avatarContainer = document.getElementById('top-bar-avatar');
             if (avatarContainer) {
@@ -8360,7 +8361,7 @@
             document.getElementById('user-role-display').innerText = 'MODO DEMO';
             document.getElementById('user-role-display').style.color = 'var(--warning)';
             const avatarContainer = document.getElementById('top-bar-avatar');
-            if (avatarContainer) avatarContainer.innerHTML = '<img src="https://ui-avatars.com/api/?name=Demo&background=7c3aed&color=fff&bold=true" style="width:100%;height:100%;object-fit:cover;">';
+            if (avatarContainer) avatarContainer.innerHTML = `<img src="${avatarLocal('Demo', { fondo: '7c3aed', texto: 'fff' })}" style="width:100%;height:100%;object-fit:cover;">`;
 
             // Dashboard
             document.getElementById('welcome-msg').innerHTML = 'Modo Demostración — <span style="color:var(--warning);font-size:13px;">⚠️ Los datos son de ejemplo y no se guardan.</span>';
@@ -8425,7 +8426,7 @@
         <tr>
             <td>
                 <div style="display:flex;align-items:center;gap:10px;">
-                    <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(c.nombre)}&background=random&color=fff&bold=true&size=32" style="width:32px;height:32px;border-radius:8px;flex-shrink:0;">
+                    <img src="${avatarLocal(c.nombre, { tam: 32 })}" style="width:32px;height:32px;border-radius:8px;flex-shrink:0;">
                     <div>
                         <div style="font-weight:600;color:white;">${c.nombre}</div>
                         <div style="font-size:10px;color:#aaa;">${c.visitas} reparaciones</div>
@@ -8947,7 +8948,7 @@
 
             const imgUrl = datos.avatar
                 ? datos.avatar
-                : `https://ui-avatars.com/api/?name=${encodeURIComponent(datos.usuario || 'U')}&background=random&color=fff&bold=true&size=64`;
+                : avatarLocal(datos.usuario || 'U', { tam: 64 });
 
             const anim = esHistorial ? 'none' : 'messageIn 0.3s ease';
 
@@ -8962,7 +8963,7 @@
             <div style="display:flex;gap:10px;align-items:flex-start;animation:${anim};">
                 <img src="${imgUrl}"
                      style="width:38px;height:38px;border-radius:10px;object-fit:cover;border:2px solid ${rc.color};flex-shrink:0;margin-top:2px;"
-                     onerror="this.src='https://ui-avatars.com/api/?name=U&background=333&color=fff'">
+                     onerror="this.src=avatarLocal('U', { fondo: '333', texto: 'fff' })">
                 <div style="flex:1;max-width:82%;">
                     <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;">
                         <span style="font-size:12px;font-weight:700;color:white;">${datos.usuario || 'Usuario'}</span>
@@ -15050,7 +15051,7 @@
                         email: "ventas@hermanosvega.com",
                         dir: "Av. Argentina 1450, Centro de Lima",
                         cat: "Pantallas y Displays",
-                        foto: "https://ui-avatars.com/api/?name=Hermanos+Vega&background=7c3aed&color=fff&size=120"
+                        foto: avatarLocal('Hermanos Vega', { fondo: '7c3aed', texto: 'fff', tam: 120 })
                     },
                     {
                         nombre: "Suministros Express S.A.C.",
@@ -15058,7 +15059,7 @@
                         email: "pedidos@suministros.pe",
                         dir: "Calle Las Begonias 450, San Isidro",
                         cat: "Repuestos y Flex",
-                        foto: "https://ui-avatars.com/api/?name=Suministros+Express&background=10b981&color=fff&size=120"
+                        foto: avatarLocal('Suministros Express', { fondo: '10b981', texto: 'fff', tam: 120 })
                     }
                 ];
                 localStorage.setItem('rafitox_proveedores', JSON.stringify(proveedores));
@@ -15094,7 +15095,7 @@
             }
 
             grid.innerHTML = proveedores.map((p, index) => {
-                const foto = p.foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(p.nombre)}&background=7c3aed&color=fff&size=120`;
+                const foto = p.foto || avatarLocal(p.nombre, { fondo: '7c3aed', texto: 'fff', tam: 120 });
                 const cleanPhone = p.tel.replace(/\D/g, '');
                 return `
                 <div class="bh-card" style="display:flex; flex-direction:column; align-items:center; text-align:center; padding:25px; border:1px solid var(--bh-border); transition:0.3s; position:relative; overflow:hidden;">
@@ -15377,7 +15378,7 @@
                             tbody.innerHTML = res.data.map(r => `
                                 <tr>
                                     <td style="display:flex; align-items:center; gap:10px; border:none; padding:12px;">
-                                        <img src="${r.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(r.nombre_completo)}" style="width:30px; height:30px; border-radius:50%; object-fit:cover;">
+                                        <img src="${r.avatar || avatarLocal(r.nombre_completo, { fondo: '111', texto: 'a78bfa' })}" style="width:30px; height:30px; border-radius:50%; object-fit:cover;">
                                         <span style="font-weight:bold; color:white;">${r.nombre_completo}</span>
                                     </td>
                                     <td style="color:#aaa;">${r.nickname}</td>
@@ -15458,7 +15459,10 @@
                 nombre_completo: nombre,
                 nickname: tel,
                 pais: pais,
-                avatar: avatar || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(nombre) + '&background=111&color=a78bfa'),
+                // Si no pone foto se guarda vacío: al dibujar la fila se generan las iniciales
+                // en el momento. Antes se guardaba una dirección de ui-avatars dentro de la
+                // base de datos, y esa fila quedaba dependiendo de un servidor ajeno para siempre.
+                avatar: avatar || null,
                 estado: estado
             };
 
