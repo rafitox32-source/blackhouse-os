@@ -66,7 +66,45 @@ Resultado del filtro corriendo sobre los 398 modelos reales:
 Y sobre 11 nombres basura de prueba: **rechazó los 11**, aceptando los 4 legítimos
 (`Galaxy A31`, `iPhone 15 Pro Max`, `Moto E 2nd Gen`, `Redmi Note 13 Pro+`).
 
-### Portero 2 — la corroboración (lo que hace que sea "inteligente")
+### Portero 2 — la IA, pero reconociendo en vez de recordando
+
+El filtro de forma no puede detectar un nombre que *parece* correcto y no existe: `Mate note 10`
+lo cruza sin problema.
+
+Lo que **no** hay que hacer es preguntarle a la IA de memoria. `llama-3.1-8b-instant` es un
+modelo chico: ante un `Honor X6b` real lo "corrige" hacia el `X6`, que es más famoso. Eso es
+peor que el error de tipeo original.
+
+En vez de eso se le entregan **los modelos parecidos de nuestro propio catálogo** y se le pide
+elegir entre ellos o decir que ninguno sirve. Recordar es difícil; reconocer es fácil.
+
+Los candidatos salen por distancia de edición contra el nombre visible **y** contra la clave
+canónica —quien escribe `A31` no debería quedarse sin encontrar `Galaxy A31`, que es el mismo
+equipo— más una regla extra: si la clave aparece completa dentro de lo escrito, entra igual
+(así `P. HONOR X8A` encuentra `X8A` aunque la distancia se dispare por la basura de delante).
+
+Esto es lo que recibe la IA con los datos reales:
+
+| Escrito | Conocidos que se le pasan |
+|---|---|
+| `Samsng A31` | `Galaxy A31` |
+| `Mate note 10` | `Mate 10` |
+| `P. HONOR X8A` | `X8A` |
+| `A31` | `Galaxy A31`, `Galaxy A01`, `A21`, `A30`… |
+| `ZZZZ999` | *(ninguno)* |
+
+La regla más importante del prompt sale de ese cuarto caso: **en los celulares un carácter
+cambia el equipo.** `A21`, `A31` y `A51` son tres teléfonos distintos, así que la IA tiene
+prohibido tocar la parte numérica para parecerse a otro modelo; solo corrige palabras (la
+marca, la serie) y basura descriptiva.
+
+Si la IA corrige hacia un equipo que **ya está** en el catálogo, no se crea ficha nueva: el
+error de tipeo se absorbe en la que existe. Ese es el mejor final posible.
+
+Y la IA **no decide**: solo entra directo lo que además de pasar el formato ella reconoce con
+confianza alta. Nunca rechaza sola.
+
+### Portero 3 — la corroboración
 
 El filtro de forma no puede detectar un nombre que *parece* correcto pero está mal escrito:
 `Mate note 10` pasa el formato y sin embargo no existe.

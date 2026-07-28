@@ -906,52 +906,145 @@ function validarFormatoModelo(marca, modeloCrudo) {
 
 // === PORTERO 2: la IA ========================================================================
 // El formato no puede detectar un nombre que PARECE correcto pero no existe ("Mate note 10").
-// Para eso se le pregunta al modelo de lenguaje que ya usa el programa (Groq).
 //
-// La IA NO tiene la última palabra: solo pre-clasifica y deja su opinión escrita para el que
-// aprueba. Nunca rechaza sola — un modelo chico se equivoca con equipos poco conocidos, y
-// rechazar el celular real de un cliente es peor que dejar pasar un nombre feo a la cola.
-async function verificarModeloConIA(marca, modelo) {
-    try {
-        const result = await openai.chat.completions.create({
-            model: "llama-3.1-8b-instant",
-            temperature: 0,
-            messages: [
-                {
-                    role: "system",
-                    content: `Verificas si un modelo de celular o tablet existe de verdad.
-Respondes ÚNICAMENTE con un JSON válido, sin texto alrededor y sin explicaciones:
-{"veredicto":"real|dudoso|inexistente","confianza":"alta|media|baja","correccion":"","motivo":""}
+// La clave para que sea estable es NO pedirle a la IA que recuerde de memoria: un modelo chico
+// "corrige" un Honor X6b real hacia el X6 famoso, y eso es peor que el error de tipeo. En vez
+// de eso se le entregan los modelos parecidos de NUESTRO propio catálogo y se le pide que elija
+// entre ellos o que diga que ninguno sirve. Recordar es difícil; reconocer es fácil.
 
-- "real": el equipo existe con ese nombre o con uno equivalente.
-- "dudoso": podría existir, pero el nombre está incompleto, mal escrito o raro.
-- "inexistente": no es un equipo (es una pieza, un accesorio, una operadora o texto sin sentido).
-- "correccion": si el nombre está mal escrito, el nombre correcto; si está bien, cadena vacía.
-- "motivo": máximo 12 palabras, en español.`
-                },
-                { role: "user", content: `Marca: ${marca}\nModelo: ${modelo}` }
-            ]
-        });
-
-        const txt = (result.choices?.[0]?.message?.content || '').trim();
-        // El modelo a veces envuelve el JSON en ``` o le pone texto delante: se recorta.
-        const crudo = txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1);
-        const j = JSON.parse(crudo);
-
-        const veredicto = ['real', 'dudoso', 'inexistente'].includes(j.veredicto) ? j.veredicto : null;
-        const confianza = ['alta', 'media', 'baja'].includes(j.confianza) ? j.confianza : 'baja';
-        return {
-            veredicto,
-            confianza: veredicto ? confianza : null,
-            motivo: String(j.motivo || '').slice(0, 200) || null,
-            sugerencia: String(j.correccion || '').trim().slice(0, 60) || null
-        };
-    } catch (e) {
-        // Sin internet, sin clave o con una respuesta que no se pudo leer: se sigue sin IA y el
-        // modelo queda en la cola. Nunca se descarta por no haber podido preguntar.
-        console.warn('No se pudo verificar el modelo con IA:', e.message);
-        return { veredicto: null, confianza: null, motivo: null, sugerencia: null };
+// Distancia de edición: cuántos caracteres hay que cambiar para pasar de un texto al otro.
+function distanciaEdicion(a, b) {
+    a = String(a).toUpperCase(); b = String(b).toUpperCase();
+    const m = a.length, n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) {
+        const cur = [i];
+        for (let j = 1; j <= n; j++) {
+            cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        }
+        prev = cur;
     }
+    return prev[n];
+}
+
+// Los modelos ya verificados que se parecen a lo que se escribió. Se mide contra el nombre
+// visible y contra la clave: quien escribe "A31" no debería quedarse sin encontrar "Galaxy
+// A31", que es el mismo equipo.
+async function candidatosDelCatalogo(marca, escrito, limite = 6) {
+    try {
+        let q = supabase.from('modelos_dispositivos').select('marca, modelo, clave').eq('estado', 'verificado');
+        if (marca && marca !== 'Otros') q = q.eq('marca', marca);
+        const { data } = await q.limit(2000);
+
+        const esc = String(escrito || '');
+        return (data || [])
+            .map(c => {
+                let d = Math.min(distanciaEdicion(esc, c.modelo), distanciaEdicion(esc, c.clave));
+                // "P. HONOR X8A" trae basura delante y la distancia se dispara, pero el modelo
+                // real está ahí dentro: si la clave aparece completa, es candidato igual.
+                if (c.clave.length >= 3) {
+                    const re = new RegExp('(^|[^A-Z0-9])' + c.clave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Z0-9]|$)', 'i');
+                    if (re.test(esc)) d = Math.min(d, 1);
+                }
+                return { ...c, d };
+            })
+            .filter(c => c.d <= Math.max(2, Math.ceil(Math.min(
+                Math.max(esc.length, c.modelo.length),
+                Math.max(esc.length, c.clave.length)) * 0.45)))
+            .sort((a, b) => a.d - b.d)
+            .slice(0, limite);
+    } catch (e) {
+        return [];
+    }
+}
+
+// Se intenta primero con el modelo grande, que reconoce muchos más equipos; si la cuenta no lo
+// tiene habilitado se cae al mismo que ya usa el resto del programa.
+const MODELOS_IA_CATALOGO = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+
+const PROMPT_CATALOGO = `Eres el control de calidad del catálogo de equipos de una cadena de talleres de celulares.
+Recibes lo que escribió un técnico y decides si es un equipo real y con qué nombre debe quedar guardado.
+
+Respondes SOLO con este JSON, sin texto alrededor, sin \`\`\` y sin explicaciones:
+{"veredicto":"real|dudoso|inexistente","confianza":"alta|media|baja","nombre":"","motivo":""}
+
+- "real": es un equipo que existe.
+- "dudoso": podría existir, pero no estás seguro o el nombre está incompleto.
+- "inexistente": no es un equipo (es una pieza, un accesorio, un chip de operadora o texto sin sentido).
+- "nombre": el nombre con el que debe quedar guardado, SIN la marca. Si lo escrito ya está bien, repítelo igual.
+
+REGLAS QUE NO PUEDES ROMPER:
+1. En los celulares un solo carácter cambia el equipo: A21, A31 y A51 son tres teléfonos
+   distintos. NUNCA cambies un número del modelo para parecerte a otro equipo. Corrige solo lo
+   que es claramente un error de tipeo en una palabra (la marca, la serie), jamás en la parte
+   numérica.
+2. Si te doy MODELOS CONOCIDOS, elige uno solo cuando sea evidentemente el mismo equipo. Si
+   dudas, no elijas ninguno y deja el nombre como estaba.
+3. Nunca inventes un equipo que no te consta. Ante la duda: "dudoso" con confianza "baja".
+4. Quita del nombre lo que describe el repuesto y no el equipo: INCELL, AMOLED, OLED, C/M, con
+   marco, sin marco, colores, "borde grueso", "flex largo".
+5. Conserva el 4G / 5G cuando venga: son variantes distintas del mismo equipo.
+6. "motivo": máximo 12 palabras, en español.
+
+EJEMPLOS:
+Marca: Huawei | Escrito: "Mate note 10" | Conocidos: Mate 10, Mate 20 lite
+{"veredicto":"dudoso","confianza":"media","nombre":"Mate 10","motivo":"Sobra 'note'; el equipo es el Mate 10"}
+
+Marca: Honor | Escrito: "P. HONOR X8A" | Conocidos: X8A, X8B, X8
+{"veredicto":"real","confianza":"alta","nombre":"X8A","motivo":"El 'P.' viene del listado del proveedor"}
+
+Marca: Samsung | Escrito: "A31" | Conocidos: Galaxy A31, A21, A30, A32
+{"veredicto":"real","confianza":"alta","nombre":"Galaxy A31","motivo":"Es el Galaxy A31"}
+
+Marca: Samsung | Escrito: "A34 BORDE GRUESO" | Conocidos: A34, A33
+{"veredicto":"real","confianza":"alta","nombre":"A34","motivo":"'Borde grueso' describe la pantalla"}
+
+Marca: Samsung | Escrito: "chip bitel" | Conocidos: (ninguno)
+{"veredicto":"inexistente","confianza":"alta","nombre":"","motivo":"Es un chip de operadora"}`;
+
+async function verificarModeloConIA(marca, modelo, candidatos) {
+    const conocidos = (candidatos || []).map(c => c.modelo).join(', ') || '(ninguno)';
+    let ultimoError = null;
+
+    for (const modeloIA of MODELOS_IA_CATALOGO) {
+        try {
+            const result = await openai.chat.completions.create({
+                model: modeloIA,
+                temperature: 0,          // misma pregunta, misma respuesta
+                max_tokens: 200,
+                messages: [
+                    { role: "system", content: PROMPT_CATALOGO },
+                    { role: "user", content: `Marca: ${marca} | Escrito: "${modelo}" | Conocidos: ${conocidos}` }
+                ]
+            });
+
+            const txt = (result.choices?.[0]?.message?.content || '').trim();
+            // A veces envuelve el JSON en ``` o le pone texto delante: se recorta.
+            const j = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+
+            const veredicto = ['real', 'dudoso', 'inexistente'].includes(j.veredicto) ? j.veredicto : null;
+            if (!veredicto) throw new Error('veredicto no reconocido');
+            const propuesto = limpiarNombreModelo(j.nombre).slice(0, 60);
+
+            return {
+                veredicto,
+                confianza: ['alta', 'media', 'baja'].includes(j.confianza) ? j.confianza : 'baja',
+                motivo: String(j.motivo || '').slice(0, 200) || null,
+                // Solo cuenta como sugerencia si de verdad cambia algo.
+                sugerencia: (propuesto && propuesto.toUpperCase() !== String(modelo).toUpperCase()) ? propuesto : null,
+                motor: modeloIA
+            };
+        } catch (e) {
+            ultimoError = e;    // p. ej. el modelo grande no está habilitado en la cuenta
+        }
+    }
+
+    // Sin internet, sin clave o con una respuesta ilegible: se sigue sin IA y el modelo queda en
+    // la cola. Nunca se descarta por no haber podido preguntar.
+    console.warn('No se pudo verificar el modelo con IA:', ultimoError && ultimoError.message);
+    return { veredicto: null, confianza: null, motivo: null, sugerencia: null, motor: null };
 }
 
 // Cuánto stock tiene ESTA empresa de cada modelo, indexado por la clave canónica, para poder
@@ -1064,7 +1157,30 @@ ipcMain.on('proponer-modelo', async (event, { marca, modelo }) => {
             return event.reply('modelo-propuesto', { success: true, yaExistia: true, marca: v.marca, modelo: yaEsta.modelo });
         }
 
-        const ia = await verificarModeloConIA(v.marca, v.modelo);
+        // Se le pasan los modelos parecidos del catálogo para que elija entre equipos reales en
+        // vez de recordar de memoria, que es donde un modelo chico inventa.
+        const candidatos = await candidatosDelCatalogo(v.marca, v.modelo);
+        const ia = await verificarModeloConIA(v.marca, v.modelo, candidatos);
+
+        // Si la IA corrige hacia un equipo que YA está en el catálogo, no se crea nada nuevo:
+        // el error de tipeo se absorbe en la ficha que ya existe. Es el mejor final posible.
+        if (ia.sugerencia) {
+            const corregido = variantesDeModelo(`${v.marca} ${ia.sugerencia}`)[0];
+            const yaCatalogado = corregido && candidatos.find(c => c.clave === corregido.clave);
+            if (yaCatalogado) {
+                const { data: ficha } = await supabase.from('modelos_dispositivos')
+                    .select('id, modelo').eq('marca', yaCatalogado.marca).eq('clave', yaCatalogado.clave).maybeSingle();
+                if (ficha) {
+                    await supabase.from('modelos_uso')
+                        .upsert({ modelo_id: ficha.id, empresa_id: empresaActual }, { onConflict: 'modelo_id,empresa_id' });
+                    return event.reply('modelo-propuesto', {
+                        success: true, yaExistia: true, marca: yaCatalogado.marca, modelo: ficha.modelo,
+                        msg: `Se usó "${yaCatalogado.marca} ${ficha.modelo}", que ya estaba en el catálogo`
+                    });
+                }
+            }
+        }
+
         // Solo entra directo lo que el formato aprobó Y la IA reconoce con seguridad. Todo lo
         // demás va a la cola: la IA no rechaza sola, solo deja su opinión escrita.
         const estado = (fmt.ok === true && ia.veredicto === 'real' && ia.confianza === 'alta')
