@@ -3627,67 +3627,24 @@ ipcMain.on('crear-codigo-automatico', async (event, data) => {
 // === 11. REGISTRO SAAS CON VALIDACIÓN DE LICENCIA Y FECHA ===
 ipcMain.on('registrar-nuevo-cliente-saas', async (event, data) => {
     try {
-        const { data: licenciaData, error: errLic } = await supabase
-            .from('licencias')
-            .select('*')
-            .eq('codigo', data.codigo)
-            .eq('usada', false)
-            .single();
+        // Todo el canje corre dentro de la base (registrar_taller): validar el codigo, crear la
+        // empresa con su vencimiento, crear al dueño y marcar el codigo como usado, en una sola
+        // operacion. Antes se hacia desde el cliente, cosa que con la clave publica queda
+        // bloqueada, y que ademas permitia crear una empresa sin gastar el codigo.
+        const { data: res, error } = await supabase.rpc('registrar_taller', {
+            p_codigo: data.codigo,
+            p_empresa: data.empresa,
+            p_usuario: data.usuario,
+            p_password: data.password
+        });
 
-        if (errLic || !licenciaData) {
+        if (error) throw error;
+        if (!res || !res.success) {
             return event.reply('registro-saas-respuesta', {
-                success: false,
-                msg: 'Código de licencia inválido, inexistente o ya usado.'
+                success: false, msg: (res && res.msg) || 'No se pudo registrar el taller'
             });
         }
-
-        // Una licencia de prueba trae los días; las de siempre, los meses. Si vienen las dos,
-        // mandan los días, que es lo que distingue a una demo.
-        const fechaVencimiento = new Date();
-        if (licenciaData.dias_duracion > 0) {
-            fechaVencimiento.setDate(fechaVencimiento.getDate() + licenciaData.dias_duracion);
-        } else {
-            fechaVencimiento.setMonth(fechaVencimiento.getMonth() + (licenciaData.meses_duracion || 1));
-        }
-        const fechaSQL = fechaVencimiento.toISOString().split('T')[0];
-
-        const { data: nuevaEmpresa, error: errEmpresa } = await supabase
-            .from('empresas')
-            .insert([{
-                nombre: data.empresa,
-                limite_de_usuario: 3,
-                fecha_de_vencimiento: fechaSQL
-            }])
-            .select();
-
-        if (errEmpresa) throw errEmpresa;
-        const idGenerado = nuevaEmpresa[0].id;
-
-        // 🚨 NUEVO: Encriptamos la contraseña del administrador del nuevo taller
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(data.password, salt);
-
-        const { error: errUser } = await supabase
-            .from('usuarios')
-            .insert([{
-                usuario: data.usuario,
-                password: hashedPassword, // Se guarda encriptada
-                rol: 'dueno',
-                estado: 'activo',
-                empresa_id: idGenerado
-            }]);
-
-        if (errUser) throw errUser;
-
-        const { error: errUpdateLic } = await supabase
-            .from('licencias')
-            .update({ usada: true })
-            .eq('id', licenciaData.id);
-
-        if (errUpdateLic) throw errUpdateLic;
-
         event.reply('registro-saas-respuesta', { success: true });
-
     } catch (err) {
         console.error("Error en el registro:", err);
         event.reply('registro-saas-respuesta', { success: false, msg: err.message });
