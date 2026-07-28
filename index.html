@@ -8586,8 +8586,13 @@
         });
 
         function generarNuevaLicencia() {
-            const meses = document.getElementById('licencia-duracion').value;
-            ipcRenderer.send('crear-codigo-automatico', { meses: parseInt(meses) });
+            const elegido = document.getElementById('licencia-duracion').value;
+            // Las demos vienen como "d7" (7 días); el resto son meses, como siempre.
+            if (elegido.startsWith('d')) {
+                ipcRenderer.send('crear-codigo-automatico', { dias: parseInt(elegido.slice(1), 10) });
+            } else {
+                ipcRenderer.send('crear-codigo-automatico', { meses: parseInt(elegido, 10) });
+            }
         }
 
         ipcRenderer.on('codigo-creado-exito', (e, nuevoCodigo) => {
@@ -15511,6 +15516,7 @@
                 <div style="flex: 1;">
                     <label style="color:#aaa; font-size:11px;">DURACIÓN DEL PLAN</label>
                     <select id="licencia-duracion" class="bh-input" style="margin-bottom:0; background: #151515; color: white;">
+                        <option value="d7" style="background: #151515; color: white;">🎁 7 Días — Demo gratis</option>
                         <option value="1" style="background: #151515; color: white;">1 Mes (S/ 25.00)</option>
                         <option value="3" style="background: #151515; color: white;">3 Meses (S/ 65.00)</option>
                         <option value="6" style="background: #151515; color: white;">6 Meses (S/ 125.00)</option>

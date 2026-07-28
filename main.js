@@ -3610,15 +3610,21 @@ ipcMain.on('crear-codigo-automatico', async (event, data) => {
         }
 
         const caracteresLocos = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const codigoFinal = `BH-PRO-${caracteresLocos}`;
-        const mesesElegidos = data && data.meses ? data.meses : 1;
+
+        // Las demos se miden en días, no en meses: con meses el mínimo era 1 y poner 0 habría
+        // vencido el mismo día. El código lleva DEMO adelante para reconocerlo de un vistazo
+        // cuando alguien lo reenvía por WhatsApp.
+        const diasElegidos = data && Number(data.dias) > 0 ? Math.floor(Number(data.dias)) : null;
+        const mesesElegidos = diasElegidos ? null : (data && data.meses ? data.meses : 1);
+        const codigoFinal = `BH-${diasElegidos ? 'DEMO' : 'PRO'}-${caracteresLocos}`;
 
         const { error } = await supabase
             .from('licencias')
             .insert([{
                 codigo: codigoFinal,
                 usada: false,
-                meses_duracion: mesesElegidos
+                meses_duracion: mesesElegidos,
+                dias_duracion: diasElegidos
             }]);
 
         if (error) throw error;
@@ -3646,9 +3652,14 @@ ipcMain.on('registrar-nuevo-cliente-saas', async (event, data) => {
             });
         }
 
-        const mesesAdquiridos = licenciaData.meses_duracion || 1;
+        // Una licencia de prueba trae los días; las de siempre, los meses. Si vienen las dos,
+        // mandan los días, que es lo que distingue a una demo.
         const fechaVencimiento = new Date();
-        fechaVencimiento.setMonth(fechaVencimiento.getMonth() + mesesAdquiridos);
+        if (licenciaData.dias_duracion > 0) {
+            fechaVencimiento.setDate(fechaVencimiento.getDate() + licenciaData.dias_duracion);
+        } else {
+            fechaVencimiento.setMonth(fechaVencimiento.getMonth() + (licenciaData.meses_duracion || 1));
+        }
         const fechaSQL = fechaVencimiento.toISOString().split('T')[0];
 
         const { data: nuevaEmpresa, error: errEmpresa } = await supabase
