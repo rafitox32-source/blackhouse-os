@@ -3,20 +3,23 @@
 
 <head>
     <meta charset="UTF-8">
+    <!-- Todo lo que la interfaz necesita viaja dentro del programa (assets/vendor).
+         Ya no se pide nada a cdn.jsdelivr.net, cdnjs, fonts.googleapis.com ni ui-avatars.com:
+         la app abre igual sin internet y deja de contarle a terceros quién la usa.
+         Lo único que sale a la red es Supabase, que es la base de datos del taller. -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://flfhpffslhjcuvhxsnjz.supabase.co wss://flfhpffslhjcuvhxsnjz.supabase.co https://ui-avatars.com data: blob:; img-src * data: blob:;">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/intro.js/7.2.0/introjs.min.css" rel="stylesheet">
+        content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://flfhpffslhjcuvhxsnjz.supabase.co wss://flfhpffslhjcuvhxsnjz.supabase.co data: blob:; img-src * data: blob:;">
+    <link href="assets/vendor/css/fuentes.css" rel="stylesheet">
+    <link href="assets/vendor/css/boxicons.min.css" rel="stylesheet">
+    <link href="assets/vendor/css/introjs.min.css" rel="stylesheet">
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/index.min.js"></script>
+    <script src="assets/vendor/js/chart.min.js"></script>
+    <script src="assets/vendor/js/qrcode.min.js"></script>
+    <script src="assets/vendor/js/html2canvas.min.js"></script>
+    <script src="assets/vendor/js/JsBarcode.all.min.js"></script>
+    <script src="assets/vendor/js/supabase.min.js"></script>
+    <script src="assets/vendor/js/xlsx.full.min.js"></script>
+    <script src="assets/vendor/js/zxing.min.js"></script>
     <!-- Holograma 3D del Laboratorio: three.js incluido localmente (assets/vendor/three) para que funcione sin internet -->
     <script src="assets/vendor/three/three.min.js"></script>
     <script src="assets/vendor/three/OrbitControls.js"></script>
@@ -15470,7 +15473,7 @@
         // Al iniciar el chat, verificar que la conexión funciona:
     </script>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/intro.js/7.2.0/intro.min.js"></script>
+    <script src="assets/vendor/js/intro.min.js"></script>
     <!-- TICKET DE ORDEN (oculto, solo para html2canvas) -->
     <div id="receipt-container" style="position:fixed; left:-9999px; top:0; width:380px; background:#111; padding:0;">
         <div id="receipt-content" style="font-family:monospace; color:white; padding:25px; box-sizing:border-box;">
