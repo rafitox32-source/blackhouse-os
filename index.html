@@ -4574,15 +4574,18 @@
             <div style="position:relative; background:#000; border-radius:8px; overflow:hidden; aspect-ratio: 4 / 3;">
                 <video id="scanner-imei-video" style="width:100%; height:100%; object-fit:cover;" autoplay muted playsinline></video>
             </div>
-            <p style="color:#999; font-size:12px; margin-top:10px; text-align:center;">
-                Apunta la cámara al código de barras o QR de la caja del equipo (Code128, EAN o QR).
+            <p id="scanner-imei-estado" style="color:#999; font-size:12px; margin-top:10px; text-align:center; min-height:32px;">
+                Apunta la cámara al código de barras o QR de la caja del equipo (Code128, EAN o QR). Si el equipo es Dual SIM, escanea los 2 códigos de IMEI uno tras otro.
             </p>
             <div id="scanner-imei-error" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444; text-align:center;"></div>
-            <div style="display:flex; justify-content:space-between; margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; gap:8px; margin-top:16px;">
                 <button type="button" class="bh-btn-white" onclick="usarCelularParaImei()" title="Usar la cámara del celular por WiFi">
                     <i class='bx bx-mobile-alt'></i> Usar celular
                 </button>
-                <button type="button" class="bh-btn-white" onclick="cerrarScannerImei()">Cancelar</button>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="bh-btn-white" onclick="cerrarScannerImei()">Cancelar</button>
+                    <button type="button" class="bh-btn-purple" onclick="cerrarScannerImei()">✅ Listo</button>
+                </div>
             </div>
         </div>
     </div>
@@ -12840,31 +12843,80 @@
         // Usa @zxing/library (cargada por CDN, mismo patrón que XLSX) con BrowserMultiFormatReader,
         // que soporta Code128/EAN/QR — los formatos típicos de los códigos impresos en cajas de
         // celular. 100% frontend: Electron no bloquea getUserMedia por defecto en este proyecto.
+        // TRY_HARDER hace que ZXing analice cada frame con más cuidado (más lento por frame, pero
+        // detecta bastante mejor códigos chicos/borrosos como los de las cajas) — sin esto, el
+        // escaneo fallaba casi siempre en la práctica.
         let zxingReaderImei = null;
+        function obtenerLectorImei() {
+            if (!zxingReaderImei) {
+                const hints = new Map();
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                zxingReaderImei = new ZXing.BrowserMultiFormatReader(hints);
+            }
+            return zxingReaderImei;
+        }
+
+        // Los equipos Dual SIM traen 2 codigos de IMEI en la caja (y a veces otros codigos, como
+        // el de serie o el EAN del producto). Esta lista junta los que van pareciendo IMEI durante
+        // la sesion de escaneo actual, sin repetir, hasta un maximo de 2 — y los va reflejando en
+        // el input tal cual los vaya reconociendo.
+        let imeisEscaneados = [];
+
+        function pareceImei(textoCrudo) {
+            const digitos = (textoCrudo || '').replace(/\D/g, '');
+            return digitos.length >= 14 && digitos.length <= 16;
+        }
+
+        function actualizarEstadoScannerImei(mensaje, color) {
+            const el = document.getElementById('scanner-imei-estado');
+            el.textContent = mensaje;
+            el.style.color = color || '#999';
+        }
+
+        // Se llama cada vez que la camara (laptop o celular) decodifica algo, en CADA frame que
+        // logra leer un codigo. Filtra duplicados y codigos que no parecen IMEI (por longitud de
+        // digitos), rellena el input con los IMEI que va encontrando (uno o los 2, separados por
+        // " / "), y cuando ya junto 2 distintos cierra solo — si el equipo tiene un solo IMEI, el
+        // tecnico cierra manualmente con "Listo" cuando quiera.
+        function procesarCodigoDetectadoImei(textoCrudo) {
+            if (imeisEscaneados.length >= 2) return;
+
+            if (!pareceImei(textoCrudo)) {
+                actualizarEstadoScannerImei('Código detectado (' + textoCrudo + ') pero no parece un IMEI. Sigue apuntando o escríbelo a mano.', '#f59e0b');
+                return;
+            }
+            if (imeisEscaneados.includes(textoCrudo)) return;
+
+            imeisEscaneados.push(textoCrudo);
+            document.getElementById('imei').value = imeisEscaneados.join(' / ');
+
+            if (imeisEscaneados.length === 1) {
+                showToast('IMEI escaneado: ' + textoCrudo, 'success');
+                actualizarEstadoScannerImei('✅ IMEI 1 detectado: ' + textoCrudo + '. Si el equipo es Dual SIM, apunta al 2do código. Si no, presiona "Listo".', '#10b981');
+            } else {
+                showToast('2do IMEI escaneado: ' + textoCrudo, 'success');
+                actualizarEstadoScannerImei('✅ Se detectaron los 2 IMEI: ' + imeisEscaneados.join(' / '), '#10b981');
+                cerrarScannerImei();
+            }
+        }
 
         async function abrirScannerImei() {
             const errorBox = document.getElementById('scanner-imei-error');
             errorBox.style.display = 'none';
+            imeisEscaneados = [];
+            actualizarEstadoScannerImei('Apunta la cámara al código de barras o QR de la caja del equipo. Si el equipo es Dual SIM, escanea los 2 códigos de IMEI uno tras otro.');
             document.getElementById('modal-scanner-imei').style.display = 'flex';
 
             try {
                 if (typeof ZXing === 'undefined') {
                     throw new Error('La librería de escaneo no se pudo cargar (revisa tu conexión a internet).');
                 }
-                if (!zxingReaderImei) {
-                    zxingReaderImei = new ZXing.BrowserMultiFormatReader();
-                }
                 const videoEl = document.getElementById('scanner-imei-video');
                 // decodeFromVideoDevice(undefined, ...) usa la cámara por defecto del sistema y llama
                 // al callback en CADA frame. `err` (NotFoundException) se dispara constantemente
                 // mientras no hay código en cuadro — es normal, no es un error real, se ignora.
-                await zxingReaderImei.decodeFromVideoDevice(undefined, videoEl, (result, err) => {
-                    if (result) {
-                        const texto = result.getText();
-                        document.getElementById('imei').value = texto;
-                        showToast('Código escaneado: ' + texto, 'success');
-                        cerrarScannerImei();
-                    }
+                await obtenerLectorImei().decodeFromVideoDevice(undefined, videoEl, (result, err) => {
+                    if (result) procesarCodigoDetectadoImei(result.getText());
                 });
             } catch (e) {
                 console.error('Error abriendo el escáner de cámara:', e);
@@ -12886,20 +12938,15 @@
                     if (typeof ZXing === 'undefined') {
                         throw new Error('La librería de escaneo no se pudo cargar (revisa tu conexión a internet).');
                     }
-                    if (!zxingReaderImei) zxingReaderImei = new ZXing.BrowserMultiFormatReader();
-                    else { try { zxingReaderImei.reset(); } catch (e) { /* no-op */ } }
+                    const lector = obtenerLectorImei();
+                    try { lector.reset(); } catch (e) { /* no-op */ }
 
                     const videoEl = document.getElementById('scanner-imei-video');
                     const trackClonado = stream.getVideoTracks()[0].clone();
                     const streamClonado = new MediaStream([trackClonado]);
 
-                    await zxingReaderImei.decodeFromStream(streamClonado, videoEl, (result, err) => {
-                        if (result) {
-                            const texto = result.getText();
-                            document.getElementById('imei').value = texto;
-                            showToast('Código escaneado: ' + texto, 'success');
-                            cerrarScannerImei();
-                        }
+                    await lector.decodeFromStream(streamClonado, videoEl, (result, err) => {
+                        if (result) procesarCodigoDetectadoImei(result.getText());
                     });
                 } catch (e) {
                     console.error('Error usando la cámara del celular en el escáner:', e);

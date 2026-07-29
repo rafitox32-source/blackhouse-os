@@ -6,7 +6,8 @@
   "description": "Sistema de Gestión Profesional",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win"
+    "build": "electron-builder --win",
+    "mapa-codigo": "node scripts/mapa-codigo.js"
   },
   "build": {
     "appId": "com.blackhouse.os",
