@@ -2737,6 +2737,9 @@
 
                         <div style="display:flex; gap:8px; margin-top:10px;">
                             <button class="bh-btn-white" id="holo-foto-btn-cam" onclick="holoToggleCamara()">Activar Cámara</button>
+                            <button class="bh-btn-white" onclick="holoUsarCelularParaFoto()" title="Usar la cámara del celular por WiFi">
+                                <i class='bx bx-mobile-alt'></i>
+                            </button>
                             <button class="bh-btn-purple" id="holo-foto-btn-tomar" style="display:none;" onclick="holoTomarFoto()">Capturar ⚡</button>
                             <button class="bh-btn-purple" id="holo-foto-btn-grabar" style="display:none; background:var(--danger);" onclick="holoIniciarGrabacion()">⏺ Grabar</button>
                             <button class="bh-btn-purple" id="holo-foto-btn-detener" style="display:none; background:var(--danger);" onclick="holoDetenerGrabacion()">⏹ Detener</button>
@@ -2977,8 +2980,14 @@
                         <div class="bh-card" style="margin-top:20px; border:1px dashed var(--bh-purple);">
                             <div style="display:flex; justify-content:space-between; align-items:center;">
                                 <h3 style="margin:0; font-size:14px; color:#aaa;">📷 EVIDENCIA FOTOGRÁFICA</h3>
-                                <button id="btn-cam" class="bh-btn-white" onclick="toggleCamara()"
-                                    style="font-size:11px;">Activar Cámara</button>
+                                <div style="display:flex; gap:6px;">
+                                    <button id="btn-cam" class="bh-btn-white" onclick="toggleCamara()"
+                                        style="font-size:11px;">Activar Cámara</button>
+                                    <button class="bh-btn-white" onclick="usarCelularParaFoto()"
+                                        style="font-size:11px;" title="Usar la cámara del celular por WiFi">
+                                        <i class='bx bx-mobile-alt'></i>
+                                    </button>
+                                </div>
                             </div>
                             <div
                                 style="margin-top:15px; text-align:center; background:black; border-radius:8px; overflow:hidden; min-height:200px; position:relative;">
@@ -4569,7 +4578,10 @@
                 Apunta la cámara al código de barras o QR de la caja del equipo (Code128, EAN o QR).
             </p>
             <div id="scanner-imei-error" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444; text-align:center;"></div>
-            <div style="text-align:right; margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; margin-top:16px;">
+                <button type="button" class="bh-btn-white" onclick="usarCelularParaImei()" title="Usar la cámara del celular por WiFi">
+                    <i class='bx bx-mobile-alt'></i> Usar celular
+                </button>
                 <button type="button" class="bh-btn-white" onclick="cerrarScannerImei()">Cancelar</button>
             </div>
         </div>
@@ -8306,6 +8318,7 @@
         function limpiarFirma() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
 
         let streamCamara = null;
+        let usandoCelularEnFoto = false;
         async function toggleCamara() {
             const video = document.getElementById('video-feed');
             const placeholder = document.getElementById('cam-placeholder');
@@ -8314,6 +8327,7 @@
             if (!streamCamara) {
                 try {
                     streamCamara = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                    usandoCelularEnFoto = false;
                     video.srcObject = streamCamara; video.style.display = 'block'; placeholder.style.display = 'none';
                     controls.style.display = 'block'; document.getElementById('photo-preview').style.display = 'none';
                     document.getElementById('photo-actions').style.display = 'none'; btn.innerText = "Apagar Cámara 🚫"; btn.style.color = "var(--danger)";
@@ -8321,9 +8335,32 @@
             } else { apagarCamara(); btn.innerText = "Activar Cámara 📸"; btn.style.color = "white"; }
         }
 
+        // Usa la camara del celular (ya emparejada por WiFi, o pide emparejarla)
+        // en vez de la webcam de la laptop, para la foto de evidencia de Recepcion.
+        function usarCelularParaFoto() {
+            emparejarCelular((stream) => {
+                const video = document.getElementById('video-feed');
+                streamCamara = stream;
+                usandoCelularEnFoto = true;
+                video.srcObject = stream;
+                video.style.display = 'block';
+                document.getElementById('cam-placeholder').style.display = 'none';
+                document.getElementById('cam-controls').style.display = 'block';
+                document.getElementById('photo-preview').style.display = 'none';
+                document.getElementById('photo-actions').style.display = 'none';
+                document.getElementById('btn-cam').innerText = "Apagar Cámara 🚫";
+                document.getElementById('btn-cam').style.color = "var(--danger)";
+            });
+        }
+
         function apagarCamara() {
             const video = document.getElementById('video-feed');
-            if (streamCamara) { streamCamara.getTracks().forEach(t => t.stop()); streamCamara = null; }
+            // Si es la camara del celular, NUNCA se detiene el track aqui: es un
+            // stream compartido con el resto de la app (Holograma, Estudio, etc.).
+            if (streamCamara && !usandoCelularEnFoto) { streamCamara.getTracks().forEach(t => t.stop()); }
+            streamCamara = null;
+            usandoCelularEnFoto = false;
+            video.srcObject = null;
             video.style.display = 'none'; document.getElementById('cam-controls').style.display = 'none';
             if (document.getElementById('photo-preview').style.display === 'none') { document.getElementById('cam-placeholder').style.display = 'block'; }
         }
@@ -11225,6 +11262,7 @@
             }
         }
 
+        let holoUsandoCelular = false;
         async function holoToggleCamara() {
             const video = document.getElementById('holo-foto-video');
             const placeholder = document.getElementById('holo-foto-placeholder');
@@ -11232,6 +11270,7 @@
             if (!holoFotoStream) {
                 try {
                     holoFotoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    holoUsandoCelular = false;
                     video.srcObject = holoFotoStream;
                     video.style.display = 'block';
                     placeholder.style.display = 'none';
@@ -11245,9 +11284,30 @@
             }
         }
 
+        // Usa la camara del celular (ya emparejada por WiFi, o pide emparejarla)
+        // para fotografiar/grabar una pieza del Holograma 3D.
+        function holoUsarCelularParaFoto() {
+            emparejarCelular((stream) => {
+                const video = document.getElementById('holo-foto-video');
+                holoFotoStream = stream;
+                holoUsandoCelular = true;
+                video.srcObject = stream;
+                video.style.display = 'block';
+                document.getElementById('holo-foto-placeholder').style.display = 'none';
+                document.getElementById('holo-foto-btn-tomar').style.display = (holoFotoModoActual === 'foto') ? 'inline-block' : 'none';
+                document.getElementById('holo-foto-btn-grabar').style.display = (holoFotoModoActual === 'video') ? 'inline-block' : 'none';
+                document.getElementById('holo-foto-btn-cam').innerText = 'Apagar Cámara';
+            });
+        }
+
         function holoApagarCamaraFoto() {
             const video = document.getElementById('holo-foto-video');
-            if (holoFotoStream) { holoFotoStream.getTracks().forEach(t => t.stop()); holoFotoStream = null; }
+            // Si es la camara del celular, NUNCA se detiene el track aqui: es un
+            // stream compartido con el resto de la app (Recepcion, Estudio, etc.).
+            if (holoFotoStream && !holoUsandoCelular) { holoFotoStream.getTracks().forEach(t => t.stop()); }
+            holoFotoStream = null;
+            holoUsandoCelular = false;
+            video.srcObject = null;
             video.style.display = 'none';
             document.getElementById('holo-foto-btn-tomar').style.display = 'none';
             document.getElementById('holo-foto-btn-grabar').style.display = 'none';
@@ -11726,17 +11786,23 @@
         // Supabase Realtime que ya usa la transmision en vivo hacia el
         // cliente, pero al reves: aqui el CELULAR transmite (crea la oferta)
         // y esta PC recibe (crea la respuesta), via camara-celular.html.
+        //
+        // Es UNA sola conexion compartida por toda la app: una vez que el
+        // celular se empareja (desde Recepcion, el Holograma, el escaner de
+        // IMEI o el Estudio de Grabacion), su stream queda disponible para
+        // cualquiera de esos lugares sin tener que volver a escanear el QR.
         // ===================================================================
-        const CAMARA_CELULAR = { canal: null, pc: null, roomCode: null, conectado: false };
+        const CAMARA_CELULAR = { canal: null, pc: null, roomCode: null, conectado: false, stream: null, callbacks: [] };
 
         function generarCodigoSalaCamara() {
             return Math.random().toString(36).substr(2, 8).toUpperCase();
         }
 
-        function alternarCamaraCelular() {
-            if (CAMARA_CELULAR.conectado) {
-                if (!confirm('¿Desconectar la cámara del celular?')) return;
-                desconectarCamaraCelular();
+        // onConectado(stream) se llama apenas el celular quede emparejado. Si ya
+        // estaba conectado de antes (de otra pantalla), se llama al instante.
+        function emparejarCelular(onConectado) {
+            if (CAMARA_CELULAR.conectado && CAMARA_CELULAR.stream) {
+                onConectado(CAMARA_CELULAR.stream);
                 return;
             }
             if (!supabaseChat) {
@@ -11744,12 +11810,18 @@
                 return;
             }
 
-            CAMARA_CELULAR.roomCode = generarCodigoSalaCamara();
-            const url = `https://blackhouse-os-web.vercel.app/camara-celular.html?room=${CAMARA_CELULAR.roomCode}`;
+            CAMARA_CELULAR.callbacks.push(onConectado);
 
             document.getElementById('camara-celular-estado-modal').innerHTML = '<i class="bx bx-loader-alt bx-spin"></i> Esperando que el celular se conecte...';
             document.getElementById('camara-celular-estado-modal').style.color = 'var(--warning)';
             document.getElementById('modal-camara-celular').style.display = 'flex';
+
+            // Ya habia un emparejamiento en curso (otra pantalla lo empezo): no
+            // se abre un segundo canal, solo se hace cola para el mismo aviso.
+            if (CAMARA_CELULAR.canal) return;
+
+            CAMARA_CELULAR.roomCode = generarCodigoSalaCamara();
+            const url = `https://blackhouse-os-web.vercel.app/camara-celular.html?room=${CAMARA_CELULAR.roomCode}`;
 
             const qrCont = document.getElementById('qr-camara-celular');
             qrCont.innerHTML = '';
@@ -11772,7 +11844,8 @@
                         CAMARA_CELULAR.pc = pc;
 
                         pc.ontrack = (event) => {
-                            GRAB.streams.celular = event.streams[0];
+                            CAMARA_CELULAR.stream = event.streams[0];
+                            GRAB.streams.celular = event.streams[0]; // compatibilidad con el Estudio de Grabacion
                             CAMARA_CELULAR.conectado = true;
 
                             ['grab-cam-micro', 'grab-cam-cara'].forEach(selId => {
@@ -11785,10 +11858,17 @@
                                 }
                             });
 
-                            document.getElementById('camara-celular-estado').innerHTML = '<i class="bx bx-check-circle" style="color:var(--success);"></i> Celular conectado';
-                            document.getElementById('btn-camara-celular').innerHTML = "<i class='bx bx-mobile-alt'></i> Desconectar celular";
-                            showToast('📱 Cámara del celular conectada. Ya puedes elegirla en los selectores de arriba.', 'success');
+                            const estadoBtn = document.getElementById('camara-celular-estado');
+                            if (estadoBtn) estadoBtn.innerHTML = '<i class="bx bx-check-circle" style="color:var(--success);"></i> Celular conectado';
+                            const btnEstudio = document.getElementById('btn-camara-celular');
+                            if (btnEstudio) btnEstudio.innerHTML = "<i class='bx bx-mobile-alt'></i> Desconectar celular";
+
+                            showToast('📱 Cámara del celular conectada.', 'success');
                             document.getElementById('modal-camara-celular').style.display = 'none';
+
+                            const callbacks = CAMARA_CELULAR.callbacks;
+                            CAMARA_CELULAR.callbacks = [];
+                            callbacks.forEach(cb => { try { cb(CAMARA_CELULAR.stream); } catch (e) { console.error(e); } });
                         };
 
                         pc.onicecandidate = (event) => {
@@ -11819,6 +11899,15 @@
                 .subscribe();
         }
 
+        function alternarCamaraCelular() {
+            if (CAMARA_CELULAR.conectado) {
+                if (!confirm('¿Desconectar la cámara del celular? (deja de estar disponible en toda la app, no solo aquí)')) return;
+                desconectarCamaraCelular();
+                return;
+            }
+            emparejarCelular(() => {});
+        }
+
         function cerrarModalCamaraCelular() {
             document.getElementById('modal-camara-celular').style.display = 'none';
             // Si se cierra antes de que el celular se conecte, se cancela el
@@ -11826,10 +11915,12 @@
             if (!CAMARA_CELULAR.conectado && CAMARA_CELULAR.canal) {
                 supabaseChat.removeChannel(CAMARA_CELULAR.canal);
                 CAMARA_CELULAR.canal = null;
+                CAMARA_CELULAR.callbacks = [];
             }
         }
 
         function desconectarCamaraCelular() {
+            CAMARA_CELULAR.stream = null;
             if (GRAB.streams.celular) {
                 GRAB.streams.celular.getTracks().forEach(t => t.stop());
                 GRAB.streams.celular = null;
@@ -11846,9 +11937,12 @@
                     opt.remove();
                 }
             });
-            document.getElementById('camara-celular-estado').innerText = '';
-            document.getElementById('btn-camara-celular').innerHTML = "<i class='bx bx-mobile-alt'></i> Usar cámara del celular (WiFi)";
+            const estadoBtn = document.getElementById('camara-celular-estado');
+            if (estadoBtn) estadoBtn.innerText = '';
+            const btnEstudio = document.getElementById('btn-camara-celular');
+            if (btnEstudio) btnEstudio.innerHTML = "<i class='bx bx-mobile-alt'></i> Usar cámara del celular (WiFi)";
             showToast('Cámara del celular desconectada.', 'info');
+            document.dispatchEvent(new CustomEvent('celular-desconectado'));
         }
 
         function abrirEstudioGrabacion() {
@@ -12777,6 +12871,42 @@
                 errorBox.textContent = 'No se pudo acceder a la cámara: ' + e.message;
                 errorBox.style.display = 'block';
             }
+        }
+
+        // Usa la camara del celular (ya emparejada por WiFi, o pide emparejarla)
+        // para escanear el IMEI/codigo de barras en vez de la webcam de la laptop.
+        // Se le pasa a ZXing un CLON del track (no el original): ZXing "apaga" el
+        // stream que recibe cuando se resetea, y ese stream es compartido con el
+        // resto de la app — clonando, solo se apaga la copia, nunca la camara real.
+        function usarCelularParaImei() {
+            const errorBox = document.getElementById('scanner-imei-error');
+            errorBox.style.display = 'none';
+            emparejarCelular(async (stream) => {
+                try {
+                    if (typeof ZXing === 'undefined') {
+                        throw new Error('La librería de escaneo no se pudo cargar (revisa tu conexión a internet).');
+                    }
+                    if (!zxingReaderImei) zxingReaderImei = new ZXing.BrowserMultiFormatReader();
+                    else { try { zxingReaderImei.reset(); } catch (e) { /* no-op */ } }
+
+                    const videoEl = document.getElementById('scanner-imei-video');
+                    const trackClonado = stream.getVideoTracks()[0].clone();
+                    const streamClonado = new MediaStream([trackClonado]);
+
+                    await zxingReaderImei.decodeFromStream(streamClonado, videoEl, (result, err) => {
+                        if (result) {
+                            const texto = result.getText();
+                            document.getElementById('imei').value = texto;
+                            showToast('Código escaneado: ' + texto, 'success');
+                            cerrarScannerImei();
+                        }
+                    });
+                } catch (e) {
+                    console.error('Error usando la cámara del celular en el escáner:', e);
+                    errorBox.textContent = 'No se pudo usar la cámara del celular: ' + e.message;
+                    errorBox.style.display = 'block';
+                }
+            });
         }
 
         function cerrarScannerImei() {
