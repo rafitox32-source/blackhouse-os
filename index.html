@@ -5142,6 +5142,18 @@
                         <select id="grab-mic" class="bh-input" onchange="guardarConfigGrabacion()"></select>
                     </div>
                 </div>
+
+                <div style="margin-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <button type="button" class="bh-btn-white" id="btn-camara-celular" onclick="alternarCamaraCelular()"
+                        style="padding:8px 14px; font-size:12px;">
+                        <i class='bx bx-mobile-alt'></i> Usar cámara del celular (WiFi)
+                    </button>
+                    <span id="camara-celular-estado" style="font-size:12px; color:var(--text-muted);"></span>
+                </div>
+                <p style="font-size:11px; color:var(--text-muted); margin-top:6px;">
+                    ¿Las cámaras de tu laptop no sirven o no tienen suficiente calidad? Conecta el celular por WiFi y
+                    elígelo como "Cámara del microscopio" o "Tu cámara" en los selectores de arriba.
+                </p>
                 <div style="display:flex; gap:18px; flex-wrap:wrap; margin-top:6px; font-size:13px;">
                     <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
                         <input type="checkbox" id="grab-op-marco" checked onchange="guardarConfigGrabacion()">
@@ -5177,6 +5189,22 @@
                     Grabaciones</button>
             </div>
             <div id="grab-estado-transmision" style="display:none; margin-top:10px; padding:12px 14px; border-radius:8px; font-size:13px; font-weight:700;"></div>
+        </div>
+    </div>
+
+    <!-- Modal: Vincular la cámara del celular por WiFi al Estudio de Grabación -->
+    <div id="modal-camara-celular" class="modal-overlay">
+        <div class="modal-content" style="width: 360px; text-align: center;">
+            <button onclick="cerrarModalCamaraCelular()" style="position:absolute; top:15px; right:15px; background:none; border:none; color:var(--text-muted); font-size:20px; cursor:pointer;">&times;</button>
+            <h3 style="margin-top:0;"><i class='bx bx-mobile-alt'></i> Cámara del Celular</h3>
+            <p style="color:#aaa; font-size:13px; margin-bottom:15px;">
+                Escanea este código con la cámara de tu celular (misma red WiFi que esta PC) y abre el link.
+            </p>
+            <div id="qr-camara-celular" style="width:180px; height:180px; margin:0 auto 15px; background:#fff; padding:10px; border-radius:10px;"></div>
+            <p id="camara-celular-estado-modal" style="font-size:13px; font-weight:700; color:var(--warning);">
+                <i class='bx bx-loader-alt bx-spin'></i> Esperando que el celular se conecte...
+            </p>
+            <button class="bh-btn-white" style="margin-top:10px;" onclick="cerrarModalCamaraCelular()">Cancelar</button>
         </div>
     </div>
 
@@ -11681,8 +11709,8 @@
         const GRAB = {
             encendido: false,
             escena: 'microscopio',
-            streams: { micro: null, cara: null, pantalla: null, mic: null },
-            videos: { micro: null, cara: null, pantalla: null },
+            streams: { micro: null, cara: null, pantalla: null, mic: null, celular: null },
+            videos: { micro: null, cara: null, pantalla: null, celular: null },
             tema: { marco: null, barra: null, transicion: null },
             rafId: null,
             grabador: null,
@@ -11692,9 +11720,140 @@
             transicionHasta: 0
         };
 
+        // ===================================================================
+        // CÁMARA DEL CELULAR POR WIFI (para cuando las cámaras de la laptop
+        // no sirven o no alcanzan calidad). Reusa el mismo patron WebRTC +
+        // Supabase Realtime que ya usa la transmision en vivo hacia el
+        // cliente, pero al reves: aqui el CELULAR transmite (crea la oferta)
+        // y esta PC recibe (crea la respuesta), via camara-celular.html.
+        // ===================================================================
+        const CAMARA_CELULAR = { canal: null, pc: null, roomCode: null, conectado: false };
+
+        function generarCodigoSalaCamara() {
+            return Math.random().toString(36).substr(2, 8).toUpperCase();
+        }
+
+        function alternarCamaraCelular() {
+            if (CAMARA_CELULAR.conectado) {
+                if (!confirm('¿Desconectar la cámara del celular?')) return;
+                desconectarCamaraCelular();
+                return;
+            }
+            if (!supabaseChat) {
+                showToast('Conexión en tiempo real no disponible todavía, intenta de nuevo en unos segundos.', 'danger');
+                return;
+            }
+
+            CAMARA_CELULAR.roomCode = generarCodigoSalaCamara();
+            const url = `https://blackhouse-os-web.vercel.app/camara-celular.html?room=${CAMARA_CELULAR.roomCode}`;
+
+            document.getElementById('camara-celular-estado-modal').innerHTML = '<i class="bx bx-loader-alt bx-spin"></i> Esperando que el celular se conecte...';
+            document.getElementById('camara-celular-estado-modal').style.color = 'var(--warning)';
+            document.getElementById('modal-camara-celular').style.display = 'flex';
+
+            const qrCont = document.getElementById('qr-camara-celular');
+            qrCont.innerHTML = '';
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(qrCont, { text: url, width: 160, height: 160, colorDark: '#7c3aed', colorLight: '#ffffff' });
+            }
+
+            const roomName = 'celular_camara_' + CAMARA_CELULAR.roomCode;
+            CAMARA_CELULAR.canal = supabaseChat.channel(roomName);
+
+            CAMARA_CELULAR.canal
+                .on('broadcast', { event: 'offer' }, async (payload) => {
+                    try {
+                        const pc = new RTCPeerConnection({
+                            iceServers: [
+                                { urls: 'stun:stun.l.google.com:19302' },
+                                { urls: 'stun:stun1.l.google.com:19302' }
+                            ]
+                        });
+                        CAMARA_CELULAR.pc = pc;
+
+                        pc.ontrack = (event) => {
+                            GRAB.streams.celular = event.streams[0];
+                            CAMARA_CELULAR.conectado = true;
+
+                            ['grab-cam-micro', 'grab-cam-cara'].forEach(selId => {
+                                const sel = document.getElementById(selId);
+                                if (sel && !sel.querySelector('option[value="__CELULAR__"]')) {
+                                    const opt = document.createElement('option');
+                                    opt.value = '__CELULAR__';
+                                    opt.innerText = '📱 Cámara del celular (conectada)';
+                                    sel.appendChild(opt);
+                                }
+                            });
+
+                            document.getElementById('camara-celular-estado').innerHTML = '<i class="bx bx-check-circle" style="color:var(--success);"></i> Celular conectado';
+                            document.getElementById('btn-camara-celular').innerHTML = "<i class='bx bx-mobile-alt'></i> Desconectar celular";
+                            showToast('📱 Cámara del celular conectada. Ya puedes elegirla en los selectores de arriba.', 'success');
+                            document.getElementById('modal-camara-celular').style.display = 'none';
+                        };
+
+                        pc.onicecandidate = (event) => {
+                            if (event.candidate) {
+                                CAMARA_CELULAR.canal.send({
+                                    type: 'broadcast', event: 'ice-candidate-pc',
+                                    payload: { candidate: event.candidate }
+                                });
+                            }
+                        };
+
+                        await pc.setRemoteDescription(new RTCSessionDescription(payload.payload.offer));
+                        const answer = await pc.createAnswer();
+                        await pc.setLocalDescription(answer);
+                        CAMARA_CELULAR.canal.send({ type: 'broadcast', event: 'answer', payload: { answer } });
+                    } catch (e) {
+                        console.error('Error conectando la camara del celular:', e);
+                        document.getElementById('camara-celular-estado-modal').innerText = 'Error: ' + e.message;
+                        document.getElementById('camara-celular-estado-modal').style.color = 'var(--danger)';
+                    }
+                })
+                .on('broadcast', { event: 'ice-candidate-celular' }, async (payload) => {
+                    if (CAMARA_CELULAR.pc && payload.payload.candidate) {
+                        try { await CAMARA_CELULAR.pc.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)); }
+                        catch (e) { console.error('ICE (celular):', e); }
+                    }
+                })
+                .subscribe();
+        }
+
+        function cerrarModalCamaraCelular() {
+            document.getElementById('modal-camara-celular').style.display = 'none';
+            // Si se cierra antes de que el celular se conecte, se cancela el
+            // emparejamiento (no deja el canal escuchando de fondo para siempre).
+            if (!CAMARA_CELULAR.conectado && CAMARA_CELULAR.canal) {
+                supabaseChat.removeChannel(CAMARA_CELULAR.canal);
+                CAMARA_CELULAR.canal = null;
+            }
+        }
+
+        function desconectarCamaraCelular() {
+            if (GRAB.streams.celular) {
+                GRAB.streams.celular.getTracks().forEach(t => t.stop());
+                GRAB.streams.celular = null;
+            }
+            if (CAMARA_CELULAR.pc) { CAMARA_CELULAR.pc.close(); CAMARA_CELULAR.pc = null; }
+            if (CAMARA_CELULAR.canal) { supabaseChat.removeChannel(CAMARA_CELULAR.canal); CAMARA_CELULAR.canal = null; }
+            CAMARA_CELULAR.conectado = false;
+
+            ['grab-cam-micro', 'grab-cam-cara'].forEach(selId => {
+                const sel = document.getElementById(selId);
+                const opt = sel && sel.querySelector('option[value="__CELULAR__"]');
+                if (opt) {
+                    if (sel.value === '__CELULAR__') sel.value = '';
+                    opt.remove();
+                }
+            });
+            document.getElementById('camara-celular-estado').innerText = '';
+            document.getElementById('btn-camara-celular').innerHTML = "<i class='bx bx-mobile-alt'></i> Usar cámara del celular (WiFi)";
+            showToast('Cámara del celular desconectada.', 'info');
+        }
+
         function abrirEstudioGrabacion() {
             document.getElementById('modal-grabacion').style.display = 'flex';
-            
+
             // Poblar select de órdenes
             const selectOrden = document.getElementById('grab-orden-select');
             if (selectOrden && typeof ordenesActuales !== 'undefined') {
@@ -11822,11 +11981,17 @@
             }
 
             try {
-                if (idMicro) {
+                if (idMicro === '__CELULAR__') {
+                    if (!GRAB.streams.celular) throw new Error('La cámara del celular no está conectada.');
+                    GRAB.videos.micro = videoDeStream(GRAB.streams.celular);
+                } else if (idMicro) {
                     GRAB.streams.micro = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: idMicro }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
                     GRAB.videos.micro = videoDeStream(GRAB.streams.micro);
                 }
-                if (idCara) {
+                if (idCara === '__CELULAR__') {
+                    if (!GRAB.streams.celular) throw new Error('La cámara del celular no está conectada.');
+                    GRAB.videos.cara = videoDeStream(GRAB.streams.celular);
+                } else if (idCara) {
                     GRAB.streams.cara = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: idCara }, width: { ideal: 1280 }, height: { ideal: 720 } } });
                     GRAB.videos.cara = videoDeStream(GRAB.streams.cara);
                 }
@@ -11878,9 +12043,12 @@
             GRAB.encendido = false;
             if (GRAB.rafId) cancelAnimationFrame(GRAB.rafId);
             GRAB.rafId = null;
-            Object.values(GRAB.streams).forEach(s => { if (s) s.getTracks().forEach(t => t.stop()); });
-            GRAB.streams = { micro: null, cara: null, pantalla: null, mic: null };
-            GRAB.videos = { micro: null, cara: null, pantalla: null };
+            // La camara del celular NO se apaga con el estudio: es una conexion
+            // WiFi persistente (como si fuera un webcam enchufado), se apaga
+            // aparte con "Desconectar celular".
+            Object.entries(GRAB.streams).forEach(([k, s]) => { if (k !== 'celular' && s) s.getTracks().forEach(t => t.stop()); });
+            GRAB.streams = { micro: null, cara: null, pantalla: null, mic: null, celular: GRAB.streams.celular };
+            GRAB.videos = { micro: null, cara: null, pantalla: null, celular: null };
             GRAB.tema = { marco: null, barra: null, transicion: null };
             const c = document.getElementById('grab-canvas');
             if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
