@@ -56,6 +56,10 @@ function leerRefreshAuth() {
     } catch (e) { return null; }
 }
 
+function borrarRefreshAuth() {
+    try { fs.unlinkSync(rutaRefreshAuth()); } catch (e) { /* no existía */ }
+}
+
 async function abrirSesionAuth(usuario, password) {
     try {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -534,12 +538,14 @@ ipcMain.on('iniciar-sesion-token', async (event, data) => {
 // === 2.0C CERRAR SESIÓN RECORDADA (invalida el token guardado) ===
 ipcMain.on('cerrar-sesion-token', async (event, data) => {
     try {
-        const token = data && data.token;
-        if (token) {
-            await supabase.from('usuarios').update({ session_token: null, session_expira: null }).eq('session_token', token);
-        }
+        // Va por RPC porque esto puede pasar SIN sesion activa (desde la propia pantalla de
+        // login). Con la clave publica el UPDATE directo quedaba bloqueado y el token
+        // sobrevivia, asi que al reabrir el programa volvia a entrar solo.
+        await supabase.rpc('cerrar_sesion_recordada', { p_token: data && data.token });
+        try { await supabase.auth.signOut(); } catch (e) { /* no había sesión abierta */ }
+        borrarRefreshAuth();
     } catch (e) {
-        console.warn('No se pudo invalidar el token de sesión:', e.message);
+        console.warn('No se pudo cerrar la sesión recordada:', e.message);
     }
     // location.reload() en el renderer NO reinicia main.js (sigue siendo el mismo proceso Electron
     // en ejecución) — sin esto, empresaActual/rolActual se quedaban apuntando al usuario anterior
@@ -549,6 +555,7 @@ ipcMain.on('cerrar-sesion-token', async (event, data) => {
     empresaActual = null;
     rolActual = null;
     usuarioActual = null;
+    usoModelosSincronizado = false;
 });
 
 // === 2.1 VERIFICACIÓN DE 2FA (SEGUNDO PASO DE ACCESO) ===

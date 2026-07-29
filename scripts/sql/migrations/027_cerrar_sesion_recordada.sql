@@ -1,0 +1,9 @@
+-- Migración 027: cerrar sesión también necesita entrar sin sesión previa
+-- Motor: PostgreSQL (Supabase, proyecto flfhpffslhjcuvhxsnjz)
+--
+-- Cerrar sesión borra el token de "recordarme", y eso puede ocurrir SIN sesión activa (desde la
+-- propia pantalla de login). Con la clave pública ese UPDATE quedaba bloqueado y el token
+-- sobrevivía: al reabrir el programa volvía a entrar solo, justo lo contrario de lo que el
+-- usuario pidió al cerrar sesión.
+--
+-- El contenido exacto está aplicado en la base; este archivo queda como registro.
