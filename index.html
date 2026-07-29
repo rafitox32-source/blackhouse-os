@@ -3669,7 +3669,7 @@
                                 Empresa</div>
                             <div class="config-item" onclick="showConfigSection('conf-personalizacion', this)">
                                 Personalización</div>
-                            <div class="config-item" onclick="showConfigSection('conf-apariencia', this)">
+                            <div class="config-item" onclick="showConfigSection('conf-apariencia', this); abrirEditorMarca();">
                                 Apariencia / Tema</div>
                             <div class="config-item" onclick="showConfigSection('conf-ticket', this); renderTicketPreview();">
                                 Ticket / Comprobante</div>
@@ -3919,10 +3919,50 @@
                                         <div style="font-size:11px; color:#94a3b8;">Diseño gerencial, 3D y colores dorados</div>
                                     </div>
                                 </div>
-                                <p style="font-size:11px; color:var(--text-muted); margin-top:16px;">
-                                    ¿Quieres otro tema con colores distintos? Se pueden diseñar más temas aparte —
-                                    pídelo cuando quieras.
-                                </p>
+                                <!-- ====== EDITOR DE MARCA (solo el dueño) ======
+                                     Antes aquí decía "pídelo cuando quieras". Ya no hace falta
+                                     pedirlo: el taller se pone sus propios colores desde aquí. -->
+                                <div id="editor-marca" style="display:none; margin-top:26px; padding-top:22px; border-top:1px solid var(--bh-border);">
+                                    <h2 style="margin-bottom:4px;">Los colores de tu taller</h2>
+                                    <p style="font-size:13px; color:var(--text-muted); margin-top:0;">
+                                        Esto no es solo para esta computadora: se guarda en tu cuenta y lo ve
+                                        todo tu equipo al entrar. Elige un tema de partida, retoca lo que
+                                        quieras y guarda.
+                                    </p>
+
+                                    <div class="input-group" style="max-width:320px;">
+                                        <label>Partir de</label>
+                                        <select id="marca-preset" class="bh-input" onchange="marcaCambiarPreset(this.value)">
+                                            <option value="">Cargando…</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Los controles se generan solos desde MARCA_CAMPOS -->
+                                    <div id="marca-colores" style="margin-top:6px;"></div>
+
+                                    <!-- Aviso de legibilidad. Se llena en vivo al mover un color. -->
+                                    <div id="marca-contraste" style="margin-top:18px;"></div>
+
+                                    <div class="input-group" style="max-width:420px; margin-top:18px;">
+                                        <label>Logo del taller (opcional, máx. 2 MB)</label>
+                                        <div style="display:flex; gap:10px; align-items:center;">
+                                            <img id="marca-logo-vista" alt="" style="display:none; width:46px; height:46px; object-fit:contain; border-radius:8px; background:var(--bh-surface-2); border:1px solid var(--bh-border);">
+                                            <input type="file" id="marca-logo-archivo" accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                                   class="bh-input" style="flex:1;" onchange="marcaSubirLogo(this)">
+                                        </div>
+                                        <div id="marca-logo-estado" style="font-size:11px; color:var(--text-muted); margin-top:5px;"></div>
+                                    </div>
+
+                                    <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:22px;">
+                                        <button class="bh-btn-purple" onclick="marcaGuardar()">Guardar para todo el equipo</button>
+                                        <button class="bh-btn-white" onclick="marcaDescartar()">Descartar cambios</button>
+                                        <button class="bh-btn-white" onclick="marcaExportar()">Exportar tema</button>
+                                        <button class="bh-btn-white" onclick="document.getElementById('marca-importar').click()">Importar tema</button>
+                                        <input type="file" id="marca-importar" accept="application/json,.json"
+                                               style="display:none;" onchange="marcaImportar(this)">
+                                    </div>
+                                    <p id="marca-aviso" style="font-size:11px; color:var(--text-muted); margin-top:12px;"></p>
+                                </div>
                             </div>
 
                             <!-- ============ TICKET / COMPROBANTE (personalización de impresión) ============ -->
@@ -6252,6 +6292,406 @@
                 // Misma regla que ya tenía el tema de empresa: la elección de ESTE equipo gana.
                 if (!eligioTemaEnEsteEquipo()) aplicarTemaEmpresa(cfg);
             });
+        }
+
+        // ---- EDITOR DE MARCA (Fase 5) ---------------------------------------------------
+        // Qué se puede tocar y cómo se llama en cristiano. El orden es el de la pantalla.
+        //
+        // Solo aparecen los tokens que el selector de color del sistema sabe representar, o
+        // sea los hexadecimales. Los que en algún tema son rgba() o un degradado
+        // (--bh-card-bg, --bh-border, --bh-input-bg, --bh-purple-glow, --bh-bg-gradient) se
+        // heredan del tema de partida y no se editan aquí: un selector de color no puede
+        // mostrar un degradado. Se cambian con Importar tema.
+        const MARCA_CAMPOS = [
+            { grupo: 'Tu color de marca' },
+            { t: '--bh-purple',        n: 'Color principal',        d: 'Botones, enlaces, lo que resalta' },
+            { t: '--bh-purple-dark',   n: 'Principal oscuro',       d: 'El mismo, al presionar' },
+            { t: '--bh-accent-2',      n: 'Segundo color',          d: 'Cierra los degradados' },
+            { t: '--bh-accent-soft',   n: 'Principal suave',        d: 'Texto resaltado' },
+            { t: '--bh-on-accent',     n: 'Texto sobre el color',   d: 'Lo que se lee encima de un botón' },
+
+            { grupo: 'Fondos' },
+            { t: '--bh-bg-dark',       n: 'Fondo de la ventana',    d: '' },
+            { t: '--bh-surface',       n: 'Tarjetas',               d: '' },
+            { t: '--bh-surface-2',     n: 'Tarjetas al pasar',      d: '' },
+            { t: '--bh-surface-3',     n: 'Fondos internos',        d: '' },
+            { t: '--bh-border-strong', n: 'Líneas divisorias',      d: 'Separadores de tablas' },
+            { t: '--bh-scroll-thumb',  n: 'Barra de desplazar',     d: '' },
+
+            { grupo: 'Textos' },
+            { t: '--text-main',        n: 'Texto principal',        d: '' },
+            { t: '--text-soft',        n: 'Texto secundario',       d: '' },
+            { t: '--text-muted',       n: 'Texto apagado',          d: 'El más usado en la app' },
+            { t: '--text-dim',         n: 'Notas y pistas',         d: '' },
+            { t: '--text-faint',       n: 'Texto casi apagado',     d: 'Campos vacíos, deshabilitado' },
+            { t: '--text-invert',      n: 'Texto sobre oscuro',     d: '' },
+
+            { grupo: 'Avisos' },
+            { t: '--success',          n: 'Correcto',               d: '' },
+            { t: '--danger',           n: 'Error',                  d: '' },
+            { t: '--warning',          n: 'Advertencia',            d: '' },
+            { t: '--info',             n: 'Información',            d: '' },
+
+            { grupo: 'Laboratorio 3D' },
+            { t: '--bh-holo-ok',       n: 'Pieza sana',             d: 'El azul del holograma' },
+            { t: '--bh-holo-bad',      n: 'Pieza dañada',           d: '' },
+            { t: '--bh-bot',           n: 'Robot del chat',         d: '' }
+        ];
+
+        let marcaPresets = [];       // los temas de fábrica que manda el servidor
+        let marcaBorrador = null;    // lo que se está editando ahora, sin guardar
+        let marcaGuardadoServidor = null;  // lo último que confirmó el servidor
+
+        // --- Contraste, para avisar cuando un color queda ilegible ------------------------
+        // Es la cuenta de la norma WCAG. 4.5 es el mínimo para texto normal; por debajo de 3
+        // ya no se lee ni en un cartel.
+        function _canal(c) {
+            c = c / 255;
+            return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+        }
+        function _luminancia(hex) {
+            const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex).trim());
+            if (!m) return null;
+            let h = m[1];
+            if (h.length === 3) h = h.split('').map(c => c + c).join('');
+            const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+            return 0.2126 * _canal(r) + 0.7152 * _canal(g) + 0.0722 * _canal(b);
+        }
+        function contraste(hex1, hex2) {
+            const a = _luminancia(hex1), b = _luminancia(hex2);
+            if (a === null || b === null) return null;
+            return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+        }
+
+        // Las tres parejas que de verdad importan: si estas fallan, la app no se puede usar.
+        const MARCA_PAREJAS = [
+            { a: '--text-main',   b: '--bh-surface', q: 'El texto principal sobre las tarjetas' },
+            { a: '--text-muted',  b: '--bh-surface', q: 'El texto apagado sobre las tarjetas' },
+            { a: '--text-invert', b: '--bh-purple',  q: 'El texto sobre los botones de color' }
+        ];
+
+        function marcaRevisarContraste() {
+            const caja = document.getElementById('marca-contraste');
+            if (!caja || !marcaBorrador) return;
+            const tk = marcaBorrador.tema.tokens;
+            const problemas = [];
+
+            MARCA_PAREJAS.forEach(p => {
+                const r = contraste(tk[p.a], tk[p.b]);
+                if (r === null) return;      // alguno es rgba o degradado: no se puede medir
+                if (r < 4.5) problemas.push({ q: p.q, r: r, grave: r < 3 });
+            });
+
+            caja.textContent = '';
+            if (!problemas.length) {
+                const ok = document.createElement('div');
+                ok.style.cssText = 'font-size:12px; color:var(--success);';
+                ok.textContent = '✓ Todos los textos se leen bien sobre su fondo.';
+                caja.appendChild(ok);
+                return;
+            }
+
+            // textContent y createElement, nunca innerHTML: estos valores los escribió alguien.
+            const cont = document.createElement('div');
+            cont.style.cssText = 'border:1px solid var(--warning); border-radius:10px; padding:12px; background:var(--bh-surface-2);';
+            const tit = document.createElement('div');
+            tit.style.cssText = 'font-weight:700; font-size:13px; color:var(--warning); margin-bottom:6px;';
+            tit.textContent = 'Ojo con la legibilidad';
+            cont.appendChild(tit);
+            problemas.forEach(p => {
+                const l = document.createElement('div');
+                l.style.cssText = 'font-size:12px; color:var(--text-muted); margin-top:3px;';
+                l.textContent = (p.grave ? '✕ ' : '! ') + p.q + ' casi no se distingue (contraste '
+                              + p.r.toFixed(1) + ', hace falta 4.5).';
+                cont.appendChild(l);
+            });
+            const nota = document.createElement('div');
+            nota.style.cssText = 'font-size:11px; color:var(--text-dim); margin-top:8px;';
+            nota.textContent = 'Se puede guardar igual, pero a tu equipo le va a costar leer la pantalla.';
+            cont.appendChild(nota);
+            caja.appendChild(cont);
+        }
+
+        // --- Pintar los controles --------------------------------------------------------
+        function marcaPintarControles() {
+            const caja = document.getElementById('marca-colores');
+            if (!caja || !marcaBorrador) return;
+            const tk = marcaBorrador.tema.tokens;
+            caja.textContent = '';
+
+            MARCA_CAMPOS.forEach(campo => {
+                if (campo.grupo) {
+                    const h = document.createElement('div');
+                    h.style.cssText = 'font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); margin:20px 0 10px;';
+                    h.textContent = campo.grupo;
+                    caja.appendChild(h);
+                    return;
+                }
+                const valor = tk[campo.t];
+                // Si en este tema el valor no es hexadecimal, el selector no puede mostrarlo.
+                const esHex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(valor || ''));
+
+                const fila = document.createElement('div');
+                fila.style.cssText = 'display:flex; align-items:center; gap:12px; padding:7px 0;';
+
+                if (esHex) {
+                    const inp = document.createElement('input');
+                    inp.type = 'color';
+                    inp.value = valor.length === 4
+                        ? '#' + valor.slice(1).split('').map(c => c + c).join('')
+                        : valor;
+                    inp.style.cssText = 'width:44px; height:32px; padding:0; border:1px solid var(--bh-border); border-radius:8px; background:none; cursor:pointer;';
+                    inp.addEventListener('input', () => marcaTocarColor(campo.t, inp.value));
+                    fila.appendChild(inp);
+                } else {
+                    const muestra = document.createElement('div');
+                    muestra.style.cssText = 'width:44px; height:32px; border-radius:8px; border:1px solid var(--bh-border);';
+                    muestra.style.background = valorCssValido(valor) ? valor : 'transparent';
+                    muestra.title = 'Viene del tema de partida. Se cambia con Importar tema.';
+                    fila.appendChild(muestra);
+                }
+
+                const textos = document.createElement('div');
+                const n = document.createElement('div');
+                n.style.cssText = 'font-size:13px; font-weight:600;';
+                n.textContent = campo.n;
+                textos.appendChild(n);
+                const d = document.createElement('div');
+                d.style.cssText = 'font-size:11px; color:var(--text-dim);';
+                d.textContent = esHex ? campo.d : (campo.d ? campo.d + ' · ' : '') + 'viene del tema de partida';
+                textos.appendChild(d);
+                fila.appendChild(textos);
+                caja.appendChild(fila);
+            });
+        }
+
+        // Mover un color: se aplica al instante para que se vea de verdad, no en una miniatura.
+        function marcaTocarColor(token, valor) {
+            if (!marcaBorrador || !TOKENS_CONOCIDOS.includes(token) || !valorCssValido(valor)) return;
+            marcaBorrador.tema.tokens[token] = valor;
+            marcaBorrador.preset = marcaBorrador.preset || 'original';
+            aplicarTokensEmpresa(marcaBorrador.tema.tokens);
+            marcaRevisarContraste();
+            marcaMarcarSinGuardar(true);
+        }
+
+        function marcaMarcarSinGuardar(hay) {
+            const el = document.getElementById('marca-aviso');
+            if (el) el.textContent = hay
+                ? 'Hay cambios sin guardar. Se ven solo en esta pantalla hasta que le des a Guardar.'
+                : '';
+        }
+
+        function marcaCambiarPreset(clave) {
+            const p = marcaPresets.find(x => x.clave === clave);
+            if (!p) return;
+            // Copia profunda: si no, editar tocaría el preset de fábrica que tenemos en memoria.
+            marcaBorrador = {
+                preset: p.clave,
+                es_claro: !!p.es_claro,
+                logo_url: marcaBorrador ? marcaBorrador.logo_url : null,
+                tema: JSON.parse(JSON.stringify(p.tema))
+            };
+            _pintarTema(TEMAS_VALIDOS.includes(p.clave) ? p.clave : 'original');
+            document.body.classList.toggle('tema-claro', !!p.es_claro);
+            aplicarTokensEmpresa(marcaBorrador.tema.tokens);
+            marcaPintarControles();
+            marcaRevisarContraste();
+            marcaMarcarSinGuardar(true);
+        }
+
+        // --- Abrir el editor -------------------------------------------------------------
+        function abrirEditorMarca() {
+            const caja = document.getElementById('editor-marca');
+            if (!caja) return;
+            // Solo el dueño. El servidor lo vuelve a comprobar al guardar: esto es para no
+            // mostrarle a un técnico una pantalla que no va a poder usar.
+            if (localStorage.getItem('userRol') !== 'dueno') { caja.style.display = 'none'; return; }
+            caja.style.display = 'block';
+            if (typeof ipcRenderer !== 'undefined') ipcRenderer.send('obtener-presets-tema');
+        }
+
+        if (typeof ipcRenderer !== 'undefined') {
+            ipcRenderer.on('presets-tema-respuesta', (e, res) => {
+                if (!res || !res.success || !Array.isArray(res.data) || !res.data.length) {
+                    const el = document.getElementById('marca-aviso');
+                    if (el) el.textContent = 'No se pudieron cargar los temas de partida. '
+                        + 'Revisa la conexión y vuelve a entrar a esta pantalla.';
+                    return;
+                }
+                marcaPresets = res.data;
+                const sel = document.getElementById('marca-preset');
+                if (sel) {
+                    sel.textContent = '';
+                    marcaPresets.forEach(p => {
+                        const o = document.createElement('option');
+                        o.value = p.clave;
+                        o.textContent = p.nombre;      // viene de la base: textContent, no innerHTML
+                        sel.appendChild(o);
+                    });
+                }
+                // Se parte de lo que la empresa ya tenga guardado; si no tiene, del preset actual.
+                const guardado = marcaGuardadoServidor || leerTemaEmpresaLocal();
+                if (guardado && guardado.tema && guardado.tema.tokens) {
+                    marcaBorrador = JSON.parse(JSON.stringify(guardado));
+                    if (sel) sel.value = guardado.preset || 'original';
+                    marcaPintarControles();
+                    marcaRevisarContraste();
+                    marcaMarcarSinGuardar(false);
+                } else {
+                    const actual = localStorage.getItem('appTheme') || 'original';
+                    if (sel) sel.value = marcaPresets.some(p => p.clave === actual) ? actual : 'original';
+                    marcaCambiarPreset(sel ? sel.value : 'original');
+                    marcaMarcarSinGuardar(false);
+                }
+            });
+
+            ipcRenderer.on('guardar-tema-respuesta', (e, res) => {
+                if (res && res.success) {
+                    marcaGuardadoServidor = JSON.parse(JSON.stringify(marcaBorrador));
+                    guardarTemaEmpresaLocal(marcaGuardadoServidor);
+                    // Los colores del taller ganan de nuevo: se suelta la elección de este
+                    // equipo, si no el dueño guardaría y no vería su propio cambio.
+                    try { localStorage.removeItem('appTheme'); } catch (err) {}
+                    marcaMarcarSinGuardar(false);
+                    if (typeof showToast === 'function') showToast(res.msg || 'Apariencia guardada', 'success');
+                } else if (typeof showToast === 'function') {
+                    showToast((res && res.msg) || 'No se pudo guardar la apariencia', 'danger');
+                }
+            });
+
+            ipcRenderer.on('logo-marca-respuesta', (e, res) => {
+                const est = document.getElementById('marca-logo-estado');
+                if (res && res.success && res.url) {
+                    if (marcaBorrador) marcaBorrador.logo_url = res.url;
+                    const img = document.getElementById('marca-logo-vista');
+                    if (img) { img.src = res.url; img.style.display = 'block'; }
+                    if (est) est.textContent = 'Logo subido. Dale a Guardar para que lo vea tu equipo.';
+                    marcaMarcarSinGuardar(true);
+                } else if (est) {
+                    est.textContent = (res && res.msg) || 'No se pudo subir el logo.';
+                }
+            });
+        }
+
+        function marcaGuardar() {
+            if (!marcaBorrador) return;
+            if (typeof ipcRenderer === 'undefined') return;
+            ipcRenderer.send('guardar-tema-empresa', {
+                tema: marcaBorrador.tema,
+                preset: marcaBorrador.preset,
+                es_claro: !!marcaBorrador.es_claro,
+                logo_url: marcaBorrador.logo_url || null
+            });
+        }
+
+        function marcaDescartar() {
+            const vuelta = marcaGuardadoServidor || leerTemaEmpresaLocal();
+            if (vuelta) {
+                marcaBorrador = JSON.parse(JSON.stringify(vuelta));
+                aplicarTemaEmpresa(marcaBorrador);
+            } else {
+                marcaBorrador = null;
+                limpiarTokensEmpresa();
+                cargarTemaGuardado();
+            }
+            if (marcaBorrador) { marcaPintarControles(); marcaRevisarContraste(); }
+            marcaMarcarSinGuardar(false);
+            if (typeof showToast === 'function') showToast('Cambios descartados', 'info');
+        }
+
+        function marcaSubirLogo(input) {
+            const f = input && input.files && input.files[0];
+            const est = document.getElementById('marca-logo-estado');
+            if (!f) return;
+            if (f.size > 2 * 1024 * 1024) {
+                if (est) est.textContent = 'El logo pesa más de 2 MB. Usa una imagen más liviana.';
+                input.value = '';
+                return;
+            }
+            if (est) est.textContent = 'Subiendo…';
+            const lector = new FileReader();
+            lector.onload = () => {
+                // El renderer nunca habla con Storage: manda los bytes a main.js y él sube.
+                if (typeof ipcRenderer !== 'undefined') {
+                    ipcRenderer.send('subir-logo-marca', {
+                        buf: new Uint8Array(lector.result),
+                        tipo: f.type,
+                        nombre: f.name
+                    });
+                }
+            };
+            lector.onerror = () => { if (est) est.textContent = 'No se pudo leer el archivo.'; };
+            lector.readAsArrayBuffer(f);
+        }
+
+        function marcaExportar() {
+            if (!marcaBorrador) return;
+            const txt = JSON.stringify({
+                preset: marcaBorrador.preset,
+                es_claro: !!marcaBorrador.es_claro,
+                tema: marcaBorrador.tema
+            }, null, 2);
+            const a = document.createElement('a');
+            a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(txt);
+            a.download = 'tema-blackhouse.json';
+            a.click();
+        }
+
+        function marcaImportar(input) {
+            const f = input && input.files && input.files[0];
+            if (!f) return;
+            const lector = new FileReader();
+            lector.onload = () => {
+                input.value = '';
+                let cfg;
+                try { cfg = JSON.parse(lector.result); }
+                catch (e) {
+                    if (typeof showToast === 'function') showToast('Ese archivo no es un tema válido', 'danger');
+                    return;
+                }
+                // Un archivo lo puede haber escrito cualquiera: se acepta token por token y
+                // se cuenta lo que se descartó, para poder decirlo.
+                const tokens = (cfg && cfg.tema && cfg.tema.tokens) || (cfg && cfg.tokens);
+                if (!tokens || typeof tokens !== 'object') {
+                    if (typeof showToast === 'function') showToast('El archivo no trae colores', 'danger');
+                    return;
+                }
+                const limpios = {};
+                let descartados = 0;
+                Object.keys(tokens).forEach(k => {
+                    if (TOKENS_CONOCIDOS.includes(k) && valorCssValido(tokens[k])) limpios[k] = tokens[k];
+                    else descartados++;
+                });
+                if (!Object.keys(limpios).length) {
+                    if (typeof showToast === 'function') showToast('Ningún color del archivo es válido', 'danger');
+                    return;
+                }
+                const presetPedido = TEMAS_VALIDOS.includes(cfg.preset) ? cfg.preset : 'original';
+                const base = marcaPresets.find(p => p.clave === presetPedido);
+                // Se parte del preset completo y encima lo importado: así nunca falta un token.
+                marcaBorrador = {
+                    preset: presetPedido,
+                    es_claro: cfg.es_claro === true,
+                    logo_url: marcaBorrador ? marcaBorrador.logo_url : null,
+                    tema: { preset: presetPedido, version: 1,
+                            tokens: Object.assign({}, base ? base.tema.tokens : {}, limpios) }
+                };
+                const sel = document.getElementById('marca-preset');
+                if (sel) sel.value = presetPedido;
+                _pintarTema(presetPedido);
+                document.body.classList.toggle('tema-claro', marcaBorrador.es_claro);
+                aplicarTokensEmpresa(marcaBorrador.tema.tokens);
+                marcaPintarControles();
+                marcaRevisarContraste();
+                marcaMarcarSinGuardar(true);
+                if (typeof showToast === 'function') {
+                    showToast(descartados
+                        ? `Tema importado. Se ignoraron ${descartados} valores que no se aceptan.`
+                        : 'Tema importado', descartados ? 'warning' : 'success');
+                }
+            };
+            lector.readAsText(f);
         }
 
         // ================= FIN TEMA PROPIO DE LA EMPRESA ================================

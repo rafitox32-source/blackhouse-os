@@ -3631,6 +3631,80 @@ ipcMain.on('obtener-tema-empresa', async (event) => {
     }
 });
 
+// Los temas de fábrica. Son de la casa y todos los talleres los leen igual.
+ipcMain.on('obtener-presets-tema', async (event) => {
+    try {
+        if (!empresaActual) return;
+        const { data, error } = await supabase
+            .from('temas_preset')
+            .select('clave, nombre, es_claro, orden, tema')
+            .order('orden', { ascending: true });
+        if (error) throw error;
+        event.reply('presets-tema-respuesta', { success: true, data: data || [] });
+    } catch (e) {
+        console.error('Error al pedir los temas de fábrica:', e.message);
+        event.reply('presets-tema-respuesta', { success: false, msg: e.message });
+    }
+});
+
+// Guardar la apariencia. Va por RPC a propósito: la comprobación de que quien guarda es el
+// dueño, y de que los valores son colores de verdad, la hace el servidor. Lo que valide el
+// programa es una cortesía para avisar antes; lo que manda es la base.
+ipcMain.on('guardar-tema-empresa', async (event, data) => {
+    try {
+        if (!empresaActual) throw new Error('No hay sesión activa');
+        const { data: res, error } = await supabase.rpc('guardar_tema_empresa', {
+            p_tema: data.tema,
+            p_preset: data.preset || null,
+            p_es_claro: !!data.es_claro,
+            p_logo_url: data.logo_url || null
+        });
+        if (error) throw error;
+        event.reply('guardar-tema-respuesta', {
+            success: !!(res && res.ok),
+            msg: (res && res.msg) || 'Respuesta inesperada del servidor'
+        });
+    } catch (e) {
+        console.error('Error al guardar la apariencia:', e.message);
+        event.reply('guardar-tema-respuesta', { success: false, msg: e.message });
+    }
+});
+
+// Subir el logo del taller. El renderer manda los bytes y aquí se sube: nunca habla con
+// Storage directamente. La ruta lleva el empresa_id delante porque la política del bucket
+// 'marca' compara esa primera carpeta contra la empresa del que sube.
+const LOGO_TIPOS = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/svg+xml': 'svg' };
+ipcMain.on('subir-logo-marca', async (event, { buf, tipo }) => {
+    try {
+        if (!empresaActual) throw new Error('No hay sesión activa');
+        if (rolActual !== 'dueno') {
+            return event.reply('logo-marca-respuesta', { success: false, msg: 'Solo el dueño puede cambiar el logo' });
+        }
+        const ext = LOGO_TIPOS[tipo];
+        if (!ext) {
+            return event.reply('logo-marca-respuesta', { success: false, msg: 'Solo se aceptan PNG, JPG, WEBP o SVG' });
+        }
+        const buffer = Buffer.from(buf);
+        if (buffer.length > 2 * 1024 * 1024) {
+            return event.reply('logo-marca-respuesta', { success: false, msg: 'El logo pesa más de 2 MB' });
+        }
+
+        // El nombre lo ponemos nosotros, no el usuario: así no se puede colar una ruta con
+        // ../ para escribir en la carpeta de otro taller.
+        const ruta = `${empresaActual}/logo_${Date.now()}.${ext}`;
+        const { error } = await supabase.storage
+            .from('marca')
+            .upload(ruta, buffer, { contentType: tipo, upsert: true });
+        if (error) throw error;
+
+        const { data: pub } = supabase.storage.from('marca').getPublicUrl(ruta);
+        event.reply('logo-marca-respuesta', { success: true, url: pub.publicUrl });
+    } catch (e) {
+        console.error('Error al subir el logo:', e.message);
+        event.reply('logo-marca-respuesta', { success: false, msg: e.message });
+    }
+});
+
 // === 10. GENERADOR AUTOMÁTICO DE LICENCIAS (SÓLO ADMIN) ===
 ipcMain.on('crear-codigo-automatico', async (event, data) => {
     try {
