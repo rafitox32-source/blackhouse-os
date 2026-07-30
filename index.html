@@ -577,7 +577,7 @@
         }
 
         .nav-item.active i {
-            color: #a78bfa;
+            color: var(--bh-accent-soft);
         }
 
         .wrapper {
@@ -646,7 +646,7 @@
         }
 
         .bh-input:focus {
-            border-color: #7c3aed;
+            border-color: var(--bh-purple);
             background: rgba(124, 58, 237, 0.08);
             box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
             transform: translateY(-2px);
@@ -768,7 +768,7 @@
 
         .bg-completado {
             background: rgba(124, 58, 237, 0.15);
-            color: #a78bfa;
+            color: var(--bh-accent-soft);
         }
 
         .bg-entregado {
@@ -806,18 +806,18 @@
         .kpi-icono { width:38px; height:38px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:19px; margin:0 auto 8px; }
         .kpi-label { color:#9aa0ab; font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
         .kpi-badge { display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px; margin-top:7px; }
-        .kpi-badge.up { background:rgba(16,185,129,.13); color:#34d399; }
-        .kpi-badge.down { background:rgba(239,68,68,.13); color:#f87171; }
+        .kpi-badge.up { background:rgba(16,185,129,.13); color:var(--success-soft); }
+        .kpi-badge.down { background:rgba(239,68,68,.13); color:var(--danger-soft); }
         .kpi-badge.neutro { background:rgba(255,255,255,.06); color:#888; }
 
         /* === DASHBOARD BENTO (Panel de Control) === */
         .dash-hero { position:relative; overflow:hidden; border-radius:18px; padding:32px 38px; margin-bottom:22px; background:linear-gradient(135deg, rgba(124,58,237,0.16) 0%, rgba(17,17,22,0.92) 45%, rgba(14,165,233,0.07) 100%); border:1px solid rgba(124,58,237,0.28); display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap; }
         .dash-orb { position:absolute; border-radius:50%; filter:blur(90px); pointer-events:none; opacity:.35; animation:orbFloat 14s ease-in-out infinite; }
-        .dash-orb.o1 { width:260px; height:260px; top:-110px; left:-60px; background:#7c3aed; }
-        .dash-orb.o2 { width:220px; height:220px; bottom:-130px; right:6%; background:#0ea5e9; opacity:.22; animation-delay:-5s; }
-        .dash-orb.o3 { width:160px; height:160px; top:-70px; right:32%; background:#10b981; opacity:.18; animation-delay:-9s; }
+        .dash-orb.o1 { width:260px; height:260px; top:-110px; left:-60px; background:var(--bh-purple); }
+        .dash-orb.o2 { width:220px; height:220px; bottom:-130px; right:6%; background:var(--info-soft); opacity:.22; animation-delay:-5s; }
+        .dash-orb.o3 { width:160px; height:160px; top:-70px; right:32%; background:var(--success); opacity:.18; animation-delay:-9s; }
         @keyframes orbFloat { 0%,100%{ transform:translate(0,0) scale(1);} 50%{ transform:translate(26px,16px) scale(1.12);} }
-        .dash-titulo { margin:0; font-size:30px; font-weight:800; letter-spacing:-.02em; background:linear-gradient(90deg,#ffffff 25%, #c4b5fd 65%, #a78bfa); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+        .dash-titulo { margin:0; font-size:30px; font-weight:800; letter-spacing:-.02em; background:linear-gradient(90deg,#ffffff 25%, #c4b5fd 65%, var(--bh-accent-soft)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
         .dash-reloj { position:relative; font-family:Consolas, monospace; font-size:36px; font-weight:700; color:#fff; text-align:right; line-height:1; font-variant-numeric:tabular-nums; }
         .dash-reloj small { display:block; font-size:12px; color:#9aa0ab; font-weight:500; margin-top:7px; text-transform:capitalize; font-family:inherit; letter-spacing:.02em; }
 
@@ -977,7 +977,7 @@
             padding: 15px;
             margin-top: 10px;
             display: none;
-            color: #d8b4fe;
+            color: var(--bh-accent-softer);
             font-size: 13px;
         }
 
@@ -1568,7 +1568,7 @@
 
         .user-role {
             font-size: 10px;
-            color: #a78bfa;
+            color: var(--bh-accent-soft);
             text-transform: uppercase;
             font-weight: 800;
             letter-spacing: 0.5px;
@@ -1927,8 +1927,8 @@
 
         .holo-chip {
             background: rgba(63, 216, 255, 0.08);
-            border: 1px solid #3fd8ff;
-            color: #3fd8ff;
+            border: 1px solid var(--bh-holo-ok);
+            color: var(--bh-holo-ok);
             padding: 6px 14px;
             border-radius: 20px;
             font-size: 12px;
@@ -1943,8 +1943,8 @@
 
         .holo-chip.holo-danado {
             background: rgba(255, 59, 78, 0.16);
-            border-color: #ff3b4e;
-            color: #ff3b4e;
+            border-color: var(--bh-holo-bad);
+            color: var(--bh-holo-bad);
         }
 
         #holo-canvas-wrap:fullscreen,
@@ -1966,8 +1966,8 @@
 
         .holo-icon-btn {
             background: rgba(63, 216, 255, 0.08);
-            border: 1px solid #3fd8ff;
-            color: #3fd8ff;
+            border: 1px solid var(--bh-holo-ok);
+            color: var(--bh-holo-ok);
             border-radius: 6px;
             width: 28px;
             height: 28px;
@@ -1984,7 +1984,7 @@
         }
 
         .holo-chip.holo-resaltada {
-            box-shadow: 0 0 0 2px #fff, 0 0 12px #3fd8ff;
+            box-shadow: 0 0 0 2px #fff, 0 0 12px var(--bh-holo-ok);
         }
 
         .holo-chip.holo-atenuada {
@@ -2163,7 +2163,7 @@
                 <input type="password" id="reg-admin-pass" class="bh-input" placeholder="••••••••"
                     style="margin-bottom:20px;">
 
-                <button class="bh-btn-purple" style="width:100%; height:45px; font-size:15px; background: #10b981;"
+                <button class="bh-btn-purple" style="width:100%; height:45px; font-size:15px; background: var(--success);"
                     onclick="registrarNuevoNegocio()">Verificar y Crear Cuenta</button>
                 <button class="bh-btn-white" style="width:100%; margin-top: 10px;" onclick="ocultarRegistro()">← Volver
                     al Login</button>
@@ -2174,7 +2174,7 @@
     <!-- OJO: no repetir "display" en este style. Antes tenía display:none Y display:flex en el
          mismo atributo; gana el último, así que el banner nacía SIEMPRE visible aunque la app
          estuviera actualizada. Nace oculto y solo lo muestran los eventos reales del updater. -->
-    <div id="banner-actualizacion" style="display:none; position:fixed; top:0; left:0; right:0; z-index:99999; background:linear-gradient(90deg, #7c3aed, #4c1d95); color:white; padding:10px 20px; align-items:center; justify-content:center; gap:15px; font-size:13px; box-shadow:0 2px 10px rgba(0,0,0,0.4);">
+    <div id="banner-actualizacion" style="display:none; position:fixed; top:0; left:0; right:0; z-index:99999; background:linear-gradient(90deg, var(--bh-purple), #4c1d95); color:white; padding:10px 20px; align-items:center; justify-content:center; gap:15px; font-size:13px; box-shadow:0 2px 10px rgba(0,0,0,0.4);">
         <span id="banner-actualizacion-msg">🎉 Hay una nueva versión disponible.</span>
         <button id="banner-actualizacion-btn" onclick="irADescargarActualizacion()" style="background:white; color:#4c1d95; border:none; padding:6px 14px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">Descargar manualmente</button>
         <button onclick="document.getElementById('banner-actualizacion').style.display='none'" style="background:transparent; border:none; color:white; font-size:16px; cursor:pointer; opacity:0.8;">&times;</button>
@@ -2324,13 +2324,13 @@
                                 </div>
                                 <div class="pipe-col" onclick="showView('taller', null)" title="Ir al taller">
                                     <div class="pipe-num" id="dash-listos">0</div>
-                                    <div class="pipe-tag" style="color:#d8b4fe;">✅ Listos</div>
+                                    <div class="pipe-tag" style="color:var(--bh-accent-softer);">✅ Listos</div>
                                 </div>
                             </div>
                             <div class="pipe-barra" title="Distribución de las órdenes activas">
-                                <div id="dash-seg-1" style="width:0%; background:#f87171;"></div>
+                                <div id="dash-seg-1" style="width:0%; background:var(--danger-soft);"></div>
                                 <div id="dash-seg-2" style="width:0%; background:#4fd1c5;"></div>
-                                <div id="dash-seg-3" style="width:0%; background:#a78bfa;"></div>
+                                <div id="dash-seg-3" style="width:0%; background:var(--bh-accent-soft);"></div>
                             </div>
                         </div>
 
@@ -2343,7 +2343,7 @@
                                 </div>
                                 <div class="hoy-fila">
                                     <span class="l">📦 Entregados</span>
-                                    <span class="v" id="dash-hoy-entregadas" style="color:#34d399;">0</span>
+                                    <span class="v" id="dash-hoy-entregadas" style="color:var(--success-soft);">0</span>
                                 </div>
                                 <div class="hoy-fila">
                                     <span class="l">🛠 En el taller ahora</span>
@@ -2491,7 +2491,7 @@
                                 </div>
 
                                 <!-- Estadísticas comunitarias: qué se marcó dañado más seguido en este modelo -->
-                                <div id="holo-stats-comunidad" style="display:none; font-size:11px; color:#e2950f; background:rgba(226,149,15,0.08); border:1px dashed #e2950f; border-radius:6px; padding:6px 10px; margin-bottom:10px;"></div>
+                                <div id="holo-stats-comunidad" style="display:none; font-size:11px; color:var(--warning); background:rgba(226,149,15,0.08); border:1px dashed var(--warning); border-radius:6px; padding:6px 10px; margin-bottom:10px;"></div>
 
                                 <input type="text" id="holo-buscar-pieza-input" class="bh-input" placeholder="🔍 Buscar y resaltar una pieza..." style="margin-bottom:10px;" oninput="holoBuscarPieza(this.value)">
 
@@ -2507,18 +2507,18 @@
 
                                 <div id="holo-canvas-wrap" style="position:relative; width:100%; height:320px; border-radius:10px; overflow:hidden; background:radial-gradient(circle at 50% 30%, #0a1420 0%, #000 75%); border:1px solid #1b2a3a;">
                                     <canvas id="holo-canvas" style="width:100%; height:100%; display:block; cursor:grab;"></canvas>
-                                    <div style="position:absolute; top:8px; left:10px; font-size:10px; color:#3fd8ff; opacity:0.7; letter-spacing:1px; pointer-events:none;">ARRASTRA EL FONDO PARA GIRAR · ARRASTRA UNA PIEZA PARA MOVERLA LIBREMENTE · RUEDA/+- PARA ZOOM · FLECHAS PARA GIRAR · ESPACIO ARMA/DESARMA</div>
+                                    <div style="position:absolute; top:8px; left:10px; font-size:10px; color:var(--bh-holo-ok); opacity:0.7; letter-spacing:1px; pointer-events:none;">ARRASTRA EL FONDO PARA GIRAR · ARRASTRA UNA PIEZA PARA MOVERLA LIBREMENTE · RUEDA/+- PARA ZOOM · FLECHAS PARA GIRAR · ESPACIO ARMA/DESARMA</div>
                                     <div style="position:absolute; top:8px; right:8px; display:flex; gap:6px;">
                                         <button type="button" onclick="holoCapturarPantalla()" title="Guardar imagen del holograma"
-                                            style="background:rgba(0,0,0,0.5); border:1px solid #3fd8ff; color:#3fd8ff; border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
+                                            style="background:rgba(0,0,0,0.5); border:1px solid var(--bh-holo-ok); color:var(--bh-holo-ok); border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
                                             <i class='bx bx-camera'></i>
                                         </button>
                                         <button type="button" onclick="holoAbrirGiro()" title="Vuelta 360° de una pieza (grabar o ver)"
-                                            style="background:rgba(0,0,0,0.5); border:1px solid #3fd8ff; color:#3fd8ff; border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
+                                            style="background:rgba(0,0,0,0.5); border:1px solid var(--bh-holo-ok); color:var(--bh-holo-ok); border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
                                             <i class='bx bx-rotate-left'></i>
                                         </button>
                                         <button type="button" onclick="holoToggleFullscreen()" title="Pantalla completa"
-                                            style="background:rgba(0,0,0,0.5); border:1px solid #3fd8ff; color:#3fd8ff; border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
+                                            style="background:rgba(0,0,0,0.5); border:1px solid var(--bh-holo-ok); color:var(--bh-holo-ok); border-radius:6px; width:30px; height:30px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px;">
                                             <i class='bx bx-fullscreen' id="holo-fullscreen-icon"></i>
                                         </button>
                                     </div>
@@ -2591,7 +2591,7 @@
                                     onclick="abrirEstudioGrabacion()"><i class='bx bx-video-recording'></i>
                                     Grabar Reparación</button>
                                 <button id="btn-abrir-chat" class="bh-btn-purple"
-                                    style="width:100%;margin-bottom:15px;text-align:left;padding:12px;background:linear-gradient(135deg,#10b981 0%,#047857 100%);position:relative;"
+                                    style="width:100%;margin-bottom:15px;text-align:left;padding:12px;background:linear-gradient(135deg,var(--success) 0%,#047857 100%);position:relative;"
                                     onclick="toggleChat(); limpiarBadgeChat()">
                                     <i class='bx bx-message-rounded-dots' style="font-size:16px;"></i> Abrir Chat de
                                     Equipo
@@ -2726,7 +2726,7 @@
                             <div id="holo-giro-placeholder" style="height:280px; display:flex; align-items:center; justify-content:center; color:#3c4a5a; font-size:13px; text-align:center; padding:0 20px;">
                                 Sube un video girando la pieza,<br>o abre un giro ya guardado.
                             </div>
-                            <div id="holo-giro-badge" style="display:none; position:absolute; bottom:8px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.65); color:#3fd8ff; font-size:11px; padding:4px 12px; border-radius:20px; letter-spacing:1px;">
+                            <div id="holo-giro-badge" style="display:none; position:absolute; bottom:8px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.65); color:var(--bh-holo-ok); font-size:11px; padding:4px 12px; border-radius:20px; letter-spacing:1px;">
                                 ⇄ ARRASTRA PARA GIRAR
                             </div>
                         </div>
@@ -2762,19 +2762,19 @@
                             style="margin:6px 0 10px;">
                         <datalist id="holo-piezas-sugerencias"></datalist>
 
-                        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#3fd8ff; margin-bottom:8px; cursor:pointer;">
+                        <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--bh-holo-ok); margin-bottom:8px; cursor:pointer;">
                             <input type="checkbox" id="holo-guiado-check" checked onchange="holoToggleModoGuiado()">
                             📐 Modo guiado: pedir las 6 caras en orden (recomendado para que la pieza quede completa)
                         </label>
 
                         <!-- Modo guiado: la app va pidiendo cara por cara con instrucciones -->
-                        <div id="holo-guiado-panel" style="background:rgba(63,216,255,0.06); border:1px dashed #3fd8ff; border-radius:8px; padding:10px; margin-bottom:10px;">
+                        <div id="holo-guiado-panel" style="background:rgba(63,216,255,0.06); border:1px dashed var(--bh-holo-ok); border-radius:8px; padding:10px; margin-bottom:10px;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <b id="holo-guiado-titulo" style="color:#3fd8ff; font-size:13px;">Paso 1 de 6: Frente</b>
+                                <b id="holo-guiado-titulo" style="color:var(--bh-holo-ok); font-size:13px;">Paso 1 de 6: Frente</b>
                                 <span id="holo-guiado-contador" style="font-size:11px; color:#888;"></span>
                             </div>
                             <div style="width:100%; background:#222; border-radius:10px; height:6px; overflow:hidden; margin-bottom:6px;">
-                                <div id="holo-guiado-barra" style="height:100%; width:16.6%; background:#3fd8ff; transition:width 0.3s ease;"></div>
+                                <div id="holo-guiado-barra" style="height:100%; width:16.6%; background:var(--bh-holo-ok); transition:width 0.3s ease;"></div>
                             </div>
                             <p id="holo-guiado-instruccion" style="font-size:12px; color:#ccc; margin:0;">Mostrá la pieza de frente a la cámara.</p>
                         </div>
@@ -3033,18 +3033,18 @@
                                     title="Se llena solo al tocar un repuesto de la lista, pero lo puedes cambiar a mano"
                                     oninput="costoRepuestoEditado()"></div>
                             <!-- La mano de obra ya no se escribe: sale de restarle el repuesto al total. -->
-                            <div class="input-group"><label style="color:#0ea5e9;">Mano de Obra (S/)
+                            <div class="input-group"><label style="color:var(--info-soft);">Mano de Obra (S/)
                                     <span style="font-size:10px; color:#64748b; font-weight:normal;">· automático</span></label>
                                 <input type="number" id="cost-service" class="bh-input"
-                                    style="font-weight:bold; color:#0ea5e9;" readonly value="0.00">
+                                    style="font-weight:bold; color:var(--info-soft);" readonly value="0.00">
                             </div>
                             <div class="input-group"><label style="color:var(--success); font-weight:bold;">TOTAL
                                     (S/)</label><input type="number" id="cost-total" class="bh-input"
                                     style="font-weight:bold; color:var(--success);" placeholder="0.00"
                                     oninput="calcularTotal()"></div>
-                            <div class="input-group"><label style="color:#d8b4fe;">A Cuenta / Adelanto
+                            <div class="input-group"><label style="color:var(--bh-accent-softer);">A Cuenta / Adelanto
                                     (S/)</label><input type="number" id="pay-advance" class="bh-input"
-                                    placeholder="0.00" oninput="calcularTotal()" style="border-color:#d8b4fe;"></div>
+                                    placeholder="0.00" oninput="calcularTotal()" style="border-color:var(--bh-accent-softer);"></div>
                             <div class="input-group"><label style="color:var(--warning);">Saldo Pendiente
                                     (S/)</label><input type="number" id="pay-balance" class="bh-input"
                                     style="font-weight:bold; color:var(--warning);" readonly value="0.00"></div>
@@ -3263,7 +3263,7 @@
                                         onchange="document.getElementById('menu-agregar-inventario').style.display='none'; procesarImagenInventario(event)">
                                 </label>
                                 <a onclick="document.getElementById('menu-agregar-inventario').style.display='none'; ipcRenderer.send('abrir-carpeta-plantillas')"
-                                    style="display:flex; align-items:center; gap:8px; padding:12px 16px; color:#d8b4fe; cursor:pointer; font-size:13px; border-top:1px solid #333;">
+                                    style="display:flex; align-items:center; gap:8px; padding:12px 16px; color:var(--bh-accent-softer); cursor:pointer; font-size:13px; border-top:1px solid #333;">
                                     <i class='bx bx-download'></i> Plantillas de Inventario (Excel)
                                 </a>
                             </div>
@@ -3551,10 +3551,10 @@
                         </div>
                         <div style="display:flex; gap:8px; flex-wrap:wrap;">
                             <button class="rep-accion" onclick="abrirCierreDia()"><span style="color:#38bdf8;">🧾</span> Cierre del Día</button>
-                            <button class="rep-accion" onclick="abrirModalGasto()"><span style="color:#f87171;">💸</span> Registrar Gasto</button>
-                            <button class="rep-accion" onclick="abrirTopVentas()"><span style="color:#fbbf24;">🏆</span> Más Vendidos</button>
-                            <button class="rep-accion" onclick="exportarReporteExcel()"><span style="color:#34d399;">📥</span> Exportar Excel</button>
-                            <button class="rep-accion" onclick="generarResumenIA()"><span style="color:#a78bfa;">🧠</span> Análisis IA</button>
+                            <button class="rep-accion" onclick="abrirModalGasto()"><span style="color:var(--danger-soft);">💸</span> Registrar Gasto</button>
+                            <button class="rep-accion" onclick="abrirTopVentas()"><span style="color:var(--warning-soft);">🏆</span> Más Vendidos</button>
+                            <button class="rep-accion" onclick="exportarReporteExcel()"><span style="color:var(--success-soft);">📥</span> Exportar Excel</button>
+                            <button class="rep-accion" onclick="generarResumenIA()"><span style="color:var(--bh-accent-soft);">🧠</span> Análisis IA</button>
                         </div>
                     </div>
 
@@ -3579,18 +3579,18 @@
                         <div class="bh-card kpi-card" style="background:linear-gradient(160deg, rgba(239,68,68,0.09), rgba(20,20,20,0.4)); border:1px solid rgba(239,68,68,0.22);" title="Lo que costaron de verdad los repuestos usados (stock + externos)">
                             <div class="kpi-icono" style="background:rgba(239,68,68,0.16);">🔩</div>
                             <div class="kpi-label" style="color:#f0a0a0;">Costo Repuestos (real)</div>
-                            <h2 id="kpi-gastos" style="margin:0; font-size:27px; color:#f87171;">S/ 0.00</h2>
+                            <h2 id="kpi-gastos" style="margin:0; font-size:27px; color:var(--danger-soft);">S/ 0.00</h2>
                         </div>
                         <div class="bh-card kpi-card" onclick="irAGastos()" style="cursor:pointer; background:linear-gradient(160deg, rgba(245,158,11,0.09), rgba(20,20,20,0.4)); border:1px solid rgba(245,158,11,0.22);" title="Clic para ver la lista de gastos">
                             <div class="kpi-icono" style="background:rgba(245,158,11,0.16);">💸</div>
                             <div class="kpi-label" style="color:#f3c88a;">Gastos Operativos</div>
-                            <h2 id="kpi-gastos-op" style="margin:0; font-size:27px; color:#fbbf24;">S/ 0.00</h2>
+                            <h2 id="kpi-gastos-op" style="margin:0; font-size:27px; color:var(--warning-soft);">S/ 0.00</h2>
                             <span id="badge-gastos-op" class="kpi-badge neutro" style="display:none;"></span>
                         </div>
                         <div class="bh-card kpi-card" style="background:linear-gradient(160deg, rgba(16,185,129,0.10), rgba(20,20,20,0.4)); border:1px solid rgba(16,185,129,0.25);" title="Margen real del taller y ventas, menos gastos y devoluciones">
                             <div class="kpi-icono" style="background:rgba(16,185,129,0.16);">📈</div>
                             <div class="kpi-label" style="color:#93d9bd;">Ganancia Neta (real)</div>
-                            <h2 id="kpi-ganancias" style="margin:0; font-size:27px; color:#34d399;">S/ 0.00</h2>
+                            <h2 id="kpi-ganancias" style="margin:0; font-size:27px; color:var(--success-soft);">S/ 0.00</h2>
                             <span id="badge-ganancias" class="kpi-badge neutro" style="display:none;"></span>
                         </div>
                         <div class="bh-card kpi-card">
@@ -4100,7 +4100,7 @@
                                                 placeholder="¡Excelentes noticias! Tu equipo está listo...">
                                         </div>
                                     </div>
-                                    <button class="bh-btn-purple" style="margin-top:20px; background:#10b981;"
+                                    <button class="bh-btn-purple" style="margin-top:20px; background:var(--success);"
                                         onclick="guardarConfigWA()">Guardar WhatsApp</button>
                                 </div>
                             </div>
@@ -4609,7 +4609,7 @@
                 </button>
             </div>
 
-            <div id="compat-modal-msg" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444;"></div>
+            <div id="compat-modal-msg" style="display:none; margin-top:10px; font-size:12.5px; color:var(--danger);"></div>
 
             <div
                 style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
@@ -4667,7 +4667,7 @@
                 <div id="compat-import-tabla"></div>
             </div>
 
-            <div id="compat-import-msg" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444;"></div>
+            <div id="compat-import-msg" style="display:none; margin-top:10px; font-size:12.5px; color:var(--danger);"></div>
 
             <div
                 style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
@@ -4694,7 +4694,7 @@
             <p style="color:#999; font-size:12px; margin-top:10px; text-align:center;">
                 Apunta la cámara al código de barras o QR de la caja del equipo (Code128, EAN o QR).
             </p>
-            <div id="scanner-imei-error" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444; text-align:center;"></div>
+            <div id="scanner-imei-error" style="display:none; margin-top:10px; font-size:12.5px; color:var(--danger); text-align:center;"></div>
             <div style="text-align:right; margin-top:16px;">
                 <button type="button" class="bh-btn-white" onclick="cerrarScannerImei()">Cancelar</button>
             </div>
@@ -4763,7 +4763,7 @@
                 <input type="number" id="devol-monto" class="bh-input" step="0.01" placeholder="0.00">
             </div>
 
-            <div id="devol-modal-msg" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444;"></div>
+            <div id="devol-modal-msg" style="display:none; margin-top:10px; font-size:12.5px; color:var(--danger);"></div>
 
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
                 <button type="button" class="bh-btn-white" onclick="cerrarModalDevolucion()">Cancelar</button>
@@ -4885,7 +4885,7 @@
                 <button class="bh-btn-white"
                     onclick="document.getElementById('modal-excel-import').style.display='none'">Cancelar</button>
                 <button id="btn-confirm-excel" class="bh-btn-purple" onclick="confirmarImportacionExcel()"
-                    style="background: linear-gradient(135deg, #10b981 0%, #047857 100%);">
+                    style="background: linear-gradient(135deg, var(--success) 0%, #047857 100%);">
                     <i class='bx bx-check'></i> Confirmar Importación
                 </button>
             </div>
@@ -4960,7 +4960,7 @@
             <h2 style="margin-top:0; flex-shrink: 0;">Detalle del Producto</h2>
             
             <div style="overflow-y: auto; flex: 1; padding-right: 5px;">
-                <div id="det-aviso-costo" style="display:none; background:rgba(239, 68, 68, 0.1); border:1px solid #ef4444; color:#ef4444; padding:10px; border-radius:8px; margin-bottom:15px; font-size:12px;">
+                <div id="det-aviso-costo" style="display:none; background:rgba(239, 68, 68, 0.1); border:1px solid var(--danger); color:var(--danger); padding:10px; border-radius:8px; margin-bottom:15px; font-size:12px;">
                     ⚠️ Este costo viene de un valor ambiguo en el archivo original, verifica manualmente con el proveedor.
                 </div>
 
@@ -5204,7 +5204,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <h2 style="margin:0; color: var(--info);"><i class='bx bx-video-recording'></i> Estudio de Grabación</h2>
                 <div style="display:flex; gap:8px; align-items:center;">
-                    <span id="grab-tiempo" style="display:none; font-weight:900; color:#ef4444; font-size:15px;">
+                    <span id="grab-tiempo" style="display:none; font-weight:900; color:var(--danger); font-size:15px;">
                         <i class='bx bxs-circle' style="animation: parpadeoRec 1s infinite;"></i> 00:00
                     </span>
                     <button class="bh-btn-white" style="padding:6px 12px;" onclick="cerrarEstudioGrabacion()">
@@ -5293,10 +5293,10 @@
                 <button id="grab-btn-encender" class="bh-btn-white" style="flex:1; padding:12px;"
                     onclick="encenderEstudio()"><i class='bx bx-power-off'></i> Encender</button>
                 <button id="grab-btn-rec" class="bh-btn-purple" disabled
-                    style="flex:1; padding:12px; background:linear-gradient(135deg,#ef4444 0%,#991b1b 100%);"
+                    style="flex:1; padding:12px; background:linear-gradient(135deg,var(--danger) 0%,#991b1b 100%);"
                     onclick="alternarGrabacion()"><i class='bx bxs-circle'></i> Grabar y Subir</button>
                 <button id="grab-btn-live" class="bh-btn-purple" disabled
-                    style="flex:1; padding:12px; background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);"
+                    style="flex:1; padding:12px; background:linear-gradient(135deg,var(--info) 0%,#1d4ed8 100%);"
                     onclick="alternarTransmision()"><i class='bx bx-broadcast'></i> En Vivo</button>
                 <button class="bh-btn-white" style="flex:1; padding:12px;"
                     onclick="ipcRenderer.send('abrir-carpeta-grabaciones')"><i class='bx bx-folder-open'></i>
@@ -5314,15 +5314,15 @@
 
             <div class="grid-inputs" style="grid-template-columns: 1fr;">
                 <div class="input-group">
-                    <label style="color: #e2950f;">Voltaje / Tensión (V - Voltios)</label>
+                    <label style="color: var(--warning);">Voltaje / Tensión (V - Voltios)</label>
                     <input type="number" id="ohm-v" class="bh-input" placeholder="Ej: 4.2" oninput="calcularOhm()">
                 </div>
                 <div class="input-group">
-                    <label style="color: #10b981;">Corriente / Intensidad (I - Amperios)</label>
+                    <label style="color: var(--success);">Corriente / Intensidad (I - Amperios)</label>
                     <input type="number" id="ohm-i" class="bh-input" placeholder="Ej: 2.0" oninput="calcularOhm()">
                 </div>
                 <div class="input-group">
-                    <label style="color: #ef4444;">Resistencia (R - Ohmios Ω)</label>
+                    <label style="color: var(--danger);">Resistencia (R - Ohmios Ω)</label>
                     <input type="number" id="ohm-r" class="bh-input" placeholder="Ej: 50" oninput="calcularOhm()">
                 </div>
             </div>
@@ -5484,7 +5484,7 @@
     <div id="modal-top-ventas" class="modal-overlay">
         <div class="modal-content" style="width: 560px; max-height: 85vh; display:flex; flex-direction:column;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <h2 style="margin:0; color:#fbbf24;">🏆 Lo Más Vendido</h2>
+                <h2 style="margin:0; color:var(--warning-soft);">🏆 Lo Más Vendido</h2>
                 <button class="bh-btn-white" style="padding:6px 12px;" onclick="document.getElementById('modal-top-ventas').style.display='none'">✕</button>
             </div>
             <p id="top-ventas-periodo" style="color:#aaa; font-size:13px; margin:0 0 10px;"></p>
@@ -5561,7 +5561,7 @@
     <!-- Modal: Cierre del Día unificado (taller + POS − gastos − compras − devoluciones) -->
     <div id="modal-cierre-dia" class="modal-overlay">
         <div class="modal-content" style="width: 480px;">
-            <h2 style="margin-top:0; color: #0ea5e9;">🧾 Cierre del Día</h2>
+            <h2 style="margin-top:0; color: var(--info-soft);">🧾 Cierre del Día</h2>
             <div id="cierre-dia-cuerpo" style="max-height:380px; overflow-y:auto;">
                 <p style="color:#aaa; text-align:center; padding:20px;">Calculando…</p>
             </div>
@@ -5569,7 +5569,7 @@
                 <button class="bh-btn-white" onclick="copiarCierreDia()">📋 Copiar resumen</button>
                 <div style="display:flex; gap:10px;">
                     <button class="bh-btn-white" onclick="document.getElementById('modal-cierre-dia').style.display='none'">Cerrar</button>
-                    <button class="bh-btn-purple" id="btn-guardar-cierre-dia" style="background:#0ea5e9;" onclick="confirmarCierreDia()">Guardar cierre</button>
+                    <button class="bh-btn-purple" id="btn-guardar-cierre-dia" style="background:var(--info-soft);" onclick="confirmarCierreDia()">Guardar cierre</button>
                 </div>
             </div>
         </div>
@@ -5578,7 +5578,7 @@
     <!-- Modal: Registrar gasto operativo -->
     <div id="modal-gasto" class="modal-overlay">
         <div class="modal-content" style="width: 400px;">
-            <h2 style="margin-top:0; color: #ef4444;"><i class='bx bx-wallet'></i> Registrar Gasto</h2>
+            <h2 style="margin-top:0; color: var(--danger);"><i class='bx bx-wallet'></i> Registrar Gasto</h2>
             <p style="color:#aaa; font-size:13px; margin-bottom:16px;">Gastos del negocio (alquiler, sueldos, luz, compras…). Se restan de la ganancia neta.</p>
             <div class="grid-inputs" style="grid-template-columns: 1fr;">
                 <div class="input-group">
@@ -5608,7 +5608,7 @@
             </div>
             <div style="display:flex; justify-content:space-between; margin-top:20px;">
                 <button class="bh-btn-white" onclick="document.getElementById('modal-gasto').style.display='none'">Cancelar</button>
-                <button class="bh-btn-purple" style="background:#ef4444;" onclick="guardarGasto()"><i class='bx bx-save'></i> Guardar Gasto</button>
+                <button class="bh-btn-purple" style="background:var(--danger);" onclick="guardarGasto()"><i class='bx bx-save'></i> Guardar Gasto</button>
             </div>
         </div>
     </div>
@@ -7583,9 +7583,9 @@
                 document.getElementById('rec-costo').innerHTML = `
                     <div style="font-size:10px; color:#aaa; font-weight:normal; text-align:right;">
                         Total: S/${ordenTemporal.costo} <br> 
-                        <span style="color:#d8b4fe;">A Cuenta: - S/${ordenTemporal.adelanto}</span>
+                        <span style="color:var(--bh-accent-softer);">A Cuenta: - S/${ordenTemporal.adelanto}</span>
                     </div>
-                    <div style="font-size:18px; color:#10b981; font-weight:bold;">Saldo: S/ ${ordenTemporal.saldo}</div>
+                    <div style="font-size:18px; color:var(--success); font-weight:bold;">Saldo: S/ ${ordenTemporal.saldo}</div>
                 `;
                 document.getElementById('rec-firma-img').src = ordenTemporal.firma;
 
@@ -8071,12 +8071,12 @@
             <style>
               @page { size: A4; margin: 0; }
               body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; margin:0; }
-              .header { display: flex; justify-content: space-between; border-bottom: 2px solid #7c3aed; padding-bottom: 20px; margin-bottom: 30px; }
-              .title { font-size: 28px; color: #7c3aed; margin: 0; font-weight: 800; }
+              .header { display: flex; justify-content: space-between; border-bottom: 2px solid var(--bh-purple); padding-bottom: 20px; margin-bottom: 30px; }
+              .title { font-size: 28px; color: var(--bh-purple); margin: 0; font-weight: 800; }
               .empresa-info { text-align: right; font-size: 14px; color: #666; }
               table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
               th { background: #f8f9fa; text-align: left; padding: 12px; font-size: 14px; color: #444; border-bottom: 2px solid #ddd; }
-              .total-row { display: flex; justify-content: flex-end; font-size: 20px; font-weight: bold; color: #7c3aed; }
+              .total-row { display: flex; justify-content: flex-end; font-size: 20px; font-weight: bold; color: var(--bh-purple); }
               .footer-note { text-align: center; font-size: 12px; color: #999; margin-top: 50px; border-top: 1px solid #eee; padding-top: 20px; }
             </style></head><body>
               <div class="header">
@@ -8247,12 +8247,12 @@
                         contG.innerHTML = gastos.map(g => `
                             <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 4px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px;">
                                 <div>
-                                    <span style="background:rgba(239,68,68,0.15); color:#f87171; padding:2px 8px; border-radius:999px; font-size:11px;">${escG(g.categoria)}</span>
+                                    <span style="background:rgba(239,68,68,0.15); color:var(--danger-soft); padding:2px 8px; border-radius:999px; font-size:11px;">${escG(g.categoria)}</span>
                                     <span style="color:#ddd; margin-left:8px;">${escG(g.descripcion || '')}</span>
                                     <span style="color:#666; margin-left:8px; font-size:11px;">${escG(g.fecha)}</span>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:10px;">
-                                    <strong style="color:#ef4444;">S/ ${(parseFloat(g.monto) || 0).toFixed(2)}</strong>
+                                    <strong style="color:var(--danger);">S/ ${(parseFloat(g.monto) || 0).toFixed(2)}</strong>
                                     <button onclick="eliminarGasto(${g.id})" title="Eliminar" style="background:none; border:none; color:#666; cursor:pointer;">✕</button>
                                 </div>
                             </div>`).join('');
@@ -8460,7 +8460,7 @@
             if (res.soloTecnico) {
                 if (tituloEl) tituloEl.innerHTML = '🧾 Tu caja de hoy';
                 if (btnGuardar) btnGuardar.style.display = 'none';   // el técnico no guarda el cierre del negocio
-                const subhead = t => `<div style="display:flex; justify-content:space-between; align-items:center; margin:16px 0 4px;"><span style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#0ea5e9;">${t.l}</span><strong style="font-size:15px; color:var(--success);">${f(t.v)}</strong></div>`;
+                const subhead = t => `<div style="display:flex; justify-content:space-between; align-items:center; margin:16px 0 4px;"><span style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--info-soft);">${t.l}</span><strong style="font-size:15px; color:var(--success);">${f(t.v)}</strong></div>`;
                 const filaMini = (lbl, val) => `<div style="display:flex; justify-content:space-between; padding:6px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;"><span style="color:#ccc;">${lbl}</span><strong style="color:var(--success);">${f(val)}</strong></div>`;
                 const detEq = res.detalleTecnico || [];
                 const detVe = res.ventasDetalle || [];
@@ -8476,7 +8476,7 @@
                 h += filaMini('Repuesto (lo pone el dueño)', res.repuesto || 0);
                 if (detEq.length) {
                     h += `<div style="font-size:11px; color:#888; margin:8px 0 2px;">Por equipo (cobrado · mano de obra):</div>`;
-                    h += detEq.map(d => `<div style="display:flex; justify-content:space-between; padding:5px 2px; border-bottom:1px dashed rgba(255,255,255,0.06); font-size:12px;"><span style="color:#ddd;">${esc(d.cliente || '—')}${d.modelo ? ' · ' + esc(d.modelo) : ''}</span><strong>${f(d.cobrado)} <span style="color:#0ea5e9; font-weight:600;">· ${f(d.manoObra)}</span></strong></div>`).join('');
+                    h += detEq.map(d => `<div style="display:flex; justify-content:space-between; padding:5px 2px; border-bottom:1px dashed rgba(255,255,255,0.06); font-size:12px;"><span style="color:#ddd;">${esc(d.cliente || '—')}${d.modelo ? ' · ' + esc(d.modelo) : ''}</span><strong>${f(d.cobrado)} <span style="color:var(--info-soft); font-weight:600;">· ${f(d.manoObra)}</span></strong></div>`).join('');
                 }
 
                 // ===== PRECIO DE VENTA (productos vendidos aparte, del negocio) =====
@@ -8508,14 +8508,14 @@
 
             let html = `<div style="text-align:center; margin-bottom:12px;">
                 <div style="font-size:34px; font-weight:800; color:${res.neto >= 0 ? 'var(--success)' : 'var(--danger)'};">${f(res.neto)}</div>
-                <div style="font-size:12px; color:#aaa;">Neto del día · ${esc(res.fecha)}${res.registrado ? ' · <b style="color:#0ea5e9;">GUARDADO</b>' : ''}</div></div>`;
+                <div style="font-size:12px; color:#aaa;">Neto del día · ${esc(res.fecha)}${res.registrado ? ' · <b style="color:var(--info-soft);">GUARDADO</b>' : ''}</div></div>`;
 
-            html += `<div style="font-size:11px; color:#10b981; text-transform:uppercase; letter-spacing:.05em; margin:10px 0 4px;">Entró</div>`;
+            html += `<div style="font-size:11px; color:var(--success); text-transform:uppercase; letter-spacing:.05em; margin:10px 0 4px;">Entró</div>`;
             html += fila('Taller — adelantos de hoy', f(res.adelantos), 'var(--success)');
             html += fila('Taller — saldos de órdenes entregadas hoy', f(res.saldosCobrados), 'var(--success)');
             html += fila('Ventas (POS)', f(res.ingresosPOS), 'var(--success)', res.ventasPosCount ? `${res.ventasPosCount} ventas` : '');
 
-            html += `<div style="font-size:11px; color:#ef4444; text-transform:uppercase; letter-spacing:.05em; margin:14px 0 4px;">Salió</div>`;
+            html += `<div style="font-size:11px; color:var(--danger); text-transform:uppercase; letter-spacing:.05em; margin:14px 0 4px;">Salió</div>`;
             html += fila('Gastos operativos', '−' + f(res.gastos), '#ef4444');
             html += fila('Compras a otros proveedores', '−' + f(res.comprasExternas), '#ef4444');
             html += fila('Devoluciones en efectivo', '−' + f(res.devoluciones), '#ef4444');
@@ -8653,8 +8653,8 @@
             cuerpo.innerHTML = lista.map(c => `
                 <div style="margin-bottom:12px; background:rgba(255,255,255,0.03); border:1px solid #333; border-radius:12px; overflow:hidden;">
                     <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(251,191,36,0.10); border-bottom:1px solid rgba(251,191,36,0.25); padding:8px 12px;">
-                        <span style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#fbbf24;">${esc(c.categoria)} <span style="color:#8a7a3a; font-weight:600;">· ${(c.items || []).length} ítems</span></span>
-                        <span style="font-size:13px; font-weight:800; color:#fbbf24;">S/ ${(parseFloat(c.totalCat) || 0).toFixed(2)}</span>
+                        <span style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--warning-soft);">${esc(c.categoria)} <span style="color:#8a7a3a; font-weight:600;">· ${(c.items || []).length} ítems</span></span>
+                        <span style="font-size:13px; font-weight:800; color:var(--warning-soft);">S/ ${(parseFloat(c.totalCat) || 0).toFixed(2)}</span>
                     </div>
                     <div style="padding:6px 12px 10px;">
                     ${(c.items || []).map((it, i) => `
@@ -8706,7 +8706,7 @@
             if (res.success) {
                 // Formateamos el texto de la IA para que se vea bien
                 const textoFormateado = res.text.replace(/\n/g, '<br>');
-                aiBox.innerHTML = `<span style="color:#a78bfa; font-weight:bold;">🤖 Diagnóstico IA:</span><br><span style="color:#ccc;">${textoFormateado}</span>`;
+                aiBox.innerHTML = `<span style="color:var(--bh-accent-soft); font-weight:bold;">🤖 Diagnóstico IA:</span><br><span style="color:#ccc;">${textoFormateado}</span>`;
             } else {
                 aiBox.innerHTML = `🤖 <i>Error al consultar la IA.</i>`;
             }
@@ -8819,7 +8819,7 @@
             const cont = document.getElementById('tiendas-chips');
             if (!cont) return;
             cont.innerHTML = todasLasTiendas.length
-                ? todasLasTiendas.map(t => `<span style="background:rgba(124,58,237,0.15); color:#d8b4fe; padding:3px 10px; border-radius:999px; font-size:12px;">${t.nombre}</span>`).join('')
+                ? todasLasTiendas.map(t => `<span style="background:rgba(124,58,237,0.15); color:var(--bh-accent-softer); padding:3px 10px; border-radius:999px; font-size:12px;">${t.nombre}</span>`).join('')
                 : '<span style="color:#666; font-size:12px;">Sin tiendas aún — creá la primera →</span>';
         }
 
@@ -9103,7 +9103,7 @@
             if (!document.getElementById('demo-ribbon')) {
                 const r = document.createElement('div');
                 r.id = 'demo-ribbon';
-                r.style.cssText = 'position:fixed;top:26px;right:-38px;background:#e2950f;color:#000;font-weight:900;font-size:11px;padding:6px 55px;transform:rotate(45deg);z-index:99998;pointer-events:none;letter-spacing:1px;box-shadow:0 2px 8px rgba(0,0,0,0.6);';
+                r.style.cssText = 'position:fixed;top:26px;right:-38px;background:var(--warning);color:#000;font-weight:900;font-size:11px;padding:6px 55px;transform:rotate(45deg);z-index:99998;pointer-events:none;letter-spacing:1px;box-shadow:0 2px 8px rgba(0,0,0,0.6);';
                 r.innerText = 'DEMO';
                 document.body.appendChild(r);
             }
@@ -9164,7 +9164,7 @@
             t.innerHTML = DEMO_PRODUCTOS.map(p => `
         <tr>
             <td style="font-weight:600;color:white;">${p.nombre}</td>
-            <td><span style="background:rgba(124,58,237,0.1);color:#a78bfa;padding:2px 10px;border-radius:10px;font-size:11px;">${p.categoria}</span></td>
+            <td><span style="background:rgba(124,58,237,0.1);color:var(--bh-accent-soft);padding:2px 10px;border-radius:10px;font-size:11px;">${p.categoria}</span></td>
             <td style="color:var(--success);font-weight:bold;">S/ ${p.precio}.00</td>
             <td>
                 <span style="color:${p.stock > 4 ? 'var(--success)' : 'var(--danger)'};font-weight:bold;">${p.stock} unid.</span>
@@ -10070,8 +10070,8 @@
             <style>
               @page { size: A4; margin: 0; }
               body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; margin:0; }
-              .header { display: flex; justify-content: space-between; border-bottom: 2px solid #10b981; padding-bottom: 20px; margin-bottom: 30px; }
-              .title { font-size: 26px; color: #10b981; margin: 0; font-weight: 800; }
+              .header { display: flex; justify-content: space-between; border-bottom: 2px solid var(--success); padding-bottom: 20px; margin-bottom: 30px; }
+              .title { font-size: 26px; color: var(--success); margin: 0; font-weight: 800; }
               .empresa-info { text-align: right; font-size: 14px; color: #666; }
               .section { margin-bottom: 20px; background: #f9fafb; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; }
               .section h3 { margin: 0 0 10px 0; color: #374151; font-size: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
@@ -10400,7 +10400,7 @@
                 const dot = document.createElement('div');
                 dot.className = 'patron-dot';
                 dot.setAttribute('data-dot', n);
-                dot.style.cssText = `position:absolute; width:44px; height:44px; left:${c.x - 22}px; top:${c.y - 22}px; border-radius:50%; border:2px solid #7c3aed; background:#161622; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px; color:#7c3aed; font-weight:bold;`;
+                dot.style.cssText = `position:absolute; width:44px; height:44px; left:${c.x - 22}px; top:${c.y - 22}px; border-radius:50%; border:2px solid var(--bh-purple); background:#161622; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px; color:var(--bh-purple); font-weight:bold;`;
                 dot.textContent = n;
                 dot.onclick = () => tocarPunto(n);
                 area.appendChild(dot);
@@ -11076,7 +11076,7 @@
             }, 6000);
 
             holoUltimaEliminada = { piezaKey, parte: p, danadoPrevio, timeoutId };
-            showToast(`Pieza "${nombre}" eliminada. <a href="#" onclick="holoDeshacerBorrado(); return false;" style="color:#3fd8ff; text-decoration:underline; font-weight:bold;">Deshacer</a>`, 'warning');
+            showToast(`Pieza "${nombre}" eliminada. <a href="#" onclick="holoDeshacerBorrado(); return false;" style="color:var(--bh-holo-ok); text-decoration:underline; font-weight:bold;">Deshacer</a>`, 'warning');
         }
 
         function holoDeshacerBorrado() {
@@ -11140,7 +11140,7 @@
                 return `
                     <span class="holo-chip${danado ? ' holo-danado' : ''}" id="holo-chip-${key}" style="display:inline-flex; align-items:center; gap:6px;">
                         <span onclick="holoTogglePieza('${key}')" style="cursor:pointer;">${p.nombre}</span>
-                        <i class='bx bx-rotate-left' style="cursor:pointer; ${tieneGiro ? 'opacity:1; color:#3fd8ff;' : 'opacity:0.45;'}"
+                        <i class='bx bx-rotate-left' style="cursor:pointer; ${tieneGiro ? 'opacity:1; color:var(--bh-holo-ok);' : 'opacity:0.45;'}"
                            title="${tieneGiro ? 'Ver vuelta 360° (o doble clic en la pieza)' : 'Grabar vuelta 360° de esta pieza'}"
                            onclick="holoAbrirGiroDePieza('${key}')"></i>
                         <i class='bx bx-git-compare' style="cursor:pointer; opacity:0.7;" title="Comparar antes/después" onclick="holoCompararPieza('${key}')"></i>
@@ -12245,7 +12245,7 @@
 
             const html = `<!doctype html><html><head><meta charset="utf-8"><title>Reporte de desarme</title></head>
                 <body style="font-family:Arial,sans-serif; padding:30px; color:#222;">
-                    <h1 style="color:#7c3aed;">Reporte de Desarme</h1>
+                    <h1 style="color:var(--bh-purple);">Reporte de Desarme</h1>
                     <p><b>Equipo:</b> ${modelo}<br><b>Fecha:</b> ${new Date().toLocaleString()}</p>
                     <hr style="margin:20px 0;">
                     ${filasHtml}
@@ -14791,7 +14791,7 @@
 
             cont.innerHTML = grupos.map(g => {
                 const chipsModelos = (g.miembros || []).map(m =>
-                    `<span style="background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); color:#d8b4fe; padding:3px 10px; border-radius:20px; font-size:12px;">${m.marca ? m.marca + ' ' : ''}${m.modelo}</span>`
+                    `<span style="background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); color:var(--bh-accent-softer); padding:3px 10px; border-radius:20px; font-size:12px;">${m.marca ? m.marca + ' ' : ''}${m.modelo}</span>`
                 ).join(' ');
 
                 const productos = g.productos || [];
@@ -14807,7 +14807,7 @@
                         </div>
                         <div style="display:flex; gap:8px;">
                             <button class="bh-btn-white" style="padding:4px 10px; font-size:11px;" onclick="editarGrupoCompat(${g.id})">✏️ Editar</button>
-                            <button class="bh-btn-white" style="padding:4px 10px; font-size:11px; color:#ef4444;" onclick="eliminarGrupoCompat(${g.id})">🗑️ Eliminar</button>
+                            <button class="bh-btn-white" style="padding:4px 10px; font-size:11px; color:var(--danger);" onclick="eliminarGrupoCompat(${g.id})">🗑️ Eliminar</button>
                         </div>
                     </div>
                     <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;">${chipsModelos}</div>
@@ -14889,9 +14889,9 @@
                 return;
             }
             cont.innerHTML = compatMiembrosTemp.map((m, idx) => `
-                <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); color:#d8b4fe; padding:3px 6px 3px 10px; border-radius:20px; font-size:12px;">
+                <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); color:var(--bh-accent-softer); padding:3px 6px 3px 10px; border-radius:20px; font-size:12px;">
                     ${m.marca ? m.marca + ' ' : ''}${m.modelo}
-                    <button type="button" onclick="quitarMiembroCompatBuilder(${idx})" style="background:none; border:none; color:#d8b4fe; cursor:pointer; font-size:13px; padding:0 2px;" title="Quitar">✖</button>
+                    <button type="button" onclick="quitarMiembroCompatBuilder(${idx})" style="background:none; border:none; color:var(--bh-accent-softer); cursor:pointer; font-size:13px; padding:0 2px;" title="Quitar">✖</button>
                 </span>
             `).join('');
         }
@@ -15069,9 +15069,9 @@
 
             cont.innerHTML = compatImportFilas.map((fila, i) => {
                 const chips = (fila.miembros || []).map((m, mi) => `
-                    <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); color:#d8b4fe; padding:3px 6px 3px 10px; border-radius:20px; font-size:12px;">
+                    <span style="display:inline-flex; align-items:center; gap:6px; background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); color:var(--bh-accent-softer); padding:3px 6px 3px 10px; border-radius:20px; font-size:12px;">
                         ${m.marca ? m.marca + ' ' : ''}${m.modelo}
-                        <button type="button" onclick="quitarMiembroFilaImport(${i}, ${mi})" style="background:none; border:none; color:#d8b4fe; cursor:pointer; font-size:13px; padding:0 2px;" title="Quitar">✖</button>
+                        <button type="button" onclick="quitarMiembroFilaImport(${i}, ${mi})" style="background:none; border:none; color:var(--bh-accent-softer); cursor:pointer; font-size:13px; padding:0 2px;" title="Quitar">✖</button>
                     </span>`).join('');
 
                 const opcionesTipo = Object.keys(etiquetasTipo).map(t =>
@@ -15089,7 +15089,7 @@
                                 placeholder="Nombre del grupo"
                                 style="flex:1; background:#222; color:white; border:1px solid #333; border-radius:6px; padding:4px 8px;">
                             <button type="button" onclick="quitarFilaImport(${i})" title="Quitar esta fila"
-                                style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:15px;">✖</button>
+                                style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:15px;">✖</button>
                         </div>
                         <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
                             ${chips || '<span style="color:#666; font-size:12px;">Ningún modelo.</span>'}
@@ -15306,7 +15306,7 @@
                 return `<tr>
                     <td style="font-weight:600; color:white;">
                         ${p.nombre}
-                        ${p.costo_por_confirmar ? '<span style="font-size:10px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.5); color:#ef4444; padding:2px 6px; border-radius:4px; margin-left:8px;" title="Costo base proviene de múltiples proveedores y requiere verificación.">⚠️ Revisar costo</span>' : ''}
+                        ${p.costo_por_confirmar ? '<span style="font-size:10px; background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.5); color:var(--danger); padding:2px 6px; border-radius:4px; margin-left:8px;" title="Costo base proviene de múltiples proveedores y requiere verificación.">⚠️ Revisar costo</span>' : ''}
                     </td>
                     <td><span style="font-size:11px; background:${badgeColor}22; border:1px solid ${badgeColor}44; color:${badgeColor}; padding:3px 10px; border-radius:20px; font-weight:bold;">${catText}</span></td>
                     <td>
@@ -15317,7 +15317,7 @@
                     <td style="white-space:nowrap;">
                         <button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px;" onclick="event.stopPropagation(); abrirDetalleProducto(${p.id})">👁️ Detalle</button>
                         <button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px; margin-left:4px;" onclick="event.stopPropagation(); abrirModalEtiqueta(${p.id})">🏷️ Etiqueta</button>
-                        ${localStorage.getItem('userRol') === 'dueno' ? `<button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px; color:#ef4444; margin-left:4px;" title="Eliminar producto" onclick="event.stopPropagation(); eliminarProducto(${p.id}, '${(p.nombre || '').replace(/'/g, "\\'")}')">🗑️</button>` : ''}
+                        ${localStorage.getItem('userRol') === 'dueno' ? `<button class="bh-btn-white" style="padding: 4px 8px; font-size: 11px; color:var(--danger); margin-left:4px;" title="Eliminar producto" onclick="event.stopPropagation(); eliminarProducto(${p.id}, '${(p.nombre || '').replace(/'/g, "\\'")}')">🗑️</button>` : ''}
                     </td>
                 </tr>`;
             }).join('');
@@ -15558,7 +15558,7 @@
                     document.getElementById('det-historial-body').innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:#777;">Sin historial de ingresos registrado</td></tr>`;
                 }
             } catch (err) {
-                document.getElementById('det-historial-body').innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:#ef4444;">Error cargando historial</td></tr>`;
+                document.getElementById('det-historial-body').innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:var(--danger);">Error cargando historial</td></tr>`;
                 console.error(err);
             }
         }
@@ -15833,12 +15833,12 @@
                         <img src="${foto}" style="width:100%; height:100%; object-fit:cover;">
                     </div>
                     <h3 style="margin:0; font-size:16px; color:white; font-weight:700;">${p.nombre}</h3>
-                    <span style="font-size:10px; background:var(--bh-purple)22; border:1px solid var(--bh-purple)44; color:#a78bfa; padding:3px 10px; border-radius:20px; font-weight:bold; margin-top:5px; margin-bottom:15px; display:inline-block;">${p.cat}</span>
+                    <span style="font-size:10px; background:var(--bh-purple)22; border:1px solid var(--bh-purple)44; color:var(--bh-accent-soft); padding:3px 10px; border-radius:20px; font-weight:bold; margin-top:5px; margin-bottom:15px; display:inline-block;">${p.cat}</span>
                     
                     <div style="width:100%; text-align:left; font-size:13px; color:#aaa; border-top:1px solid rgba(255,255,255,0.05); padding-top:15px; display:flex; flex-direction:column; gap:8px;">
-                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-phone' style="color:#10b981; font-size:16px;"></i> <span>${p.tel}</span></div>
-                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-envelope' style="color:#3b82f6; font-size:16px;"></i> <span>${p.email || '-'}</span></div>
-                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-map' style="color:#e2950f; font-size:16px;"></i> <span>${p.dir || '-'}</span></div>
+                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-phone' style="color:var(--success); font-size:16px;"></i> <span>${p.tel}</span></div>
+                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-envelope' style="color:var(--info); font-size:16px;"></i> <span>${p.email || '-'}</span></div>
+                        <div style="display:flex; align-items:center; gap:8px;"><i class='bx bx-map' style="color:var(--warning); font-size:16px;"></i> <span>${p.dir || '-'}</span></div>
                     </div>
                     
                     <a href="https://wa.me/51${cleanPhone}" target="_blank" class="bh-btn-purple" style="width:100%; margin-top:20px; font-size:12px; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:5px; padding:10px 0; border-radius:8px; font-weight:600;">
@@ -16119,7 +16119,7 @@
                                     </td>
                                     <td style="text-align:right; padding-right:15px;">
                                         <button class="bh-btn-white" style="padding:4px 8px; font-size:12px; margin:0 3px;" onclick="editarReseller(${JSON.stringify(r).replace(/"/g, '&quot;')})">✏️ Editar</button>
-                                        <button class="bh-btn-white" style="padding:4px 8px; font-size:12px; margin:0 3px; border-color:#ef4444; color:#ef4444; background:transparent;" onclick="eliminarReseller(${r.id})">🗑️ Eliminar</button>
+                                        <button class="bh-btn-white" style="padding:4px 8px; font-size:12px; margin:0 3px; border-color:var(--danger); color:var(--danger); background:transparent;" onclick="eliminarReseller(${r.id})">🗑️ Eliminar</button>
                                     </td>
                                 </tr>
                             `).join('');
@@ -16212,7 +16212,7 @@
         <div id="receipt-content" style="font-family:monospace; color:white; padding:25px; box-sizing:border-box;">
 
             <div style="text-align:center; font-size:18px; font-weight:bold; 
-                    border-bottom:1px dashed #555; padding-bottom:12px; margin-bottom:15px; color:#7c3aed;"
+                    border-bottom:1px dashed #555; padding-bottom:12px; margin-bottom:15px; color:var(--bh-purple);"
                 id="rec-empresa-name">MI TALLER</div>
 
             <div style="font-size:11px; color:#888; text-align:center; margin-bottom:15px;" id="rec-fecha">--/--/----
@@ -16233,11 +16233,11 @@
                 </tr>
                 <tr>
                     <td style="color:#888; padding:4px 0;">IMEI:</td>
-                    <td style="color:#a78bfa;" id="rec-imei">---</td>
+                    <td style="color:var(--bh-accent-soft);" id="rec-imei">---</td>
                 </tr>
                 <tr>
                     <td style="color:#888; padding:4px 0; vertical-align:top;">Falla:</td>
-                    <td style="color:#fbbf24;" id="rec-falla">---</td>
+                    <td style="color:var(--warning-soft);" id="rec-falla">---</td>
                 </tr>
             </table>
 
@@ -16570,7 +16570,7 @@
             height: 84px;
             border-radius: 14px 14px 8px 8px;
             background: linear-gradient(180deg, #14161d 0%, #0b0d12 100%);
-            border: 2px solid #7c3aed;
+            border: 2px solid var(--bh-purple);
             box-shadow: 0 10px 28px rgba(0, 0, 0, .55), 0 0 22px rgba(124, 58, 237, .35);
             overflow: hidden;
             flex: 0 0 auto;
@@ -16665,8 +16665,8 @@
             height: 8px;
             margin-left: -4px;
             border-radius: 50%;
-            background: #ef4444;
-            box-shadow: 0 0 8px #ef4444;
+            background: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
             z-index: 3;
             transition: background .3s, box-shadow .3s;
         }
@@ -16731,7 +16731,7 @@
             position: relative;
             max-width: 262px;
             background: linear-gradient(180deg, #1b1f2a 0%, #12151c 100%);
-            border: 1px solid #7c3aed;
+            border: 1px solid var(--bh-purple);
             border-radius: 12px;
             padding: 10px 12px;
             box-shadow: 0 12px 30px rgba(0, 0, 0, .6);
@@ -16756,13 +16756,13 @@
             height: 0;
             border-top: 9px solid transparent;
             border-bottom: 9px solid transparent;
-            border-left: 9px solid #7c3aed;
+            border-left: 9px solid var(--bh-purple);
         }
 
         #ayudante-titulo {
             font-weight: 900;
             font-size: 11.5px;
-            color: #a78bfa;
+            color: var(--bh-accent-soft);
             margin-bottom: 5px;
             letter-spacing: .3px;
         }
@@ -16779,12 +16779,12 @@
         }
 
         #ayudante-texto b {
-            color: #22d3ee;
+            color: var(--bh-bot);
         }
 
         #ayudante-cerrar {
             margin-top: 11px;
-            background: #7c3aed;
+            background: var(--bh-purple);
             border: 0;
             color: #fff;
             font-weight: 800;
@@ -16818,11 +16818,11 @@
         }
 
         #ayudante-pregunta:focus {
-            border-color: #7c3aed;
+            border-color: var(--bh-purple);
         }
 
         #ayudante-preguntar button {
-            background: #7c3aed;
+            background: var(--bh-purple);
             border: 0;
             color: #fff;
             border-radius: 8px;
@@ -16852,15 +16852,15 @@
         }
 
         #ayudante-acciones button:hover {
-            border-color: #7c3aed;
+            border-color: var(--bh-purple);
             color: #fff;
         }
 
         #ayudante-acciones #ayudante-cerrar {
             margin-top: 0;
             margin-left: auto;
-            background: #7c3aed;
-            border-color: #7c3aed;
+            background: var(--bh-purple);
+            border-color: var(--bh-purple);
             color: #fff;
         }
 
@@ -16869,7 +16869,7 @@
             margin-top: 10px;
             padding: 8px 10px;
             background: rgba(124, 58, 237, .12);
-            border-left: 3px solid #7c3aed;
+            border-left: 3px solid var(--bh-purple);
             border-radius: 6px;
             font-size: 12px;
             color: #d7dae2;
@@ -16898,7 +16898,7 @@
         }
 
         .ayu-lista button:hover {
-            border-color: #22d3ee;
+            border-color: var(--bh-bot);
             color: #fff;
         }
 
@@ -16924,7 +16924,7 @@
         /* Contorno iluminado del elemento que está explicando */
         .ayu-resaltado {
             position: relative;
-            outline: 2px solid #22d3ee !important;
+            outline: 2px solid var(--bh-bot) !important;
             outline-offset: 3px;
             border-radius: 8px;
             animation: ayuBrillo 1.4s ease-in-out infinite;
@@ -17057,18 +17057,18 @@
         /* Alerta: ojos rojos */
         #ayudante.emo-alerta .rb-ojo {
             animation: none;
-            fill: #ef4444;
+            fill: var(--danger);
         }
 
         #ayudante.emo-alerta #rb-antena {
-            fill: #ef4444;
+            fill: var(--danger);
             animation: rbPulso .35s ease-in-out infinite !important;
         }
 
         /* Autodestrucción: tiembla y se pone todo rojo */
         #ayudante.emo-explotar .rb-ojo {
             animation: none;
-            fill: #ef4444;
+            fill: var(--danger);
         }
 
         #ayudante.emo-explotar #ayudante-robot {
@@ -17076,7 +17076,7 @@
         }
 
         #ayudante.emo-explotar #ayudante-casa {
-            border-color: #ef4444;
+            border-color: var(--danger);
             box-shadow: 0 0 26px rgba(239, 68, 68, .8);
         }
 
@@ -17101,13 +17101,13 @@
         }
 
         .jp-tut-btn:hover {
-            border-color: #22d3ee;
+            border-color: var(--bh-bot);
             color: #fff;
         }
 
         .jp-tut-btn.jp-tut-sig {
-            background: #7c3aed;
-            border-color: #7c3aed;
+            background: var(--bh-purple);
+            border-color: var(--bh-purple);
             color: #fff;
         }
 
@@ -17133,10 +17133,10 @@
         }
 
         @keyframes jpColores {
-            0% { border-color: #7c3aed; box-shadow: 0 0 22px rgba(124, 58, 237, .7); }
-            33% { border-color: #22d3ee; box-shadow: 0 0 22px rgba(34, 211, 238, .7); }
-            66% { border-color: #fbbf24; box-shadow: 0 0 22px rgba(251, 191, 36, .7); }
-            100% { border-color: #7c3aed; box-shadow: 0 0 22px rgba(124, 58, 237, .7); }
+            0% { border-color: var(--bh-purple); box-shadow: 0 0 22px rgba(124, 58, 237, .7); }
+            33% { border-color: var(--bh-bot); box-shadow: 0 0 22px rgba(34, 211, 238, .7); }
+            66% { border-color: var(--warning-soft); box-shadow: 0 0 22px rgba(251, 191, 36, .7); }
+            100% { border-color: var(--bh-purple); box-shadow: 0 0 22px rgba(124, 58, 237, .7); }
         }
 
         /* Confeti */
@@ -17157,7 +17157,7 @@
             right: auto;
             left: -9px;
             border-left: 0;
-            border-right: 9px solid #7c3aed;
+            border-right: 9px solid var(--bh-purple);
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -17824,7 +17824,7 @@
             emocionJP('alerta');
             for (const n of ['3', '2', '1']) {
                 hablarAyudante('⚠️ AUTODESTRUCCIÓN',
-                    `Secuencia iniciada...<div style="font-size:30px;font-weight:900;color:#ef4444;text-align:center;margin:6px 0">${n}</div>`,
+                    `Secuencia iniciada...<div style="font-size:30px;font-weight:900;color:var(--danger);text-align:center;margin:6px 0">${n}</div>`,
                     null, true);
                 await esperar(750);
             }
@@ -18037,9 +18037,9 @@
             hablarAyudante('Lo de hoy',
                 `<div class="ayu-metricas">
                     <div class="ayu-m"><span>Órdenes de hoy</span><b>${deHoy.length}</b></div>
-                    <div class="ayu-m"><span>Facturado hoy</span><b style="color:#a78bfa">${soles(facturadoHoy)}</b></div>
-                    <div class="ayu-m"><span>Ya cobrado</span><b style="color:#34d399">${soles(cobradoHoy)}</b></div>
-                    <div class="ayu-m"><span>Por cobrar</span><b style="color:#fbbf24">${soles(facturadoHoy - cobradoHoy)}</b></div>
+                    <div class="ayu-m"><span>Facturado hoy</span><b style="color:var(--bh-accent-soft)">${soles(facturadoHoy)}</b></div>
+                    <div class="ayu-m"><span>Ya cobrado</span><b style="color:var(--success-soft)">${soles(cobradoHoy)}</b></div>
+                    <div class="ayu-m"><span>Por cobrar</span><b style="color:var(--warning-soft)">${soles(facturadoHoy - cobradoHoy)}</b></div>
                     <div class="ayu-m"><span>Entregados hoy</span><b>${entregadosHoy}</b></div>
                  </div>` +
                 (deHoy.length === 0
@@ -18113,8 +18113,8 @@
             hablarAyudante('Comisión del técnico',
                 `<div class="ayu-metricas">
                     <div class="ayu-m"><span>Órdenes terminadas</span><b>${cerradas.length}</b></div>
-                    <div class="ayu-m"><span>Mano de obra total</span><b style="color:#0ea5e9">${soles(manoObra)}</b></div>
-                    <div class="ayu-m"><span>Comisión (50%)</span><b style="color:#fbbf24">${soles(comision)}</b></div>
+                    <div class="ayu-m"><span>Mano de obra total</span><b style="color:var(--info-soft)">${soles(manoObra)}</b></div>
+                    <div class="ayu-m"><span>Comisión (50%)</span><b style="color:var(--warning-soft)">${soles(comision)}</b></div>
                  </div>
                  <div class="ayu-consejo">💡 Se calcula sobre la <b>mano de obra</b>, no sobre el total: el repuesto no es ganancia del técnico.</div>`,
                 null, true);
@@ -18132,9 +18132,9 @@
             hablarAyudante('Lo que te deben',
                 total === 0
                     ? 'No te debe nadie. Todo cobrado. 👏'
-                    : `<b style="font-size:19px;color:#fbbf24">${soles(total)}</b> repartidos en <b>${deben.length} orden${deben.length > 1 ? 'es' : ''}</b>.` +
+                    : `<b style="font-size:19px;color:var(--warning-soft)">${soles(total)}</b> repartidos en <b>${deben.length} orden${deben.length > 1 ? 'es' : ''}</b>.` +
                     '<div class="ayu-metricas">' + deben.slice(0, 6).map(r =>
-                        `<div class="ayu-m"><span>${r.cliente || 'Sin nombre'} <small style="color:#64748b">${r.modelo || ''}</small></span><b style="color:#fbbf24">${soles(r.saldo)}</b></div>`
+                        `<div class="ayu-m"><span>${r.cliente || 'Sin nombre'} <small style="color:#64748b">${r.modelo || ''}</small></span><b style="color:var(--warning-soft)">${soles(r.saldo)}</b></div>`
                     ).join('') + '</div>' +
                     '<div class="ayu-consejo">💡 Cobra al entregar. Un saldo que sale por la puerta tarda mucho en volver.</div>',
                 null, true);
@@ -18572,9 +18572,9 @@
             hablarAyudante('Cómo va tu día',
                 `<div class="ayu-metricas">
                     <div class="ayu-m"><span>Entraron hoy</span><b>${hoy.length}</b></div>
-                    <div class="ayu-m"><span>Facturado</span><b style="color:#a78bfa">${soles(facturado)}</b></div>
-                    <div class="ayu-m"><span>Entregados</span><b style="color:#34d399">${entregados}</b></div>
-                    <div class="ayu-m"><span>Listos por entregar</span><b style="color:#fbbf24">${listos}</b></div>
+                    <div class="ayu-m"><span>Facturado</span><b style="color:var(--bh-accent-soft)">${soles(facturado)}</b></div>
+                    <div class="ayu-m"><span>Entregados</span><b style="color:var(--success-soft)">${entregados}</b></div>
+                    <div class="ayu-m"><span>Listos por entregar</span><b style="color:var(--warning-soft)">${listos}</b></div>
                     <div class="ayu-m"><span>En proceso</span><b>${enProceso}</b></div>
                  </div>` +
                 `<div class="ayu-consejo">💡 ${listos > 0
@@ -18589,7 +18589,7 @@
             const n = Math.floor(Math.random() * 100) + 1;
             emocionJP('sorpresa', 5000);
             hablarAyudante('🎲 Tu número es...',
-                `<div style="font-size:38px;font-weight:900;text-align:center;color:#22d3ee;margin:4px 0">${n}</div>` +
+                `<div style="font-size:38px;font-weight:900;text-align:center;color:var(--bh-bot);margin:4px 0">${n}</div>` +
                 'Del 1 al 100. Sin trampa: yo no sé hacer trampa. 🤖',
                 null, true);
             return true;
