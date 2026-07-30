@@ -812,6 +812,11 @@
             border-radius: 16px;
             text-align: center;
             max-width: 90%;
+            /* Los 2 modales de confirmación son los únicos que no usan .modal-content, así que
+               no heredaban el límite de altura de esa clase: con un texto largo se estiraban
+               más que la pantalla y los botones quedaban fuera de la vista. */
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         .confirm-actions {
@@ -4651,7 +4656,7 @@
 
     <!-- Modal Escáner de IMEI/código de barras por cámara web (Recepción) -->
     <div id="modal-scanner-imei" class="modal-overlay">
-        <div class="modal-content" style="width: 480px; max-width: 95%;">
+        <div class="modal-content" style="width: 480px; max-width: 95%; max-height: 90vh; overflow-y: auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                 <h2 style="margin:0; color:white; font-size:18px; display:flex; align-items:center; gap:8px;">
                     <i class='bx bx-barcode-reader'></i> Escanear IMEI / Código
@@ -4669,6 +4674,23 @@
                 <br><span style="color:#c084fc;">¿No detecta nada usando el celular? Toca "📸 Foto para IMEI" en la pantalla del celular — manda una foto en alta calidad en vez del video, que en algunos celulares (iPhone) se ve peor de lo que se lee.</span>
             </p>
             <div id="scanner-imei-error" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444; text-align:center;"></div>
+
+            <!-- Diagnóstico y foto de prueba: sin esto el escaneo solo se puede depurar teniendo
+                 un equipo fisico en la mano, que es lo que hizo que este bug diera 4 vueltas. -->
+            <div style="display:flex; justify-content:center; gap:14px; margin-top:10px; font-size:11.5px;">
+                <a href="#" onclick="toggleDiagImei(); return false;" style="color:#888; text-decoration:none;">🔍 Diagnóstico</a>
+                <label style="color:#888; cursor:pointer;">
+                    🖼️ Probar con una foto
+                    <input type="file" accept="image/*" style="display:none;" onchange="probarFotoImeiDesdeArchivo(this)">
+                </label>
+            </div>
+            <div id="scanner-imei-diag" style="display:none; margin-top:8px;">
+                <pre id="scanner-imei-diag-log" style="background:#0d0d0d; border:1px solid #2a2a2a; border-radius:6px; color:#8fbf8f; font-size:10.5px; line-height:1.45; margin:0; max-height:150px; overflow:auto; padding:8px; white-space:pre-wrap; word-break:break-all;">(todavía sin datos)</pre>
+                <p style="color:#666; font-size:10.5px; margin:6px 0 0; text-align:center;">
+                    Si dice "sin candidatos", el OCR está leyendo la imagen pero no encuentra 14-16 dígitos: acercá la cámara al número. Si el texto sale vacío, el problema es enfoque o luz.
+                </p>
+            </div>
+
             <div style="display:flex; justify-content:space-between; gap:8px; margin-top:16px;">
                 <button type="button" class="bh-btn-white" onclick="usarCelularParaImei()" title="Usar la cámara del celular por WiFi">
                     <i class='bx bx-mobile-alt'></i> Usar celular
@@ -4752,7 +4774,10 @@
         </div>
     </div>
 
-    <div id="modal-confirm-custom" class="modal-overlay">
+    <!-- data-no-esc: es una decisión obligatoria de dos caminos (guardar solo la orden, o
+         registrar además la ficha del cliente). Cerrarlo con Esc elegiría una de las dos en
+         silencio, o dejaría la decisión colgada, así que queda fuera del cierre por teclado. -->
+    <div id="modal-confirm-custom" class="modal-overlay" data-no-esc>
         <div class="confirm-box">
             <div style="font-size:40px; margin-bottom:15px;">👤</div>
             <div class="confirm-title">¿Registrar Cliente Nuevo?</div>
@@ -5102,10 +5127,24 @@
                     <label>Concepto / Descripción del Servicio</label>
                     <input type="text" id="fact-desc" class="bh-input" placeholder="Ej: Reparación de placa iPhone">
                 </div>
-                <div class="input-group" style="grid-column: span 2;">
+                <div class="input-group">
                     <label>Monto Total a Facturar (S/)</label>
                     <input type="number" id="fact-monto" class="bh-input" readonly
                         style="font-weight: bold; color: var(--success); font-size: 18px;">
+                </div>
+                <!-- Método de pago: hasta ahora NO se registraba en ningún comprobante del
+                     escritorio (las 42 facturas de la base tenían metodo_pago en NULL), así que el
+                     desglose por método de los reportes salía todo como "efectivo" por descarte.
+                     Los valores coinciden con los que usa el POS móvil en panel-vendedor.html
+                     para que el desglose se pueda sumar entre las dos fuentes. -->
+                <div class="input-group">
+                    <label>Método de Pago</label>
+                    <select id="fact-metodo-pago" class="bh-input" style="background: #222;">
+                        <option value="efectivo">Efectivo</option>
+                        <option value="yape">Yape / Plin</option>
+                        <option value="tarjeta">Tarjeta</option>
+                        <option value="transferencia">Transferencia</option>
+                    </select>
                 </div>
             </div>
 
@@ -9111,12 +9150,15 @@
             const btnF = document.getElementById('btn-emitir-factura');
             if (btnF) { btnF.disabled = true; btnF.textContent = 'Generando…'; }
 
+            const metodoPago = (document.getElementById('fact-metodo-pago') || {}).value || 'efectivo';
+
             ipcRenderer.send('emitir-factura-saas', {
                 ordenId: ordenAFacturar,
                 tipo: tipo,
                 documento: doc,
                 nombre: nom,
-                total: total
+                total: total,
+                metodoPago: metodoPago
             });
         }
 
@@ -13151,6 +13193,38 @@
         // TRY_HARDER hace que ZXing analice cada frame con más cuidado (más lento por frame, pero
         // detecta bastante mejor códigos chicos/borrosos como los de las cajas) — sin esto, el
         // escaneo fallaba casi siempre en la práctica.
+        // ---- Diagnóstico en pantalla ----------------------------------------------------------
+        // Esto existe porque el escaneo de IMEI depende de la cámara, y una cámara no se puede
+        // probar desde el código: cuatro rondas de "sigue sin leerlo" se fueron en adivinar a
+        // ciegas qué estaba fallando. Ahora el modal puede mostrar exactamente qué está viendo
+        // (resolución real, frames analizados, texto crudo del OCR, candidatos y por qué se
+        // descartaron), así el problema se ve en la misma pantalla en vez de deducirse.
+        let diagLineasImei = [];
+        let diagVisibleImei = false;
+
+        function diagImei(linea) {
+            const hora = new Date().toLocaleTimeString('es-PE', { hour12: false });
+            diagLineasImei.unshift('[' + hora + '] ' + linea);
+            if (diagLineasImei.length > 40) diagLineasImei.length = 40;
+            if (diagVisibleImei) pintarDiagImei();
+        }
+
+        function pintarDiagImei() {
+            const el = document.getElementById('scanner-imei-diag-log');
+            if (el) el.textContent = diagLineasImei.join('\n') || '(todavía sin datos)';
+        }
+
+        function toggleDiagImei() {
+            diagVisibleImei = !diagVisibleImei;
+            const caja = document.getElementById('scanner-imei-diag');
+            caja.style.display = diagVisibleImei ? 'block' : 'none';
+            if (diagVisibleImei) {
+                const v = document.getElementById('scanner-imei-video');
+                diagImei('resolución del video: ' + (v && v.videoWidth ? v.videoWidth + 'x' + v.videoHeight : 'sin señal'));
+                pintarDiagImei();
+            }
+        }
+
         let zxingReaderImei = null;
         function obtenerLectorImei() {
             if (!zxingReaderImei) {
@@ -13179,26 +13253,67 @@
         let fotoImeiEnCurso = null;
 
         async function procesarFotoImeiRecibida(base64) {
-            actualizarEstadoScannerImei('📸 Foto recibida, leyendo código y números...', '#c084fc');
-            const dataUrl = 'data:image/jpeg;base64,' + base64;
+            await analizarImagenImei('data:image/jpeg;base64,' + base64, 'foto del celular');
+        }
 
+        // Modo "foto de prueba": carga una imagen del disco y la pasa por EXACTAMENTE el mismo
+        // pipeline (ZXing → preprocesado → OCR → candidatos → checksum) que la cámara.
+        // Es lo que hace verificable este flujo sin tener un equipo en la mano: se guarda una foto
+        // de una caja o de la pantalla de *#06# y se prueba el decodificador contra ella.
+        async function probarFotoImeiDesdeArchivo(input) {
+            const file = input.files && input.files[0];
+            input.value = '';
+            if (!file) return;
+            if (!document.getElementById('modal-scanner-imei').style.display ||
+                document.getElementById('modal-scanner-imei').style.display === 'none') {
+                await abrirScannerImei();
+            }
+            const dataUrl = await new Promise((resolve, reject) => {
+                const r = new FileReader();
+                r.onload = () => resolve(r.result);
+                r.onerror = reject;
+                r.readAsDataURL(file);
+            });
+            diagImei('foto de prueba: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB)');
+            await analizarImagenImei(dataUrl, 'foto de prueba');
+        }
+
+        // Camino común para cualquier imagen fija (foto del celular o foto de prueba).
+        async function analizarImagenImei(dataUrl, origen) {
+            limpiarCandidatoOcrImei(); // una imagen nueva reemplaza la sugerencia anterior
+            actualizarEstadoScannerImei('📸 ' + origen + ' recibida, leyendo código y números...', '#c084fc');
+
+            // 1) Código de barras / QR (trae checksum propio, es la lectura confiable).
             try {
                 const resultado = await obtenerLectorFotoImei().decodeFromImageUrl(dataUrl);
-                if (resultado) { procesarCodigoDetectadoImei(resultado.getText()); return; }
+                if (resultado) {
+                    diagImei(origen + ' → código: ' + resultado.getText());
+                    procesarCodigoDetectadoImei(resultado.getText());
+                    if (imeisEscaneados.length) return;
+                }
             } catch (e) {
-                // Sin código de barras/QR detectable en la foto — se sigue con el OCR de abajo.
+                diagImei(origen + ' → sin código de barras/QR legible');
             }
 
+            // 2) OCR de los números impresos, con el mismo preprocesado que el video.
             try {
+                const img = await new Promise((resolve, reject) => {
+                    const i = new Image();
+                    i.onload = () => resolve(i);
+                    i.onerror = () => reject(new Error('no se pudo abrir la imagen'));
+                    i.src = dataUrl;
+                });
+                const canvas = prepararImagenOcrImei(img, img.naturalWidth, img.naturalHeight, false);
+                diagImei(origen + ': ' + img.naturalWidth + 'x' + img.naturalHeight + ' → OCR sobre ' + canvas.width + 'x' + canvas.height);
                 const worker = await obtenerWorkerOcrImei();
-                const { data: { text } } = await worker.recognize(dataUrl);
-                const matches = (text || '').match(/\d{14,17}/g) || [];
-                const nuevo = matches.find(m => !imeisEscaneados.includes(m));
-                if (nuevo) mostrarSugerenciaOcrImei(nuevo);
-                else actualizarEstadoScannerImei('No se detectó ningún código ni número en la foto. Prueba con más luz, más cerca y bien enfocado.', '#f59e0b');
+                const { data: { text } } = await worker.recognize(canvas);
+                if (!resolverTextoOcrImei(text, origen)) {
+                    actualizarEstadoScannerImei('No se detectó ningún código ni número de IMEI. Probá con más luz, más cerca y bien enfocado — y mirá el diagnóstico para ver qué leyó.', '#f59e0b');
+                }
             } catch (e) {
-                console.error('Error leyendo la foto del celular:', e);
-                actualizarEstadoScannerImei('Error leyendo la foto: ' + e.message, '#ef4444');
+                console.error('Error leyendo la ' + origen + ':', e);
+                diagImei('error leyendo la imagen: ' + e.message);
+                actualizarEstadoScannerImei('Error leyendo la imagen: ' + e.message, '#ef4444');
             }
         }
 
@@ -13206,11 +13321,73 @@
         // el de serie o el EAN del producto). Esta lista junta los que van pareciendo IMEI durante
         // la sesion de escaneo actual, sin repetir, hasta un maximo de 2 — y los va reflejando en
         // el input tal cual los vaya reconociendo.
+        // OJO: acá se guardan SIEMPRE normalizados (solo dígitos). Antes se guardaba el texto
+        // crudo, así que "35486921-012345-6" y "354869210123456" contaban como dos IMEI distintos.
         let imeisEscaneados = [];
 
+        function normalizarImei(texto) {
+            return (texto || '').replace(/\D/g, '');
+        }
+
+        // El último dígito del IMEI es un verificador Luhn. Sirve para dos cosas:
+        //  - descartar lecturas de OCR mal leídas (un dígito equivocado rompe el checksum);
+        //  - y sobre todo, para AUTO-RELLENAR sin molestar al técnico cuando el número está bien
+        //    (era el pedido: "quiero que lo lea y se auto rellene").
+        function luhnImeiValido(digitos) {
+            if (!/^\d{15}$/.test(digitos)) return false; // el checksum solo aplica al IMEI de 15
+            let suma = 0;
+            for (let i = 0; i < 15; i++) {
+                let d = Number(digitos[i]);
+                if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; }
+                suma += d;
+            }
+            return suma % 10 === 0;
+        }
+
         function pareceImei(textoCrudo) {
-            const digitos = (textoCrudo || '').replace(/\D/g, '');
+            const digitos = normalizarImei(textoCrudo);
             return digitos.length >= 14 && digitos.length <= 16;
+        }
+
+        // Extrae candidatos a IMEI de un texto de OCR TOLERANDO SEPARADORES.
+        // El IMEI casi nunca sale como 15 dígitos pegados: en la caja y en la pantalla del
+        // celular viene agrupado ("354869 21 012345 6", "35486921-012345-6") y a veces con
+        // etiqueta ("IMEI1: ..."). El regex anterior (/\d{14,17}/) exigía dígitos seguidos, así
+        // que no encontraba NADA en esos casos — de ahí "no detecta ni los numeros".
+        // Estrategia: juntar cada corrida de dígitos-y-separadores, quitarle los separadores, y
+        // quedarse con lo que tenga largo de IMEI. Los de 15 con Luhn válido van primero.
+        function extraerCandidatosImei(texto) {
+            const corridas = (texto || '').match(/\d[\d\s.\-–—]{12,}\d/g) || [];
+            const vistos = new Set();
+            const candidatos = [];
+
+            for (const corrida of corridas) {
+                const digitos = normalizarImei(corrida);
+                const posibles = [];
+
+                // La corrida completa, si ya tiene largo de IMEI (15) o de IMEISV (16).
+                if (digitos.length >= 14 && digitos.length <= 16) posibles.push(digitos);
+
+                // Ventanas de 15 dígitos que pasen el checksum. Esto rescata dos casos frecuentes:
+                //  - la etiqueta pega su propio número al IMEI ("IMEI1: 354..." → 16 dígitos donde
+                //    el primero es el "1" de la etiqueta, no del IMEI);
+                //  - los 2 IMEI de un Dual SIM salen del OCR pegados en una sola corrida.
+                // Solo se aceptan con Luhn válido: sin checksum una ventana arbitraria sería ruido.
+                if (digitos.length > 15) {
+                    for (let i = 0; i + 15 <= digitos.length; i++) {
+                        const ventana = digitos.slice(i, i + 15);
+                        if (luhnImeiValido(ventana)) posibles.push(ventana);
+                    }
+                }
+
+                for (const p of posibles) {
+                    if (vistos.has(p)) continue;
+                    vistos.add(p);
+                    candidatos.push(p);
+                }
+            }
+            // Los válidos por checksum primero: son los que se pueden auto-rellenar.
+            return candidatos.sort((a, b) => (luhnImeiValido(b) ? 1 : 0) - (luhnImeiValido(a) ? 1 : 0));
         }
 
         // Candidato de IMEI sugerido por OCR (ver más abajo), pendiente de que el técnico
@@ -13218,11 +13395,21 @@
         // el OCR se puede equivocar de dígito y hay que dejar confirmar antes de guardarlo.
         let candidatoOcrImei = null;
 
+        // OJO: esta función YA NO borra el candidato del OCR.
+        // Antes hacía `candidatoOcrImei = null`, y como se la llama desde el callback de ZXing
+        // (que corre en CADA frame donde se ve cualquier código, incluido el EAN-13 del producto
+        // que toda caja de celular trae al lado del IMEI), la sugerencia del OCR y sus botones se
+        // borraban solos milisegundos después de aparecer. Ese era el motivo real de "no detecta
+        // el codigo / sigue sin leer el imei". Ahora el candidato solo se limpia explícitamente.
         function actualizarEstadoScannerImei(mensaje, color) {
-            candidatoOcrImei = null;
+            if (candidatoOcrImei) return; // hay una sugerencia esperando respuesta: no la tapes
             const el = document.getElementById('scanner-imei-estado');
             el.textContent = mensaje;
             el.style.color = color || '#999';
+        }
+
+        function limpiarCandidatoOcrImei() {
+            candidatoOcrImei = null;
         }
 
         // Se llama cada vez que la camara (laptop o celular) decodifica algo, en CADA frame que
@@ -13230,23 +13417,37 @@
         // digitos), rellena el input con los IMEI que va encontrando (uno o los 2, separados por
         // " / "), y cuando ya junto 2 distintos cierra solo — si el equipo tiene un solo IMEI, el
         // tecnico cierra manualmente con "Listo" cuando quiera.
+        // Códigos ya vistos que NO son IMEI (el EAN del producto, el del cargador, el S/N).
+        // Se recuerdan para no repetir el mismo aviso en cada frame: el callback de ZXing dispara
+        // decenas de veces por segundo con el mismo código en cuadro.
+        let codigosNoImeiVistos = new Set();
+
         function procesarCodigoDetectadoImei(textoCrudo) {
             if (imeisEscaneados.length >= 2) return;
 
+            const digitos = normalizarImei(textoCrudo);
+
             if (!pareceImei(textoCrudo)) {
-                actualizarEstadoScannerImei('Código detectado (' + textoCrudo + ') pero no parece un IMEI. Sigue apuntando o escríbelo a mano.', '#f59e0b');
+                diagImei('código leído, no es IMEI: ' + textoCrudo + ' (' + digitos.length + ' dígitos)');
+                if (!codigosNoImeiVistos.has(digitos)) {
+                    codigosNoImeiVistos.add(digitos);
+                    // No tapa una sugerencia del OCR pendiente (actualizarEstadoScannerImei lo respeta).
+                    actualizarEstadoScannerImei('Se leyó un código (' + textoCrudo + ') pero no es un IMEI — suele ser el código del producto. Seguí apuntando al que dice IMEI.', '#f59e0b');
+                }
                 return;
             }
-            if (imeisEscaneados.includes(textoCrudo)) return;
+            if (imeisEscaneados.includes(digitos)) return;
 
-            imeisEscaneados.push(textoCrudo);
+            limpiarCandidatoOcrImei();
+            imeisEscaneados.push(digitos);
             document.getElementById('imei').value = imeisEscaneados.join(' / ');
+            diagImei('IMEI aceptado: ' + digitos + (luhnImeiValido(digitos) ? ' (checksum OK)' : ' (sin checksum)'));
 
             if (imeisEscaneados.length === 1) {
-                showToast('IMEI escaneado: ' + textoCrudo, 'success');
-                actualizarEstadoScannerImei('✅ IMEI 1 detectado: ' + textoCrudo + '. Si el equipo es Dual SIM, apunta al 2do código. Si no, presiona "Listo".', '#10b981');
+                showToast('IMEI escaneado: ' + digitos, 'success');
+                actualizarEstadoScannerImei('✅ IMEI 1 detectado: ' + digitos + '. Si el equipo es Dual SIM, apunta al 2do código. Si no, presiona "Listo".', '#10b981');
             } else {
-                showToast('2do IMEI escaneado: ' + textoCrudo, 'success');
+                showToast('2do IMEI escaneado: ' + digitos, 'success');
                 actualizarEstadoScannerImei('✅ Se detectaron los 2 IMEI: ' + imeisEscaneados.join(' / '), '#10b981');
                 cerrarScannerImei();
             }
@@ -13275,18 +13476,100 @@
             await cargarTesseractScript();
             if (!tesseractWorkerImei) {
                 tesseractWorkerImei = await Tesseract.createWorker('eng');
-                await tesseractWorkerImei.setParameters({ tessedit_char_whitelist: '0123456789' });
+                await tesseractWorkerImei.setParameters({
+                    // El whitelist anterior era solo '0123456789', lo que se comía los espacios y
+                    // guiones — justo lo que necesita extraerCandidatosImei() para reconstruir un
+                    // IMEI escrito agrupado. Ahora se dejan pasar los separadores.
+                    tessedit_char_whitelist: '0123456789 .-/',
+                    preserve_interword_spaces: '1',
+                });
             }
             return tesseractWorkerImei;
         }
 
+        // Prepara la imagen antes de mandarla al OCR. Sin esto se le pasaba el frame completo tal
+        // cual: el IMEI ocupa una fracción chica del cuadro y a la resolución del video sale
+        // ilegible ("en mi celular se ve bien pero en el programa le cuesta leerlo").
+        // Hace tres cosas: recorta la banda central (donde uno apunta), escala x2, y pasa a
+        // escala de grises con el contraste estirado.
+        // `recortar` va en true SOLO para el video en vivo: ahí el técnico está apuntando y el
+        // código queda al centro. En una foto fija (del celular o de prueba) NO se recorta,
+        // porque el encuadre lo eligió la persona y el IMEI puede estar arriba o abajo — recortar
+        // ahí escondería justo lo que hay que leer.
+        function prepararImagenOcrImei(fuente, ancho, alto, recortar) {
+            const RECORTE_X = recortar ? 0.06 : 0, RECORTE_Y = recortar ? 0.22 : 0;
+            const sx = Math.floor(ancho * RECORTE_X);
+            const sy = Math.floor(alto * RECORTE_Y);
+            const sw = Math.max(1, ancho - sx * 2);
+            const sh = Math.max(1, alto - sy * 2);
+            const escala = sw < 1000 ? 2 : 1; // no agrandar de gusto si ya viene en alta
+
+            const canvas = document.createElement('canvas');
+            canvas.width = sw * escala;
+            canvas.height = sh * escala;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(fuente, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+            // Grises + estirado de contraste sobre el min/max real de la imagen.
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const px = img.data;
+            let min = 255, max = 0;
+            for (let i = 0; i < px.length; i += 4) {
+                const g = (px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114) | 0;
+                px[i] = px[i + 1] = px[i + 2] = g;
+                if (g < min) min = g;
+                if (g > max) max = g;
+            }
+            const rango = Math.max(1, max - min);
+            for (let i = 0; i < px.length; i += 4) {
+                const v = ((px[i] - min) * 255 / rango) | 0;
+                px[i] = px[i + 1] = px[i + 2] = v < 0 ? 0 : v > 255 ? 255 : v;
+            }
+            ctx.putImageData(img, 0, 0);
+            return canvas;
+        }
+
+        // Punto único donde se resuelve "el OCR leyó esto, ¿qué hago?".
+        // Si el candidato pasa el checksum Luhn, se acepta solo (auto-rellenado, que era el
+        // pedido). Si no, se sugiere y el técnico confirma con un click, porque el OCR se puede
+        // equivocar de dígito y sin checksum no hay forma de saberlo.
+        function resolverTextoOcrImei(textoCrudo, origen) {
+            const limpio = (textoCrudo || '').replace(/\s+/g, ' ').trim();
+            diagImei(origen + ' → OCR: "' + (limpio.slice(0, 120) || '(vacío)') + '"');
+
+            const candidatos = extraerCandidatosImei(limpio)
+                .filter(c => !imeisEscaneados.includes(c) && !ocrDescartadosImei.has(c));
+            if (!candidatos.length) {
+                diagImei('sin candidatos de 14-16 dígitos en ese texto');
+                return false;
+            }
+            diagImei('candidatos: ' + candidatos.map(c => c + (luhnImeiValido(c) ? '✓' : '?')).join(', '));
+
+            const seguro = candidatos.find(luhnImeiValido);
+            if (seguro) {
+                diagImei('auto-aceptado por checksum: ' + seguro);
+                procesarCodigoDetectadoImei(seguro);
+                return true;
+            }
+            mostrarSugerenciaOcrImei(candidatos[0]);
+            return true;
+        }
+
+        // Números que el técnico ya marcó como "no es": no se vuelven a sugerir en esta sesión.
+        // Sin esto el intervalo de OCR los re-sugería cada 2,5 s y no se podía avanzar.
+        let ocrDescartadosImei = new Set();
+
         function mostrarSugerenciaOcrImei(numero) {
             candidatoOcrImei = numero;
             const el = document.getElementById('scanner-imei-estado');
-            el.innerHTML = '📝 No se detectó un código de barras, pero se leyó este número impreso: <b>' + numero + '</b><br>' +
+            el.innerHTML = '📝 No se detectó un código de barras, pero se leyó este número impreso: <b>' + numero + '</b> ' +
+                '<span style="color:#f59e0b;">(' + numero.length + ' dígitos, sin verificar)</span><br>' +
                 '<button type="button" class="bh-btn-purple" style="padding:3px 12px; font-size:12px; margin:6px 4px 0;" onclick="confirmarOcrImei()">✅ Es el IMEI</button>' +
                 '<button type="button" class="bh-btn-white" style="padding:3px 12px; font-size:12px; margin:6px 4px 0;" onclick="descartarOcrImei()">✖ No es</button>';
             el.style.color = '#c084fc';
+            diagImei('sugerido al técnico (sin checksum): ' + numero);
         }
 
         function confirmarOcrImei() {
@@ -13297,6 +13580,10 @@
         }
 
         function descartarOcrImei() {
+            if (candidatoOcrImei) {
+                ocrDescartadosImei.add(candidatoOcrImei);
+                diagImei('descartado por el técnico: ' + candidatoOcrImei);
+            }
             candidatoOcrImei = null;
             actualizarEstadoScannerImei('Sigue apuntando la cámara al código, o al número impreso...', '#999');
         }
@@ -13312,22 +13599,17 @@
                 if (!videoEl.videoWidth) return;
                 ocrEnProcesoImei = true;
                 try {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = videoEl.videoWidth;
-                    canvas.height = videoEl.videoHeight;
-                    canvas.getContext('2d').drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+                    // extraerCandidatosImei() ya devuelve TODOS los candidatos del texto (no solo
+                    // el primero) y resolverTextoOcrImei() descarta los ya escaneados: eso cubre
+                    // el caso del Dual SIM, donde *#06# o "Acerca de" muestran los 2 IMEI juntos
+                    // en el mismo cuadro y antes se re-sugería siempre el primero.
+                    const canvas = prepararImagenOcrImei(videoEl, videoEl.videoWidth, videoEl.videoHeight, true);
                     const worker = await obtenerWorkerOcrImei();
                     const { data: { text } } = await worker.recognize(canvas);
-                    // /g y no el primer match nomás: la pantalla de "Ajustes -> Acerca de" o
-                    // *#06# de un Dual SIM muestra los 2 IMEI a la vez en la misma foto — con
-                    // solo el primer match, una vez confirmado el IMEI 1 el OCR seguía
-                    // encontrando ESE MISMO número de nuevo (siempre es el primero en el texto)
-                    // y nunca llegaba a sugerir el segundo.
-                    const matches = (text || '').match(/\d{14,17}/g) || [];
-                    const nuevo = matches.find(m => !imeisEscaneados.includes(m));
-                    if (nuevo) mostrarSugerenciaOcrImei(nuevo);
+                    resolverTextoOcrImei(text, 'video ' + canvas.width + 'x' + canvas.height);
                 } catch (e) {
                     console.error('Error en OCR de IMEI:', e);
+                    diagImei('error de OCR: ' + e.message);
                 } finally {
                     ocrEnProcesoImei = false;
                 }
@@ -13371,6 +13653,13 @@
             const errorBox = document.getElementById('scanner-imei-error');
             errorBox.style.display = 'none';
             imeisEscaneados = [];
+            // Estado de la sesión de escaneo anterior: si no se limpia, los códigos y descartes
+            // de la sesión pasada silencian los avisos de esta.
+            codigosNoImeiVistos = new Set();
+            ocrDescartadosImei = new Set();
+            limpiarCandidatoOcrImei();
+            diagLineasImei = [];
+            pintarDiagImei();
             document.getElementById('scanner-imei-camara-select').style.display = 'none';
             actualizarEstadoScannerImei('Apunta la cámara a la caja o a la pantalla del celular con el IMEI (marca *#06# o Ajustes → Acerca de). Si es Dual SIM, escanea los 2 códigos uno tras otro.');
             document.getElementById('modal-scanner-imei').style.display = 'flex';
@@ -13912,14 +14201,38 @@
             }
         });
 
-        // Cierre global con Escape
-        window.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                const modalDetalle = document.getElementById('modal-detalle-producto');
-                if (modalDetalle && modalDetalle.style.display !== 'none') {
-                    cerrarDetalleProducto();
-                }
-            }
+        // Cierre global con Escape — AHORA SÍ global.
+        // Antes esto decía "cierre global" pero solo cerraba modal-detalle-producto: los otros 41
+        // modales quedaban sin salida por teclado. Eso alimentó el reclamo repetido de "esta
+        // ventana no tiene cierre".
+        //
+        // En vez de ocultar el overlay a mano (que dejaría la cámara prendida en el escáner de
+        // IMEI, o una grabación corriendo), busca el control de cierre que YA tiene el modal y le
+        // hace click: así se reusa la limpieza que cada modal haga en su propio handler.
+        // Un modal puede optar por quedar afuera con data-no-esc (decisiones obligatorias).
+        window.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+
+            // El de arriba es el último visible en el DOM (todos comparten el mismo z-index).
+            const abiertos = Array.from(document.querySelectorAll('.modal-overlay'))
+                .filter(m => getComputedStyle(m).display !== 'none');
+            const modal = abiertos[abiertos.length - 1];
+            if (!modal || modal.hasAttribute('data-no-esc')) return;
+
+            const controles = Array.from(modal.querySelectorAll('button, span[onclick], a[onclick], i[onclick]'));
+            const esCierre = (el) => {
+                const on = el.getAttribute('onclick') || '';
+                const txt = (el.textContent || '').trim();
+                return /cerrar|Cerrar|close|Close|ocultar/.test(on)
+                    || /style\.display\s*=\s*['"]none['"]/.test(on)
+                    || /^(✖|✕|×|Cerrar|Cancelar|Salir)$/i.test(txt);
+            };
+
+            const boton = controles.find(esCierre);
+            if (boton) boton.click();
+            else modal.style.display = 'none'; // sin control propio: al menos no queda atrapado
+
+            e.stopPropagation();
         });
 
         // Recibir resultados y navegar al taller filtrando

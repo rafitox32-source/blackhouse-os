@@ -199,8 +199,31 @@ manteniendo firma y lógica intactas, agregando el insert en `ventas_pos`/`venta
 (precio = productos.precio, vendedor parseado de la nota, medio 'efectivo'). Sin tocar la APK ni
 la web. Desde ahora sus ventas alimentan Métricas, Cierre del Día y el Excel.
 
-- Limitación: su POS no envía medio de pago → todo entra como 'efectivo'. Mejora futura: agregar
-  selector de pago en panel-vendedor.html (vive en el proyecto Vercel, no en este repo).
+- Limitación: su POS no envía medio de pago al RPC `registrar_venta_movil` → esas filas de
+  `ventas_pos` entran como 'efectivo'. Los TOTALES son correctos; solo el desglose por método de
+  las ventas móviles queda incompleto. Arreglo de raíz (pendiente, riesgo medio): agregarle un
+  parámetro `p_metodo_pago` al RPC y pasarlo desde `panel-vendedor.html` (que SÍ está local, en
+  `Desktop/web-limpia`), lo cual implica DROP+CREATE de la función y desplegar a Vercel — es el
+  camino por el que la vendedora cobra de verdad, así que no se tocó por una columna de reporte.
+
+### Método de pago en los comprobantes — CORREGIDO (2026-07-30)
+
+Al revisar esto se descubrió algo peor y más de fondo: **`facturas.metodo_pago` no se escribía
+nunca**. Las 42 facturas de la base lo tenían en `NULL` — 40 emitidas desde el escritorio y 2 del
+POS móvil. El insert de `emitir-factura-saas` (`main.js`) simplemente no incluía el campo, y el
+modal de "Emitir Comprobante" no lo preguntaba. Por eso todo desglose por método salía 100%
+efectivo *por descarte*, no por los datos.
+
+Cambios aplicados:
+- `index.html` `#modal-facturacion`: selector **Método de Pago** (efectivo / yape / tarjeta /
+  transferencia — los mismos valores que usa el POS móvil, para poder sumar las dos fuentes).
+- `emitirFactura()` lo manda; `main.js` lo guarda normalizado en `facturas.metodo_pago`.
+- `recolectarDatosExport()` (el Excel) toma el método de la **factura** atada a la orden
+  (`orden_id`), con orden de preferencia factura → orden → 'efectivo'. Antes leía solo
+  `ordenes.metodo_pago`, columna que existe pero casi nunca se llena.
+
+Los comprobantes viejos siguen en `NULL` y por lo tanto se muestran como 'efectivo'; no se pueden
+reconstruir hacia atrás porque el dato nunca se capturó.
 - La carpeta `web-vendedora/` de este repo queda como alternativa/upgrade opcional (tiene venta
   libre y cierre de caja propios) — YA NO es necesario publicarla para que ella venda.
 

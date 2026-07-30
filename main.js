@@ -345,6 +345,34 @@ function createWindow() {
     }
 }
 
+// ¿`remota` es ESTRICTAMENTE más nueva que `actual`?
+// Se usa para no anunciar una actualización que no lo es. No se usa una librería de semver a
+// propósito: es la única comparación de versiones del proyecto y no vale sumar una dependencia.
+// Reglas: se comparan mayor.menor.parche numéricamente; si son iguales, una versión con sufijo
+// de pre-release (2.55.0-beta.1) es MÁS VIEJA que la final (2.55.0).
+function esVersionMasNueva(remota, actual) {
+    const trozos = (v) => {
+        const limpia = String(v == null ? '' : v).trim().replace(/^v/i, '');
+        const [nucleo, ...resto] = limpia.split('-');
+        const nums = nucleo.split('.').map((n) => {
+            const x = parseInt(n, 10);
+            return Number.isFinite(x) ? x : 0;
+        });
+        while (nums.length < 3) nums.push(0);
+        return { nums: nums.slice(0, 3), pre: resto.join('-') };
+    };
+
+    const r = trozos(remota);
+    const a = trozos(actual);
+    for (let i = 0; i < 3; i++) {
+        if (r.nums[i] > a.nums[i]) return true;
+        if (r.nums[i] < a.nums[i]) return false;
+    }
+    // Mismo número: solo es más nueva si la actual es un pre-release y la remota es final.
+    if (!r.pre && a.pre) return true;
+    return false;
+}
+
 app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
     cargarDevicesCache();
@@ -356,20 +384,50 @@ app.whenReady().then(() => {
     // dispara además una notificación nativa de Windows por su cuenta, fuera de
     // nuestro control, que se sentía como un aviso repetido/intrusivo. Con esto
     // solo queda nuestro banner propio dentro de la app, que sí refleja la versión real.
-    autoUpdater.checkForUpdates();
+    //
+    // OJO CON EL ORDEN: antes se llamaba a checkForUpdates() ANTES de registrar los listeners,
+    // así que si la respuesta llegaba rápido los eventos se perdían. Primero se suscribe, después
+    // se busca.
+
+    // El renderer puede no haber terminado de cargar cuando llega la respuesta del updater; si se
+    // manda igual, el mensaje se pierde en el vacío y el banner queda en un estado que no
+    // corresponde. Esto lo encola hasta que la ventana esté lista.
+    const avisarRenderer = (canal, datos) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        const wc = mainWindow.webContents;
+        if (wc.isLoading()) wc.once('did-finish-load', () => wc.send(canal, datos));
+        else wc.send(canal, datos);
+    };
 
     autoUpdater.on('update-available', (info) => {
-        if (mainWindow) mainWindow.webContents.send('actualizacion-disponible', { version: info.version });
+        // GUARDA DE VERSIÓN. Este es el arreglo del bug reportado tres veces: "me sigue saliendo
+        // actualizar aun teniendo la version ya actualizada". El updater puede anunciar una
+        // versión que NO es más nueva que la instalada (típico cuando quedó una descarga pendiente
+        // en la caché de electron-updater y el usuario ya instaló a mano desde la web). Si no es
+        // estrictamente mayor, no se muestra nada y se oculta el banner.
+        if (!esVersionMasNueva(info.version, app.getVersion())) {
+            console.log(`[updater] anuncio ignorado: ${info.version} no es más nueva que ${app.getVersion()}`);
+            avisarRenderer('actualizacion-no-disponible', {});
+            return;
+        }
+        avisarRenderer('actualizacion-disponible', { version: info.version });
     });
 
     autoUpdater.on('update-downloaded', (info) => {
-        if (mainWindow) mainWindow.webContents.send('actualizacion-lista', { version: info.version });
+        if (!esVersionMasNueva(info.version, app.getVersion())) {
+            console.log(`[updater] descarga pendiente ignorada: ${info.version} <= ${app.getVersion()}`);
+            avisarRenderer('actualizacion-no-disponible', {});
+            return;
+        }
+        avisarRenderer('actualizacion-lista', { version: info.version });
     });
 
     // Ya está en la última versión: avisar al renderer para que oculte el banner (defensivo).
     autoUpdater.on('update-not-available', () => {
-        if (mainWindow) mainWindow.webContents.send('actualizacion-no-disponible', {});
+        avisarRenderer('actualizacion-no-disponible', {});
     });
+
+    autoUpdater.checkForUpdates();
 
     autoUpdater.on('error', (err) => {
         console.warn('Error al buscar actualizaciones:', err.message);
@@ -2911,6 +2969,16 @@ async function recolectarDatosExport(periodo) {
             }
             (ventas || []).forEach(v => {
                 const its = itemsPorVenta[v.id] || [{ nombre: 'Venta #' + v.id, cantidad: 1, subtotal: v.total }];
+                // `medio_pago` es correcto para las ventas hechas desde el POS del escritorio
+                // (registrar-venta-pos lo guarda de verdad). Las ventas del POS MÓVIL entran por el
+                // RPC registrar_venta_movil, que no recibe el método y las deja siempre en
+                // 'efectivo': para esas, el método real está en su boleta (`facturas.metodo_pago`
+                // vía generar_boleta_movil), pero esa boleta no tiene forma determinista de atarse a
+                // estas filas (no hay orden_id ni referencia a la venta). No se adivina con una
+                // ventana de tiempo: sería un dato inventado. Los TOTALES son correctos igual; lo
+                // único que puede quedar como efectivo de más es el desglose por método de las
+                // ventas móviles. Arreglo de raíz = pasarle el método al RPC (ver el plan en
+                // docs/PLAN_FINANZAS_Y_VENTAS.md, sección 6b).
                 its.forEach(i => ventasRows.push({
                     producto: i.nombre,
                     cantidad: cf(i.cantidad),
@@ -2922,6 +2990,24 @@ async function recolectarDatosExport(periodo) {
         } catch (e) { /* POS sin migrar */ }
 
         // 2) Órdenes del taller ENTREGADAS en el período (por fecha_entregado; si no existe, created_at).
+        //
+        // MÉTODO DE PAGO: la fuente más confiable es el COMPROBANTE, no la orden. El método lo
+        // elige la persona en el momento de cobrar, en el modal de "Emitir Comprobante", y queda en
+        // `facturas.metodo_pago` (atado a la orden por `orden_id`). `ordenes.metodo_pago` existe
+        // pero casi nunca se llena. Antes esto leía solo `o.metodo_pago`, así que el desglose por
+        // método salía TODO como efectivo por descarte. Orden de preferencia:
+        // factura → orden → 'efectivo'.
+        const metodoPorOrden = {};
+        try {
+            const { data: facts } = await supabase.from('facturas')
+                .select('orden_id, metodo_pago')
+                .eq('empresa_id', empresaActual)
+                .not('orden_id', 'is', null);
+            (facts || []).forEach(f => {
+                if (f.metodo_pago) metodoPorOrden[f.orden_id] = String(f.metodo_pago).trim().toLowerCase();
+            });
+        } catch (e) { /* sin facturas: se cae a lo de la orden */ }
+
         const ordenesRows = [];
         try {
             const { data: ords } = await supabase.from('ordenes')
@@ -2936,7 +3022,7 @@ async function recolectarDatosExport(periodo) {
                     encargado: o.tecnico_id || '',
                     costoRepuesto: cf(o.costo_repuesto_real),
                     importe: cf(o.costo),
-                    pago: o.metodo_pago || 'efectivo'
+                    pago: metodoPorOrden[o.id] || o.metodo_pago || 'efectivo'
                 });
             });
         } catch (e) { }
@@ -3911,6 +3997,12 @@ ipcMain.on('emitir-factura-saas', async (event, data) => {
                 // quién lo emitió (para el control por trabajador).
                 cliente_nombre: data.nombre || null,
                 vendedor_usuario: usuarioActual || null,
+                // Método de pago: antes no se guardaba nunca (todas las facturas de la base tenían
+                // metodo_pago en NULL), así que el desglose por método en los reportes salía todo
+                // como efectivo por descarte. Se normaliza a los mismos valores que manda el POS
+                // móvil (efectivo / yape / tarjeta / transferencia) para poder sumar las dos
+                // fuentes en el mismo desglose.
+                metodo_pago: (data.metodoPago || 'efectivo').toString().trim().toLowerCase(),
                 monto_total: parseFloat(data.total)
             }]);
 
