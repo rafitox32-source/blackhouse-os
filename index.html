@@ -4774,10 +4774,15 @@
         </div>
     </div>
 
-    <!-- data-no-esc: es una decisión obligatoria de dos caminos (guardar solo la orden, o
-         registrar además la ficha del cliente). Cerrarlo con Esc elegiría una de las dos en
-         silencio, o dejaría la decisión colgada, así que queda fuera del cierre por teclado. -->
-    <div id="modal-confirm-custom" class="modal-overlay" data-no-esc>
+    <!-- DECISIÓN OBLIGATORIA — así queda a propósito (confirmado por el dueño, 2026-07-30).
+         Son dos caminos válidos (guardar solo la orden, o registrar además la ficha del cliente) y
+         no hay tercera opción: la orden ya se envió, hay que decir qué hacer con el cliente.
+         * data-no-esc: cerrarlo con Esc elegiría uno de los dos en silencio, o dejaría la decisión
+           colgada. Queda fuera del cierre global por teclado.
+         * data-decision-obligatoria: le dice al auditor de modales que la ausencia de botón de
+           cierre es intencional, para que no lo reporte como defecto en cada corrida.
+         NO agregar un "Cancelar" acá sin volver a preguntar. -->
+    <div id="modal-confirm-custom" class="modal-overlay" data-no-esc data-decision-obligatoria>
         <div class="confirm-box">
             <div style="font-size:40px; margin-bottom:15px;">👤</div>
             <div class="confirm-title">¿Registrar Cliente Nuevo?</div>

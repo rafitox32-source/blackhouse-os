@@ -110,11 +110,16 @@ function auditar(mod) {
     const anchoOk = !mAncho || Number(mAncho[2]) <= 1300 || /max-width\s*:/i.test(estilo);
 
     const noEsc = /\bdata-no-esc\b/.test(mod.apertura);
+    // Modales que a propósito no ofrecen salida porque fuerzan una decisión de dos caminos.
+    // Se marcan en el HTML con data-decision-obligatoria y quedan exentos del chequeo de cierre:
+    // sin esto la auditoría reportaba un defecto permanente que en realidad era una decisión ya
+    // tomada, y alguien lo iba a "arreglar" tarde o temprano.
+    const decisionObligatoria = /\bdata-decision-obligatoria\b/.test(mod.apertura);
 
     return {
         id: mod.id,
         linea: mod.linea,
-        cierre: botonCierre,
+        cierre: decisionObligatoria ? 'n/a' : botonCierre,
         esc: noEsc ? 'n/a' : (escPropio || escGlobal),
         overlay: overlayPropio || overlayGlobal,
         alto: claseAporta || contentAcotado || internoAcotado,
@@ -127,7 +132,7 @@ const filas = modales.map(auditar);
 // El cierre por click en el overlay NO cuenta como falla: en un modal de formulario, cerrar al
 // hacer click afuera borra lo que la persona estaba escribiendo. Se reporta como dato, no como
 // defecto — se agrega a mano solo en los modales de solo lectura, si se quiere.
-const falla = (f) => !f.cierre || f.esc === false || !f.alto || !f.ancho;
+const falla = (f) => f.cierre === false || f.esc === false || !f.alto || !f.ancho;
 
 // --- salida -----------------------------------------------------------------------------------
 const si = (v) => (v === 'n/a' ? ' n/a ' : v ? '  ✔  ' : '  ✘  ');
@@ -146,7 +151,7 @@ for (const f of filas) {
 const conFalla = filas.filter(falla);
 const cuenta = (k) => filas.filter((f) => f[k] === false).length;
 console.log('\n--- Resumen ---');
-console.log(`sin botón de cierre .................. ${cuenta('cierre')}`);
+console.log(`sin botón de cierre .................. ${cuenta('cierre')}   (${filas.filter(f => f.cierre === 'n/a').length} exentos: decisión obligatoria)`);
 console.log(`sin cierre con Esc .................. ${cuenta('esc')}   (${filas.filter(f => f.esc === 'n/a').length} exentos por data-no-esc)`);
 console.log(`sin altura acotada .................. ${cuenta('alto')}`);
 console.log(`ancho que no entra en 1366px ........ ${cuenta('ancho')}`);

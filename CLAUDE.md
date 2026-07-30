@@ -86,12 +86,17 @@ Hay **46** modales (`id="modal-*"`, clases `modal-overlay` / `modal-content`). E
 reportó la misma falla 3 veces: *"no tiene boton de cerrar"*, *"esta pestaña no tiene para
 cerrar"*, *"verifica que todas las ventanas tengan cierre y se puedan ajustar a la pantalla"*.
 
-Estado real (auditado con `node test/auditar-modales.mjs`): **41 de 42 cumplen**. Lo que hay que
+Estado real (auditado con `node test/auditar-modales.mjs`): **42 de 42 cumplen**. Lo que hay que
 mantener al agregar o tocar un modal:
 
 - **Botón de cierre visible.** Vale cualquiera de las formas que ya se usan en el repo: `onclick`
   a una función `cerrarX()`, un `style.display='none'` inline, una `✖`, o un botón "Cerrar" /
-  "Cancelar". El único que no tiene es `modal-confirm-custom`, a propósito (decisión obligatoria).
+  "Cancelar".
+- **Excepción por decisión obligatoria.** Un modal que fuerza elegir entre dos caminos válidos
+  puede no tener salida, y se marca en el HTML con `data-no-esc data-decision-obligatoria` + un
+  comentario que explique por qué. El auditor lo cuenta como exento. Hoy el único es
+  `modal-confirm-custom` ("¿Registrar Cliente Nuevo?"): **el dueño confirmó el 2026-07-30 que
+  queda así a propósito — no le agregues un "Cancelar" sin volver a preguntarle.**
 - **Cierre con `Esc`: ya es global**, no hay que hacer nada por modal. El listener busca el
   control de cierre del propio modal y le hace click, para no saltarse la limpieza (apagar la
   cámara, cortar una grabación). Si un modal es una decisión obligatoria, marcalo con
@@ -135,8 +140,27 @@ Atajo: `/migracion`.
 - No poner claves inline en comandos (`KEY="sb_secret_..."` en un Bash fue bloqueado).
   Leerlas desde `.env` dentro del script.
 - `.env` y `token gibhut.txt` están en `.gitignore`. Que siga así.
-- Deuda abierta que el usuario marcó como "no urgente": el `.env` se embebe en el build vía
-  `release.yml`. Cuando se retome, ver `docs/SACAR_SERVICE_ROLE_DEL_INSTALADOR.md`.
+### Qué viaja en el instalador (verificado 2026-07-30 — decisión: se deja así)
+
+`package.json` → `build.files` incluye `.env` explícitamente, así que el `.env` **viaja en el
+instalador**, y el CI lo genera desde los secrets de GitHub (`release.yml`). Contenido real:
+
+| variable | qué es | ¿problema? |
+|---|---|---|
+| `SUPABASE_KEY` | JWT con **rol=anon** | No. Pública por diseño; la app confía en el RLS. |
+| `SUPABASE_URL` | pública | No. |
+| `GROQ_API_KEY` | clave secreta real | **Sí**: quien descomprima el instalador la saca. |
+| `GEMINI_API_KEY` | clave secreta real (la inyecta el CI) | **Sí**, igual. |
+| `EMAIL_USER` / `EMAIL_PASS` | vacías | No. |
+
+**Ojo con la documentación vieja:** `docs/PLAN_FINANZAS_Y_VENTAS.md` §6 y
+`docs/SACAR_SERVICE_ROLE_DEL_INSTALADOR.md` dicen que la app usa la `service_role`. **Ya no es
+cierto**: migró a anon + RLS real (migraciones 021-027). No hay service_role en el instalador.
+
+El riesgo que queda no es acceso a los datos, es consumo de la cuota de Groq y Gemini.
+**El dueño decidió el 2026-07-30 dejarlo así.** Si alguna vez se retoma, el arreglo de fondo es que
+esas llamadas de IA pasen por un endpoint propio en Vercel (que ya tiene servidor) en vez de salir
+desde la PC del cliente. **No lo vuelvas a proponer sin que lo pida.**
 
 ## 7. Git y release
 
