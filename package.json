@@ -7,7 +7,9 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win",
-    "mapa-codigo": "node scripts/mapa-codigo.js"
+    "mapa-codigo": "node scripts/mapa-codigo.js",
+    "qa": "node test/qa-ejemplo.mjs",
+    "test": "node test/imei-decodificador.test.mjs && node test/version.test.mjs && node test/auditar-modales.mjs --fallan"
   },
   "build": {
     "appId": "com.blackhouse.os",
@@ -43,7 +45,9 @@
       "!cosas-que-no-uso/**/*",
       "!tools/**/*",
       "!docs/**/*",
-      "!software/**/*"
+      "!software/**/*",
+      "!test/**/*",
+      "!.claude/**/*"
     ],
     "extraResources": [
       {
@@ -72,6 +76,7 @@
     "@semantic-release/release-notes-generator": "^12.1.0",
     "electron": "^42.5.0",
     "electron-builder": "^26.15.3",
+    "playwright-core": "^1.62.0",
     "semantic-release": "^22.0.12"
   }
 }

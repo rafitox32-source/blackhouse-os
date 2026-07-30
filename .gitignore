@@ -7,3 +7,5 @@ dist/
 # a git desde aca -- icono/ en particular tiene instaladores/zips pesados que no
 # deben terminar en el historial del repo.
 cosas-que-no-uso/
+# Estado local de Obsidian (se abre el repo para leer docs/); no es del proyecto.
+.obsidian/
