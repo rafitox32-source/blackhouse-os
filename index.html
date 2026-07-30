@@ -795,6 +795,13 @@
             padding: 40px;
             border: 1px solid var(--bh-border);
             max-width: 95%;
+            /* Sin esto, un modal con contenido largo (ej. el de fotografiar pieza del
+               Holograma) se estira más alto que la pantalla y, al estar centrado, el
+               botón de cerrar (arriba o abajo) queda fuera de la vista sin forma de
+               llegar a él. Con esto, el modal se limita a la altura de la ventana y
+               scrollea por dentro en vez de desbordarse. */
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         .confirm-box {
@@ -2124,6 +2131,11 @@
                         class='bx bx-message-rounded-dots'></i> CRM</div>
                 <div id="nav-config" class="nav-item" onclick="showView('config', this)"><i class='bx bx-cog'></i>
                     Ajustes</div>
+                <div id="nav-monitor" class="nav-item" style="display:none;" onclick="showView('monitor-view', this)"
+                    title="Solo visible para la casa matriz: actividad y errores de todos los talleres">
+                    <i class='bx bx-shield-quarter'></i> Monitor <span id="badge-nav-errores"
+                        style="display:none; background:var(--danger); color:white; font-size:10px; padding:1px 6px; border-radius:10px; margin-left:4px;"></span>
+                </div>
             </div>
             
             <div style="padding: 12px 12px 15px; margin-top: auto; border-top: 1px solid var(--border-color); text-align: center;">
@@ -2667,6 +2679,8 @@
                 <!-- Modal: Fotografiar pieza para el Holograma 3D -->
                 <div id="modal-holo-foto" class="modal-overlay">
                     <div class="modal-content" style="width:460px;">
+                        <button type="button" onclick="holoCerrarModalFoto()"
+                            style="position:absolute; top:15px; right:15px; background:transparent; border:none; color:var(--text-muted); font-size:20px; cursor:pointer;">✖</button>
                         <h3 style="margin-top:0; color:var(--bh-purple);"><i class='bx bx-camera'></i> Fotografiar / grabar pieza</h3>
                         <p style="color:var(--text-muted); font-size:12px; margin-top:-6px;">Se guarda para <b id="holo-foto-modelo-nombre">este modelo</b> y se comparte con todos los técnicos que reparen el mismo equipo.</p>
 
@@ -4240,6 +4254,80 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- Monitor de Actividad + Caja de Errores: solo casa matriz (empresa 1), ve TODOS los talleres -->
+                <div id="monitor-view" class="view">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                        <h1>Monitor de Actividad y Errores</h1>
+                        <span style="font-size:11px; color:#999;">Todas las empresas — soporte a talleres</span>
+                    </div>
+
+                    <div style="display:flex; gap:22px; border-bottom:1px solid var(--bh-border); margin-bottom:16px;">
+                        <button type="button" id="monitor-tab-actividad" onclick="cambiarTabMonitor('actividad')"
+                            style="background:transparent; border:none; padding:10px 4px; cursor:pointer; font-size:14px; font-weight:600; color:white; border-bottom:2px solid var(--bh-purple);">📋
+                            Actividad</button>
+                        <button type="button" id="monitor-tab-errores" onclick="cambiarTabMonitor('errores')"
+                            style="background:transparent; border:none; padding:10px 4px; cursor:pointer; font-size:14px; font-weight:600; color:#999; border-bottom:2px solid transparent;">🐞
+                            Caja de Errores <span id="badge-errores-pendientes"
+                                style="display:none; background:var(--danger); color:white; font-size:10px; padding:1px 6px; border-radius:10px; margin-left:4px;"></span></button>
+                    </div>
+
+                    <div id="monitor-panel-actividad">
+                        <div class="bh-card" style="margin-bottom:14px;">
+                            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+                                <div class="input-group" style="flex:1; min-width:160px;">
+                                    <label>Filtrar por usuario</label>
+                                    <input type="text" id="monitor-filtro-usuario" class="bh-input"
+                                        placeholder="usuario..." onkeyup="if(event.key==='Enter') cargarMonitorActividad()">
+                                </div>
+                                <div class="input-group" style="flex:1; min-width:160px;">
+                                    <label>Filtrar por empresa (ID)</label>
+                                    <input type="text" id="monitor-filtro-empresa" class="bh-input" placeholder="ej: 3"
+                                        onkeyup="if(event.key==='Enter') cargarMonitorActividad()">
+                                </div>
+                                <button type="button" class="bh-btn-purple" onclick="cargarMonitorActividad()"
+                                    style="height:38px;">🔄 Actualizar</button>
+                            </div>
+                        </div>
+                        <div class="bh-card">
+                            <table style="width:100%">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Empresa</th>
+                                        <th>Usuario</th>
+                                        <th>Rol</th>
+                                        <th>Acción</th>
+                                        <th>Detalle</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="list-monitor-actividad">
+                                    <tr>
+                                        <td colspan="6" style="text-align:center; padding:20px;">Cargando...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="monitor-panel-errores" style="display:none;">
+                        <div class="bh-card" style="margin-bottom:14px;">
+                            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                <button type="button" class="bh-btn-white" id="filtro-error-pendiente"
+                                    onclick="filtrarErrores('pendiente')">🟡 Pendientes</button>
+                                <button type="button" class="bh-btn-white" id="filtro-error-resuelto"
+                                    onclick="filtrarErrores('resuelto')">✅ Resueltos</button>
+                                <button type="button" class="bh-btn-white" id="filtro-error-todos"
+                                    onclick="filtrarErrores('')">Todos</button>
+                                <button type="button" class="bh-btn-purple" onclick="cargarCajaErrores()"
+                                    style="margin-left:auto;">🔄 Actualizar</button>
+                            </div>
+                        </div>
+                        <div id="list-caja-errores">
+                            <div style="text-align:center; padding:20px; color:#999;">Cargando...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -4574,8 +4662,11 @@
             <div style="position:relative; background:#000; border-radius:8px; overflow:hidden; aspect-ratio: 4 / 3;">
                 <video id="scanner-imei-video" style="width:100%; height:100%; object-fit:cover;" autoplay muted playsinline></video>
             </div>
+            <select id="scanner-imei-camara-select" class="bh-input" style="display:none; margin-top:8px; font-size:12.5px;"
+                onchange="cambiarCamaraLaptopImei(this.value)" title="Si la cámara que se ve no sirve, prueba con otra"></select>
             <p id="scanner-imei-estado" style="color:#999; font-size:12px; margin-top:10px; text-align:center; min-height:32px;">
-                Apunta la cámara al código de barras o QR de la caja del equipo (Code128, EAN o QR). Si el equipo es Dual SIM, escanea los 2 códigos de IMEI uno tras otro.
+                Apunta la cámara a la caja del equipo (código de barras o QR) <b>o a la pantalla del celular</b> mostrando el IMEI (Ajustes → Acerca de, o marcando <b>*#06#</b>). Si el equipo es Dual SIM, escanea los 2 códigos de IMEI uno tras otro.
+                <br><span style="color:#c084fc;">¿No detecta nada usando el celular? Toca "📸 Foto para IMEI" en la pantalla del celular — manda una foto en alta calidad en vez del video, que en algunos celulares (iPhone) se ve peor de lo que se lee.</span>
             </p>
             <div id="scanner-imei-error" style="display:none; margin-top:10px; font-size:12.5px; color:#ef4444; text-align:center;"></div>
             <div style="display:flex; justify-content:space-between; gap:8px; margin-top:16px;">
@@ -5766,6 +5857,34 @@
     <script>
         const isElectron = typeof window !== 'undefined' && window.ipcRenderer !== undefined;
 
+        // ================= CAPTURA DE ERRORES DEL RENDERER (caja de errores, casa matriz) =======
+        // Cualquier error de JS sin atrapar (o promesa rechazada sin .catch) se manda a main.js,
+        // que lo guarda para que la casa matriz lo revise después — sin esto, esos errores solo
+        // quedaban en la consola de DevTools de la PC del técnico, invisibles para todos los demás.
+        window.addEventListener('error', (event) => {
+            if (!isElectron) return;
+            try {
+                ipcRenderer.send('registrar-error-renderer', {
+                    mensaje: event.message,
+                    stack: event.error && event.error.stack,
+                    url: event.filename,
+                    linea: event.lineno,
+                    columna: event.colno,
+                });
+            } catch (e) { /* no-op */ }
+        });
+        window.addEventListener('unhandledrejection', (event) => {
+            if (!isElectron) return;
+            try {
+                const razon = event.reason;
+                ipcRenderer.send('registrar-error-renderer', {
+                    mensaje: (razon && razon.message) || String(razon),
+                    stack: razon && razon.stack,
+                    url: location.href,
+                });
+            } catch (e) { /* no-op */ }
+        });
+
         let chartInstance = null;
         let codigoActualParaCopiar = ""; // NUEVO: Variable para guardar el código generado
 
@@ -6135,6 +6254,15 @@
                 // El contador de licencias vencidas o por vencer se trae al entrar.
                 if (tabLicencias) { tabLicencias.style.display = 'block'; ipcRenderer.send('obtener-panel-licencias'); }
             }
+
+            // Monitor de actividad + caja de errores: igual criterio que el generador de licencias,
+            // solo la casa matriz (empresa 1) lo ve — es una herramienta de soporte a los talleres,
+            // no algo que le sirva al dueño de un taller normal.
+            const navMonitor = document.getElementById('nav-monitor');
+            if (navMonitor) {
+                navMonitor.style.display = (miEmpresa === '1' && rol === 'dueno') ? 'flex' : 'none';
+                if (miEmpresa === '1' && rol === 'dueno') ipcRenderer.send('obtener-caja-errores', { estado: 'pendiente' });
+            }
         }
 
         function showView(id, el) {
@@ -6177,6 +6305,10 @@
 
             if (id === 'proveedores-view') cargarProveedores();
 
+            if (id === 'monitor-view') {
+                cambiarTabMonitor(monitorTabActiva || 'actividad');
+            }
+
             // 2. Aquí mantenemos tu Configuración intacta con sus propias llaves
             if (id === 'config') {
                 ipcRenderer.send('obtener-usuarios');
@@ -6193,6 +6325,125 @@
                 setTimeout(() => { if (typeof initHologramaLab === 'function') initHologramaLab(); }, 30);
             }
         }
+
+        // ================= MONITOR DE ACTIVIDAD Y CAJA DE ERRORES (casa matriz) =================
+        let monitorTabActiva = 'actividad';
+        let monitorErroresFiltroEstado = 'pendiente';
+
+        function cambiarTabMonitor(tab) {
+            monitorTabActiva = tab;
+            const btnActividad = document.getElementById('monitor-tab-actividad');
+            const btnErrores = document.getElementById('monitor-tab-errores');
+            document.getElementById('monitor-panel-actividad').style.display = tab === 'actividad' ? 'block' : 'none';
+            document.getElementById('monitor-panel-errores').style.display = tab === 'errores' ? 'block' : 'none';
+            btnActividad.style.color = tab === 'actividad' ? 'white' : '#999';
+            btnActividad.style.borderBottomColor = tab === 'actividad' ? 'var(--bh-purple)' : 'transparent';
+            btnErrores.style.color = tab === 'errores' ? 'white' : '#999';
+            btnErrores.style.borderBottomColor = tab === 'errores' ? 'var(--bh-purple)' : 'transparent';
+            if (tab === 'actividad') cargarMonitorActividad();
+            else cargarCajaErrores();
+        }
+
+        function nombreLegibleCanal(canal) {
+            const texto = (canal || '').replace(/[-_]/g, ' ');
+            return texto.charAt(0).toUpperCase() + texto.slice(1);
+        }
+
+        function cargarMonitorActividad() {
+            const usuario = (document.getElementById('monitor-filtro-usuario').value || '').trim();
+            const empresaId = (document.getElementById('monitor-filtro-empresa').value || '').trim();
+            ipcRenderer.send('obtener-monitor-actividad', { usuario: usuario || null, empresa_id: empresaId || null });
+        }
+
+        ipcRenderer.on('monitor-actividad-respuesta', (event, res) => {
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            const tbody = document.getElementById('list-monitor-actividad');
+            if (!tbody) return;
+            if (!res || !res.ok) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#ef4444;">${esc((res && res.msg) || 'Error cargando actividad')}</td></tr>`;
+                return;
+            }
+            if (!res.filas.length) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#999;">Sin actividad registrada todavía.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = res.filas.map(f => `
+                <tr>
+                    <td style="font-size:11px; color:#999; white-space:nowrap;">${new Date(f.creado_en).toLocaleString()}</td>
+                    <td>${f.empresa_id}</td>
+                    <td>${esc(f.usuario)}</td>
+                    <td style="font-size:11px; color:#999;">${esc(f.rol || '')}</td>
+                    <td>${esc(nombreLegibleCanal(f.canal))}</td>
+                    <td style="font-size:11px; color:#999; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(f.detalle || '')}">${esc(f.detalle || '')}</td>
+                </tr>
+            `).join('');
+        });
+
+        function filtrarErrores(estado) {
+            monitorErroresFiltroEstado = estado;
+            [['pendiente', 'filtro-error-pendiente'], ['resuelto', 'filtro-error-resuelto'], ['', 'filtro-error-todos']].forEach(([e, id]) => {
+                const btn = document.getElementById(id);
+                if (btn) btn.style.background = (e === estado) ? 'var(--bh-purple)' : '';
+            });
+            cargarCajaErrores();
+        }
+
+        function cargarCajaErrores() {
+            ipcRenderer.send('obtener-caja-errores', { estado: monitorErroresFiltroEstado || null });
+        }
+
+        ipcRenderer.on('caja-errores-respuesta', (event, res) => {
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            // Este mismo evento llega también en segundo plano justo tras el login (para el
+            // contador del menú), sin que la vista del monitor esté abierta todavía.
+            const badgeNav = document.getElementById('badge-nav-errores');
+            if (res && res.ok && badgeNav) {
+                const pendientes = res.filas.filter(f => f.estado === 'pendiente').length;
+                if (pendientes > 0) { badgeNav.textContent = pendientes; badgeNav.style.display = 'inline-block'; }
+                else badgeNav.style.display = 'none';
+            }
+
+            const cont = document.getElementById('list-caja-errores');
+            if (!cont) return; // el monitor todavía no se abrió esta sesión
+            if (!res || !res.ok) {
+                cont.innerHTML = `<div style="text-align:center; padding:20px; color:#ef4444;">${esc((res && res.msg) || 'Error cargando errores')}</div>`;
+                return;
+            }
+            const badgeTab = document.getElementById('badge-errores-pendientes');
+            const pendientesTab = res.filas.filter(f => f.estado === 'pendiente').length;
+            if (pendientesTab > 0) { badgeTab.textContent = pendientesTab; badgeTab.style.display = 'inline-block'; }
+            else badgeTab.style.display = 'none';
+
+            if (!res.filas.length) {
+                cont.innerHTML = `<div style="text-align:center; padding:20px; color:#999;">No hay errores registrados${monitorErroresFiltroEstado ? ' con ese filtro' : ''}. 🎉</div>`;
+                return;
+            }
+            cont.innerHTML = res.filas.map(f => `
+                <div class="bh-card" style="margin-bottom:10px; border-left:3px solid ${f.estado === 'pendiente' ? 'var(--danger)' : 'var(--success)'};">
+                    <div style="display:flex; justify-content:space-between; align-items:start; gap:10px; flex-wrap:wrap;">
+                        <div>
+                            <div style="font-weight:600; color:${f.estado === 'pendiente' ? '#ef4444' : '#10b981'};">${f.estado === 'pendiente' ? '🟡 Pendiente' : '✅ Resuelto'} — ${esc(f.origen)}</div>
+                            <div style="font-size:11px; color:#999; margin-top:2px;">${new Date(f.creado_en).toLocaleString()} · Empresa ${f.empresa_id ?? '—'} · ${esc(f.usuario || 'sin sesión')}</div>
+                        </div>
+                        ${f.estado === 'pendiente' ? `<button type="button" class="bh-btn-purple" style="white-space:nowrap;" onclick="marcarErrorResuelto(${f.id})">✅ Marcar resuelto</button>` : ''}
+                    </div>
+                    <div style="margin-top:8px; font-size:13px;">${esc(f.mensaje)}</div>
+                    ${f.stack ? `<pre style="margin-top:6px; font-size:10.5px; color:#888; white-space:pre-wrap; max-height:120px; overflow:auto; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px;">${esc(f.stack)}</pre>` : ''}
+                    ${f.contexto ? `<div style="margin-top:6px; font-size:11px; color:#888;">${esc(JSON.stringify(f.contexto))}</div>` : ''}
+                    ${f.nota_resolucion ? `<div style="margin-top:6px; font-size:11.5px; color:#10b981;">Nota: ${esc(f.nota_resolucion)}</div>` : ''}
+                </div>
+            `).join('');
+        });
+
+        function marcarErrorResuelto(id) {
+            const nota = prompt('Nota de la solución (opcional):') || '';
+            ipcRenderer.send('resolver-error-app', { id, nota });
+        }
+
+        ipcRenderer.on('error-app-resuelto', (event, res) => {
+            if (res && res.ok) { showToast('Error marcado como resuelto', 'success'); cargarCajaErrores(); }
+            else showToast('No se pudo marcar el error: ' + ((res && res.msg) || ''), 'danger');
+        });
 
         // 3. ESTO VA AFUERA (Independiente)
         ipcRenderer.on('lista-de-facturas', (e, rows) => {
@@ -11804,9 +12055,21 @@
         // onConectado(stream) se llama apenas el celular quede emparejado. Si ya
         // estaba conectado de antes (de otra pantalla), se llama al instante.
         function emparejarCelular(onConectado) {
-            if (CAMARA_CELULAR.conectado && CAMARA_CELULAR.stream) {
+            // El celular pudo haberse desconectado sin avisar (se bloqueó la pantalla, se
+            // cerró la pestaña, se cortó el WiFi) sin que "conectado" se haya actualizado
+            // solo — por eso no basta con confiar en el flag, se revisa que el track de
+            // video siga realmente vivo antes de reusarlo.
+            const streamVivo = CAMARA_CELULAR.stream && CAMARA_CELULAR.stream.getVideoTracks().some(t => t.readyState === 'live');
+            if (CAMARA_CELULAR.conectado && streamVivo) {
                 onConectado(CAMARA_CELULAR.stream);
                 return;
+            }
+            if (CAMARA_CELULAR.conectado && !streamVivo) {
+                // Estaba "conectado" pero el stream ya murió: se limpia el estado viejo para
+                // que abajo se arme un emparejamiento nuevo en vez de fallar en silencio.
+                CAMARA_CELULAR.conectado = false;
+                CAMARA_CELULAR.stream = null;
+                GRAB.streams.celular = null;
             }
             if (!supabaseChat) {
                 showToast('Conexión en tiempo real no disponible todavía, intenta de nuevo en unos segundos.', 'danger');
@@ -11883,6 +12146,28 @@
                             }
                         };
 
+                        // Sin esto, si el celular se bloquea, cierra la pestaña o pierde el WiFi,
+                        // "conectado" se quedaba en true para siempre — el próximo intento de
+                        // usar la cámara desde cualquier pantalla creía que todavía funcionaba y
+                        // fallaba en silencio con un video negro en vez de ofrecer re-emparejar.
+                        pc.onconnectionstatechange = () => {
+                            if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+                                CAMARA_CELULAR.conectado = false;
+                                CAMARA_CELULAR.stream = null;
+                                GRAB.streams.celular = null;
+                                ['grab-cam-micro', 'grab-cam-cara'].forEach(selId => {
+                                    const sel = document.getElementById(selId);
+                                    const opt = sel && sel.querySelector('option[value="__CELULAR__"]');
+                                    if (opt) opt.remove();
+                                });
+                                const estadoBtn2 = document.getElementById('camara-celular-estado');
+                                if (estadoBtn2) estadoBtn2.innerHTML = '<i class="bx bx-x-circle" style="color:var(--danger);"></i> Celular desconectado';
+                                const btnEstudio2 = document.getElementById('btn-camara-celular');
+                                if (btnEstudio2) btnEstudio2.innerHTML = "<i class='bx bx-mobile-alt'></i> Usar cámara del celular";
+                                showToast('📱 Se perdió la conexión con el celular. Vuelve a tocar el ícono para emparejarlo de nuevo.', 'warning');
+                            }
+                        };
+
                         await pc.setRemoteDescription(new RTCSessionDescription(payload.payload.offer));
                         const answer = await pc.createAnswer();
                         await pc.setLocalDescription(answer);
@@ -11898,6 +12183,26 @@
                         try { await CAMARA_CELULAR.pc.addIceCandidate(new RTCIceCandidate(payload.payload.candidate)); }
                         catch (e) { console.error('ICE (celular):', e); }
                     }
+                })
+                // El video en vivo (comprimido para que se vea fluido) no alcanza en calidad
+                // para leer codigos/texto chicos, sobre todo en iPhone (Safari limita más la
+                // resolucion de un video de WebRTC que Chrome/Android). Por eso el boton "Tomar
+                // foto" del celular manda una FOTO FIJA de la camara a maxima calidad, en vez de
+                // un frame del video — llega en trozos porque una foto en base64 no entra en un
+                // solo mensaje de Supabase Realtime.
+                .on('broadcast', { event: 'foto-imei-inicio' }, (payload) => {
+                    fotoImeiEnCurso = { id: payload.payload.id, trozos: new Array(payload.payload.total) };
+                    actualizarEstadoScannerImei('📸 Recibiendo foto de alta calidad del celular...', '#c084fc');
+                })
+                .on('broadcast', { event: 'foto-imei-trozo' }, (payload) => {
+                    if (!fotoImeiEnCurso || fotoImeiEnCurso.id !== payload.payload.id) return;
+                    fotoImeiEnCurso.trozos[payload.payload.indice] = payload.payload.datos;
+                })
+                .on('broadcast', { event: 'foto-imei-fin' }, async (payload) => {
+                    if (!fotoImeiEnCurso || fotoImeiEnCurso.id !== payload.payload.id) return;
+                    const base64 = fotoImeiEnCurso.trozos.join('');
+                    fotoImeiEnCurso = null;
+                    await procesarFotoImeiRecibida(base64);
                 })
                 .subscribe();
         }
@@ -12856,6 +13161,47 @@
             return zxingReaderImei;
         }
 
+        // Lector aparte para las fotos fijas que manda el celular: usar el mismo lector del
+        // video continuo lo interrumpiría a medio decodeo (decodeFromImageUrl es de un solo
+        // frame, no continuo).
+        let zxingReaderFotoImei = null;
+        function obtenerLectorFotoImei() {
+            if (!zxingReaderFotoImei) {
+                const hints = new Map();
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                zxingReaderFotoImei = new ZXing.BrowserMultiFormatReader(hints);
+            }
+            return zxingReaderFotoImei;
+        }
+
+        // Ensambla los trozos de una foto que manda camara-celular.html por el mismo canal
+        // de emparejamiento (ver 'foto-imei-inicio/trozo/fin' en emparejarCelular()).
+        let fotoImeiEnCurso = null;
+
+        async function procesarFotoImeiRecibida(base64) {
+            actualizarEstadoScannerImei('📸 Foto recibida, leyendo código y números...', '#c084fc');
+            const dataUrl = 'data:image/jpeg;base64,' + base64;
+
+            try {
+                const resultado = await obtenerLectorFotoImei().decodeFromImageUrl(dataUrl);
+                if (resultado) { procesarCodigoDetectadoImei(resultado.getText()); return; }
+            } catch (e) {
+                // Sin código de barras/QR detectable en la foto — se sigue con el OCR de abajo.
+            }
+
+            try {
+                const worker = await obtenerWorkerOcrImei();
+                const { data: { text } } = await worker.recognize(dataUrl);
+                const matches = (text || '').match(/\d{14,17}/g) || [];
+                const nuevo = matches.find(m => !imeisEscaneados.includes(m));
+                if (nuevo) mostrarSugerenciaOcrImei(nuevo);
+                else actualizarEstadoScannerImei('No se detectó ningún código ni número en la foto. Prueba con más luz, más cerca y bien enfocado.', '#f59e0b');
+            } catch (e) {
+                console.error('Error leyendo la foto del celular:', e);
+                actualizarEstadoScannerImei('Error leyendo la foto: ' + e.message, '#ef4444');
+            }
+        }
+
         // Los equipos Dual SIM traen 2 codigos de IMEI en la caja (y a veces otros codigos, como
         // el de serie o el EAN del producto). Esta lista junta los que van pareciendo IMEI durante
         // la sesion de escaneo actual, sin repetir, hasta un maximo de 2 — y los va reflejando en
@@ -12867,7 +13213,13 @@
             return digitos.length >= 14 && digitos.length <= 16;
         }
 
+        // Candidato de IMEI sugerido por OCR (ver más abajo), pendiente de que el técnico
+        // confirme con un click porque, a diferencia del código de barras (que trae checksum),
+        // el OCR se puede equivocar de dígito y hay que dejar confirmar antes de guardarlo.
+        let candidatoOcrImei = null;
+
         function actualizarEstadoScannerImei(mensaje, color) {
+            candidatoOcrImei = null;
             const el = document.getElementById('scanner-imei-estado');
             el.textContent = mensaje;
             el.style.color = color || '#999';
@@ -12900,11 +13252,127 @@
             }
         }
 
+        // ---- Fallback de OCR: lee los NÚMEROS impresos cuando no se detecta ningún código de
+        // barras/QR (caja borrosa, código dañado, formato raro, cámara sin buen enfoque, etc).
+        // Se carga bajo demanda (Tesseract.js pesa ~2MB) solo la primera vez que hace falta.
+        let tesseractWorkerImei = null;
+        let cargandoTesseract = null;
+
+        function cargarTesseractScript() {
+            if (window.Tesseract) return Promise.resolve();
+            if (cargandoTesseract) return cargandoTesseract;
+            cargandoTesseract = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('No se pudo cargar el lector de texto (OCR).'));
+                document.head.appendChild(script);
+            });
+            return cargandoTesseract;
+        }
+
+        async function obtenerWorkerOcrImei() {
+            await cargarTesseractScript();
+            if (!tesseractWorkerImei) {
+                tesseractWorkerImei = await Tesseract.createWorker('eng');
+                await tesseractWorkerImei.setParameters({ tessedit_char_whitelist: '0123456789' });
+            }
+            return tesseractWorkerImei;
+        }
+
+        function mostrarSugerenciaOcrImei(numero) {
+            candidatoOcrImei = numero;
+            const el = document.getElementById('scanner-imei-estado');
+            el.innerHTML = '📝 No se detectó un código de barras, pero se leyó este número impreso: <b>' + numero + '</b><br>' +
+                '<button type="button" class="bh-btn-purple" style="padding:3px 12px; font-size:12px; margin:6px 4px 0;" onclick="confirmarOcrImei()">✅ Es el IMEI</button>' +
+                '<button type="button" class="bh-btn-white" style="padding:3px 12px; font-size:12px; margin:6px 4px 0;" onclick="descartarOcrImei()">✖ No es</button>';
+            el.style.color = '#c084fc';
+        }
+
+        function confirmarOcrImei() {
+            if (!candidatoOcrImei) return;
+            const numero = candidatoOcrImei;
+            candidatoOcrImei = null;
+            procesarCodigoDetectadoImei(numero);
+        }
+
+        function descartarOcrImei() {
+            candidatoOcrImei = null;
+            actualizarEstadoScannerImei('Sigue apuntando la cámara al código, o al número impreso...', '#999');
+        }
+
+        let ocrIntervalImei = null;
+        let ocrEnProcesoImei = false;
+
+        function iniciarOcrFallbackImei(videoEl) {
+            detenerOcrFallbackImei();
+            ocrIntervalImei = setInterval(async () => {
+                if (ocrEnProcesoImei || candidatoOcrImei) return;
+                if (imeisEscaneados.length >= 2) return;
+                if (!videoEl.videoWidth) return;
+                ocrEnProcesoImei = true;
+                try {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoEl.videoWidth;
+                    canvas.height = videoEl.videoHeight;
+                    canvas.getContext('2d').drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+                    const worker = await obtenerWorkerOcrImei();
+                    const { data: { text } } = await worker.recognize(canvas);
+                    // /g y no el primer match nomás: la pantalla de "Ajustes -> Acerca de" o
+                    // *#06# de un Dual SIM muestra los 2 IMEI a la vez en la misma foto — con
+                    // solo el primer match, una vez confirmado el IMEI 1 el OCR seguía
+                    // encontrando ESE MISMO número de nuevo (siempre es el primero en el texto)
+                    // y nunca llegaba a sugerir el segundo.
+                    const matches = (text || '').match(/\d{14,17}/g) || [];
+                    const nuevo = matches.find(m => !imeisEscaneados.includes(m));
+                    if (nuevo) mostrarSugerenciaOcrImei(nuevo);
+                } catch (e) {
+                    console.error('Error en OCR de IMEI:', e);
+                } finally {
+                    ocrEnProcesoImei = false;
+                }
+            }, 2500);
+        }
+
+        function detenerOcrFallbackImei() {
+            if (ocrIntervalImei) { clearInterval(ocrIntervalImei); ocrIntervalImei = null; }
+            candidatoOcrImei = null;
+        }
+
+        // ---- Selector de cámara (laptop): si la cámara por defecto no enfoca bien o está
+        // tapada, el técnico puede elegir otra de las que tenga conectadas.
+        async function poblarSelectorCamarasImei() {
+            const select = document.getElementById('scanner-imei-camara-select');
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const camaras = devices.filter(d => d.kind === 'videoinput');
+                if (camaras.length <= 1) { select.style.display = 'none'; return; }
+                select.innerHTML = camaras.map((c, i) => `<option value="${c.deviceId}">${c.label || ('Cámara ' + (i + 1))}</option>`).join('');
+                select.style.display = 'block';
+            } catch (e) {
+                select.style.display = 'none';
+            }
+        }
+
+        async function cambiarCamaraLaptopImei(deviceId) {
+            try { obtenerLectorImei().reset(); } catch (e) { /* no-op */ }
+            const videoEl = document.getElementById('scanner-imei-video');
+            try {
+                await obtenerLectorImei().decodeFromVideoDevice(deviceId, videoEl, (result, err) => {
+                    if (result) procesarCodigoDetectadoImei(result.getText());
+                });
+                iniciarOcrFallbackImei(videoEl);
+            } catch (e) {
+                console.error('Error cambiando de cámara:', e);
+            }
+        }
+
         async function abrirScannerImei() {
             const errorBox = document.getElementById('scanner-imei-error');
             errorBox.style.display = 'none';
             imeisEscaneados = [];
-            actualizarEstadoScannerImei('Apunta la cámara al código de barras o QR de la caja del equipo. Si el equipo es Dual SIM, escanea los 2 códigos de IMEI uno tras otro.');
+            document.getElementById('scanner-imei-camara-select').style.display = 'none';
+            actualizarEstadoScannerImei('Apunta la cámara a la caja o a la pantalla del celular con el IMEI (marca *#06# o Ajustes → Acerca de). Si es Dual SIM, escanea los 2 códigos uno tras otro.');
             document.getElementById('modal-scanner-imei').style.display = 'flex';
 
             try {
@@ -12918,6 +13386,8 @@
                 await obtenerLectorImei().decodeFromVideoDevice(undefined, videoEl, (result, err) => {
                     if (result) procesarCodigoDetectadoImei(result.getText());
                 });
+                iniciarOcrFallbackImei(videoEl);
+                poblarSelectorCamarasImei();
             } catch (e) {
                 console.error('Error abriendo el escáner de cámara:', e);
                 errorBox.textContent = 'No se pudo acceder a la cámara: ' + e.message;
@@ -12933,6 +13403,7 @@
         function usarCelularParaImei() {
             const errorBox = document.getElementById('scanner-imei-error');
             errorBox.style.display = 'none';
+            document.getElementById('scanner-imei-camara-select').style.display = 'none';
             emparejarCelular(async (stream) => {
                 try {
                     if (typeof ZXing === 'undefined') {
@@ -12948,6 +13419,7 @@
                     await lector.decodeFromStream(streamClonado, videoEl, (result, err) => {
                         if (result) procesarCodigoDetectadoImei(result.getText());
                     });
+                    iniciarOcrFallbackImei(videoEl);
                 } catch (e) {
                     console.error('Error usando la cámara del celular en el escáner:', e);
                     errorBox.textContent = 'No se pudo usar la cámara del celular: ' + e.message;
@@ -12965,6 +13437,7 @@
             // Se detiene el lector de ZXing (internamente para sus propios tracks) Y ADEMÁS se
             // paran manualmente todos los tracks del stream por si acaso, para nunca dejar la
             // cámara encendida en segundo plano.
+            detenerOcrFallbackImei();
             if (zxingReaderImei) {
                 try { zxingReaderImei.reset(); } catch (e) { /* no-op */ }
             }

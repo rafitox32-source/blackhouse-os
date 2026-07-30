@@ -163,6 +163,156 @@ let rolActual = null;
 let usuarioActual = null;
 const otpMemoryCache = new Map(); // Fallback en memoria si faltan columnas de base de datos
 
+// ================= MONITOR DE ACTIVIDAD Y CAJA DE ERRORES (soporte, solo casa matriz) =========
+// Cada canal IPC que un usuario dispara ES, en la práctica, "una función usada" — por eso el
+// historial de actividad no se arma llamando a una función de log desde cada uno de los ~120
+// handlers (habría que tocar todos, y cualquier handler nuevo se olvidaría de agregarla). En vez
+// de eso, se envuelve UNA sola vez ipcMain.on/handle para que registre solo, automáticamente,
+// cualquier canal que se dispare — igual que un middleware.
+const CANALES_SIN_ACTIVIDAD = new Set([
+    // Autenticación: no hay empresaActual todavía (se descartarían solos) y son sensibles.
+    'iniciar-sesion', 'iniciar-sesion-token', 'verificar-2fa', 'cerrar-sesion-token',
+    // Polling frecuente: no aportan al historial y lo inundarían de ruido.
+    'listar-pedidos-accesorios-pendientes',
+    // Se registra aparte, como error, no como actividad (ver más abajo).
+    'registrar-error-renderer',
+]);
+
+const CLAVES_SENSIBLES_LOG = ['password', 'contrasena', 'contraseña', 'clave', 'foto', 'imagen', 'firma', 'base64', 'otp', 'token'];
+
+function resumirDetalleActividad(payload) {
+    if (payload === undefined || payload === null) return null;
+    try {
+        let resumen;
+        if (typeof payload === 'object' && !Array.isArray(payload)) {
+            resumen = {};
+            for (const k of Object.keys(payload)) {
+                if (CLAVES_SENSIBLES_LOG.some(s => k.toLowerCase().includes(s))) continue;
+                let v = payload[k];
+                if (typeof v === 'string' && v.length > 120) v = v.slice(0, 120) + '…';
+                resumen[k] = v;
+            }
+        } else {
+            resumen = payload;
+        }
+        const texto = JSON.stringify(resumen);
+        return texto.length > 400 ? texto.slice(0, 400) + '…' : texto;
+    } catch (e) {
+        return null;
+    }
+}
+
+function registrarActividad(canal, payload) {
+    // Sin sesión no hay a quién atribuirle la fila (y pasa todo el rato antes del login).
+    if (!usuarioActual || !empresaActual) return;
+    supabase.from('log_actividad').insert({
+        empresa_id: empresaActual,
+        usuario: usuarioActual,
+        rol: rolActual,
+        canal,
+        detalle: resumirDetalleActividad(payload),
+    }).then(({ error }) => {
+        if (error) console.warn('No se pudo registrar actividad:', error.message);
+    });
+}
+
+function registrarErrorApp(origen, mensaje, stack, contexto) {
+    supabase.from('log_errores').insert({
+        empresa_id: empresaActual || null,
+        usuario: usuarioActual || null,
+        rol: rolActual || null,
+        origen,
+        mensaje: String(mensaje || '').slice(0, 2000),
+        stack: stack ? String(stack).slice(0, 4000) : null,
+        contexto: contexto || null,
+    }).then(({ error }) => {
+        if (error) console.warn('No se pudo registrar el error en la caja de errores:', error.message);
+    });
+}
+
+// Errores que se le escapan al try/catch de cada handler (o que ocurren en el propio proceso
+// principal, fuera de cualquier handler) — sin esto, esos casos no dejaban ningún rastro.
+process.on('uncaughtException', (err) => {
+    console.error('uncaughtException:', err);
+    registrarErrorApp('main', err && err.message, err && err.stack, null);
+});
+process.on('unhandledRejection', (err) => {
+    console.error('unhandledRejection:', err);
+    registrarErrorApp('main', (err && err.message) || String(err), err && err.stack, null);
+});
+
+const _ipcMainOnOriginal = ipcMain.on.bind(ipcMain);
+const _ipcMainHandleOriginal = ipcMain.handle.bind(ipcMain);
+ipcMain.on = function (canal, listener) {
+    return _ipcMainOnOriginal(canal, (event, ...args) => {
+        if (!CANALES_SIN_ACTIVIDAD.has(canal)) registrarActividad(canal, args[0]);
+        return listener(event, ...args);
+    });
+};
+ipcMain.handle = function (canal, listener) {
+    return _ipcMainHandleOriginal(canal, (event, ...args) => {
+        if (!CANALES_SIN_ACTIVIDAD.has(canal)) registrarActividad(canal, args[0]);
+        return listener(event, ...args);
+    });
+};
+
+// El propio renderer avisa sus errores de JS (window.onerror / unhandledrejection) por acá.
+ipcMain.on('registrar-error-renderer', (event, data) => {
+    registrarErrorApp('renderer', data && data.mensaje, data && data.stack, {
+        url: data && data.url, linea: data && data.linea, columna: data && data.columna,
+    });
+});
+
+// === MONITOR DE ACTIVIDAD Y ERRORES: PANEL (solo casa matriz, ve TODAS las empresas) ===
+// Igual que el panel de licencias: bloqueado también del lado del servidor (no solo ocultando el
+// botón en el renderer) porque el .exe de cada taller corre con la misma clave que hoy tiene
+// acceso a todo — la comprobación de empresaActual es la que de verdad importa.
+ipcMain.on('obtener-monitor-actividad', async (event, filtros) => {
+    try {
+        if (empresaActual !== 1) return event.reply('monitor-actividad-respuesta', { ok: false, msg: 'No autorizado' });
+        let q = supabase.from('log_actividad').select('*').order('creado_en', { ascending: false }).limit(300);
+        if (filtros && filtros.empresa_id) q = q.eq('empresa_id', Number(filtros.empresa_id));
+        if (filtros && filtros.usuario) q = q.ilike('usuario', `%${filtros.usuario}%`);
+        const { data, error } = await q;
+        if (error) throw error;
+        event.reply('monitor-actividad-respuesta', { ok: true, filas: data || [] });
+    } catch (e) {
+        console.error('Error leyendo el monitor de actividad:', e.message);
+        event.reply('monitor-actividad-respuesta', { ok: false, msg: e.message });
+    }
+});
+
+ipcMain.on('obtener-caja-errores', async (event, filtros) => {
+    try {
+        if (empresaActual !== 1) return event.reply('caja-errores-respuesta', { ok: false, msg: 'No autorizado' });
+        let q = supabase.from('log_errores').select('*').order('creado_en', { ascending: false }).limit(300);
+        if (filtros && filtros.estado) q = q.eq('estado', filtros.estado);
+        if (filtros && filtros.empresa_id) q = q.eq('empresa_id', Number(filtros.empresa_id));
+        const { data, error } = await q;
+        if (error) throw error;
+        event.reply('caja-errores-respuesta', { ok: true, filas: data || [] });
+    } catch (e) {
+        console.error('Error leyendo la caja de errores:', e.message);
+        event.reply('caja-errores-respuesta', { ok: false, msg: e.message });
+    }
+});
+
+ipcMain.on('resolver-error-app', async (event, d) => {
+    try {
+        if (empresaActual !== 1) return event.reply('error-app-resuelto', { ok: false, msg: 'No autorizado' });
+        const { error } = await supabase.from('log_errores').update({
+            estado: 'resuelto',
+            nota_resolucion: (d && d.nota) || null,
+            resuelto_en: new Date().toISOString(),
+        }).eq('id', d.id);
+        if (error) throw error;
+        event.reply('error-app-resuelto', { ok: true, id: d.id });
+    } catch (e) {
+        console.error('Error marcando el error como resuelto:', e.message);
+        event.reply('error-app-resuelto', { ok: false, msg: e.message });
+    }
+});
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1200,
