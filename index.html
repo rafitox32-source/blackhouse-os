@@ -2498,18 +2498,13 @@
                                     Repositorio de Dump</button>
                                 <button class="bh-btn-white"
                                     style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
-                                    onclick="document.getElementById('modal-ruta-diagnostico').style.display='flex'">
-                                    <i class='bx bx-git-repo-forked'></i> Ruta de Diagnóstico de Encendido
+                                    onclick="abrirDiagnosticoPlaca()">
+                                    <i class='bx bx-chip'></i> Diagnóstico de Placa
                                 </button>
                                 <button class="bh-btn-white"
                                     style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
                                     onclick="document.getElementById('modal-ohm').style.display='flex'">
                                     <i class='bx bx-calculator'></i> Calculadora Ley de Ohm
-                                </button>
-                                <button class="bh-btn-white"
-                                    style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
-                                    onclick="abrirModalDiagnosticoConsumo()">
-                                    <i class='bx bx-bolt-circle'></i> Diagnóstico de Consumo
                                 </button>
 
                                 <button class="bh-btn-white" style="width:100%; margin-bottom:10px; text-align:left; padding:12px;"
@@ -2534,20 +2529,120 @@
                     </div>
                 </div>
 
-                <!-- Modal: Ruta de Diagnóstico de Encendido (antes vivía fija en Laboratorio, ahora en modal para dejar el espacio al Holograma) -->
-                <div id="modal-ruta-diagnostico" class="modal-overlay">
-                    <div class="modal-content" style="width:600px; max-height:85vh; overflow-y:auto;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <!-- Modal: Diagnóstico de Placa — unifica lo que antes eran dos botones separados
+                     ("Ruta de Diagnóstico de Encendido" y "Diagnóstico de Consumo"). La lógica de
+                     los dos se conserva intacta: la ruta de 4 pasos vive en la FASE 2, y la tabla
+                     de consumo por etapa también. Lo nuevo es la FASE 1 (periféricos), que se
+                     evalúa ANTES de deducir nada de la placa base, y el informe final. -->
+                <div id="modal-diagnostico-placa" class="modal-overlay">
+                    <div class="modal-content" style="width:640px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <h3 style="margin:0; color:var(--bh-purple); display:flex; align-items:center; gap:8px; font-size:16px;">
-                                <i class='bx bx-git-repo-forked'></i> Ruta de Diagnóstico de Encendido
+                                <i class='bx bx-chip'></i> Diagnóstico de Placa
                             </h3>
-                            <span id="diag-ruta-estado" style="font-size:12px; font-weight:bold; color:var(--warning);">Paso 1 de 4</span>
+                            <button type="button" onclick="cerrarDiagnosticoPlaca()"
+                                style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✖</button>
+                        </div>
+                        <p style="color:#888; font-size:12px; margin:0 0 16px;">
+                            Se evalúa de lo más simple a lo más complejo: primero periféricos (batería, flex, botón),
+                            y recién si eso está bien se deduce falla en la placa base.
+                        </p>
+
+                        <!-- ---------- EQUIPO ---------- -->
+                        <div style="border:1px solid #2a2a2a; border-radius:8px; padding:14px; margin-bottom:14px;">
+                            <h4 style="margin:0 0 12px; color:var(--info); font-size:13px;">Equipo</h4>
+                            <div class="grid-inputs" style="grid-template-columns:1fr 1fr; gap:10px;">
+                                <div class="input-group">
+                                    <label>Modelo</label>
+                                    <input type="text" id="dp-modelo" class="bh-input" placeholder="Ej: iPhone 11 / A34"
+                                        oninput="dpDetectarArquitectura()">
+                                </div>
+                                <div class="input-group">
+                                    <label>Arquitectura</label>
+                                    <select id="dp-arquitectura" class="bh-input" style="background:#222;">
+                                        <option value="android">Android (OVP → IF PMIC → VPH_PWR)</option>
+                                        <option value="apple">Apple (Tristar → Tigris → VDD_MAIN)</option>
+                                    </select>
+                                </div>
+                                <div class="input-group" style="grid-column:span 2;">
+                                    <label>Falla reportada</label>
+                                    <input type="text" id="dp-falla" class="bh-input" placeholder="Ej: no enciende, se apaga al poner el logo">
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Progress Bar -->
-                        <div style="width:100%; background:#222; border-radius:10px; height:8px; margin-bottom:20px; overflow:hidden;">
-                            <div id="diag-ruta-progreso" style="height:100%; width:25%; background:var(--bh-purple); transition:width 0.3s ease, background 0.3s ease;"></div>
+                        <!-- ---------- FASE 1: PERIFÉRICOS ---------- -->
+                        <div style="border:1px solid #2a2a2a; border-radius:8px; padding:14px; margin-bottom:14px;">
+                            <h4 style="margin:0 0 4px; color:var(--info); font-size:13px;">Fase 1 — Periféricos</h4>
+                            <p style="color:#777; font-size:11.5px; margin:0 0 12px;">
+                                Dejá en blanco lo que no midas. Cada valor que cargues acota el diagnóstico.
+                            </p>
+                            <div class="grid-inputs" style="grid-template-columns:1fr 1fr; gap:10px;">
+                                <div class="input-group">
+                                    <label>Batería VBAT (V)</label>
+                                    <input type="text" id="dp-vbat" class="bh-input" inputmode="decimal" placeholder="Ej: 3.85" oninput="dpEvaluar()">
+                                </div>
+                                <div class="input-group">
+                                    <label>Líneas BSI / THM</label>
+                                    <select id="dp-bsi" class="bh-input" style="background:#222;" onchange="dpEvaluar()">
+                                        <option value="">— sin medir —</option>
+                                        <option value="ok">Con valor de referencia (OK)</option>
+                                        <option value="ol">OL / circuito abierto</option>
+                                        <option value="gnd">A masa (GND)</option>
+                                    </select>
+                                </div>
+                                <div class="input-group">
+                                    <label>VBUS en sub-board (V)</label>
+                                    <input type="text" id="dp-vbus-sub" class="bh-input" inputmode="decimal" placeholder="Ej: 5.0" oninput="dpEvaluar()">
+                                </div>
+                                <div class="input-group">
+                                    <label>VBUS en FPC de placa (V)</label>
+                                    <input type="text" id="dp-vbus-fpc" class="bh-input" inputmode="decimal" placeholder="Ej: 4.9" oninput="dpEvaluar()">
+                                </div>
+                                <div class="input-group" style="grid-column:span 2;">
+                                    <label>Voltaje en botón Power (V)</label>
+                                    <input type="text" id="dp-power" class="bh-input" inputmode="decimal" placeholder="Ej: 1.8" oninput="dpEvaluar()">
+                                </div>
+                            </div>
+                            <div id="dp-fase1-aviso" style="display:none; margin-top:10px; padding:10px; border-radius:6px; font-size:12.5px; line-height:1.5;"></div>
                         </div>
+
+                        <!-- ---------- FASE 2: CONSUMO (lógica que antes vivía en su propio modal) ---------- -->
+                        <div style="border:1px solid #2a2a2a; border-radius:8px; padding:14px; margin-bottom:14px;">
+                            <h4 style="margin:0 0 12px; color:var(--info); font-size:13px;">Fase 2 — Consumo en la fuente</h4>
+                            <div class="grid-inputs" style="grid-template-columns:1fr 1fr; gap:10px;">
+                                <div class="input-group">
+                                    <label>Etapa de prueba</label>
+                                    <select id="diag-etapa" class="bh-input" style="background:#222;" onchange="dpEvaluar()">
+                                        <option value="antes">Antes de presionar Power</option>
+                                        <option value="durante">Manteniendo Power</option>
+                                        <option value="despues">Al soltar Power</option>
+                                    </select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Consumo (A)</label>
+                                    <input type="text" id="diag-consumo" class="bh-input" inputmode="decimal" placeholder="Ej: 0.045"
+                                        style="font-family:monospace; font-size:17px; color:var(--info);">
+                                </div>
+                                <div class="input-group" style="grid-column:span 2;">
+                                    <label>Caídas de tensión en líneas clave (opcional)</label>
+                                    <input type="text" id="dp-caidas" class="bh-input" placeholder="Ej: VDD_MAIN 0.02V, I2C0 sin pull-up">
+                                </div>
+                            </div>
+                            <div id="diag-resultado-panel" style="display:none; margin-top:10px; padding:10px; border:1px solid #333; border-radius:6px; font-size:12.5px;">
+                                <span id="diag-resultado-texto"></span>
+                            </div>
+                        </div>
+
+                        <!-- ---------- FASE 2: RUTA DE ENCENDIDO (los 4 pasos de siempre) ---------- -->
+                        <div style="border:1px solid #2a2a2a; border-radius:8px; padding:14px; margin-bottom:14px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <h4 style="margin:0; color:var(--info); font-size:13px;">Fase 2 — Ruta de encendido</h4>
+                                <span id="diag-ruta-estado" style="font-size:11.5px; font-weight:bold; color:var(--warning);">Paso 1 de 4</span>
+                            </div>
+                            <div style="width:100%; background:#222; border-radius:10px; height:8px; margin-bottom:16px; overflow:hidden;">
+                                <div id="diag-ruta-progreso" style="height:100%; width:25%; background:var(--bh-purple); transition:width 0.3s ease, background 0.3s ease;"></div>
+                            </div>
 
                         <!-- Pasos -->
                         <div id="diag-paso-1" class="diag-step-container active" style="margin-bottom:15px; padding:15px; border:1px solid #333; border-radius:8px; background:rgba(255,255,255,0.02); transition:opacity 0.3s ease;">
@@ -2597,16 +2692,33 @@
                             </div>
                         </div>
 
-                        <!-- Resumen / Fin -->
-                        <div id="diag-resumen" style="display:none; padding:15px; border:1px solid var(--bh-purple); border-radius:8px; background:rgba(124,58,237,0.1); margin-top:20px; text-align:center;">
-                            <h4 style="margin:0 0 10px 0; color:white;">Diagnóstico Finalizado</h4>
-                            <p id="diag-resumen-texto" style="font-size:13px; color:#ddd; margin-bottom:15px;"></p>
-                            <button class="bh-btn-purple" onclick="insertarRutaBitacora()" style="width:100%; margin-bottom:10px;"><i class='bx bx-message-square-add'></i> Añadir Resultado a Bitácora</button>
-                            <button class="bh-btn-white" onclick="reiniciarRuta()" style="width:100%; border:none; background:transparent; color:#aaa; padding:10px;">Reiniciar Ruta</button>
+                            <!-- Resumen de la ruta -->
+                            <div id="diag-resumen" style="display:none; padding:12px; border:1px solid var(--bh-purple); border-radius:8px; background:rgba(124,58,237,0.1); margin-top:14px;">
+                                <p id="diag-resumen-texto" style="font-size:12.5px; color:#ddd; margin:0 0 10px;"></p>
+                                <button class="bh-btn-white" onclick="reiniciarRuta()" style="border:none; background:transparent; color:#aaa; padding:4px 0; font-size:12px;">Reiniciar ruta</button>
+                            </div>
                         </div>
 
-                        <div style="text-align:right; margin-top:15px;">
-                            <button class="bh-btn-white" onclick="document.getElementById('modal-ruta-diagnostico').style.display='none'">Cerrar</button>
+                        <!-- ---------- INFORME ---------- -->
+                        <div id="dp-informe" style="display:none; border:1px solid var(--bh-purple); border-radius:8px; padding:14px; margin-bottom:14px; background:rgba(124,58,237,0.08);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <h4 style="margin:0; color:white; font-size:13px;">Informe</h4>
+                                <span id="dp-confianza" style="font-size:11px; font-weight:bold; padding:2px 8px; border-radius:10px;"></span>
+                            </div>
+                            <div id="dp-informe-cuerpo" style="font-size:12.5px; color:#ddd; line-height:1.6;"></div>
+                        </div>
+
+                        <div style="display:flex; gap:8px; justify-content:space-between; align-items:center;">
+                            <button class="bh-btn-white" onclick="dpReiniciarTodo()" style="font-size:12px;">Limpiar todo</button>
+                            <div style="display:flex; gap:8px;">
+                                <button class="bh-btn-white" onclick="cerrarDiagnosticoPlaca()">Cerrar</button>
+                                <button class="bh-btn-purple" id="dp-btn-generar" onclick="dpGenerarInforme()">
+                                    <i class='bx bx-bot'></i> Generar diagnóstico
+                                </button>
+                                <button class="bh-btn-purple" id="dp-btn-bitacora" style="background:var(--success); display:none;" onclick="dpInsertarBitacora()">
+                                    <i class='bx bx-message-square-add'></i> A la bitácora
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -5182,43 +5294,9 @@
         </div>
     </div>
 
-    <!-- Modal Diagnóstico Consumo -->
-    <div id="modal-diagnostico-consumo" class="modal-overlay">
-        <div class="modal-content" style="width: 500px;">
-            <h2 style="margin-top:0; color: var(--bh-purple); display:flex; align-items:center; gap:8px;">
-                <i class='bx bx-bolt-circle'></i> Diagnóstico de Consumo
-            </h2>
-            <p style="color:#aaa; font-size:13px; margin-bottom:20px;">
-                Ingresa el valor de consumo (en Amperios) y selecciona la etapa para obtener el pre-diagnóstico de placa.
-            </p>
-
-            <div class="input-group">
-                <label>Etapa de Prueba</label>
-                <select id="diag-etapa" class="bh-input" onchange="evaluarConsumo()">
-                    <option value="antes">Antes de presionar Power</option>
-                    <option value="durante">Manteniendo Power</option>
-                    <option value="despues">Al soltar Power</option>
-                </select>
-            </div>
-
-            <div class="input-group" style="margin-top: 15px;">
-                <label>Consumo (A)</label>
-                <input type="text" id="diag-consumo" class="bh-input" inputmode="decimal" placeholder="Ej: 0.045" style="font-family: monospace; font-size: 18px; color: var(--info);">
-            </div>
-
-            <div id="diag-resultado-panel" style="margin-top: 20px; padding: 15px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid #333; display: none;">
-                <div style="font-weight:bold; margin-bottom: 5px; font-size: 14px;" id="diag-resultado-titulo">Resultado</div>
-                <div style="font-size: 13px; color: #ddd;" id="diag-resultado-texto"></div>
-            </div>
-
-            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:25px;">
-                <button class="bh-btn-white" onclick="cerrarModalDiagnosticoConsumo()">Cerrar</button>
-                <button class="bh-btn-purple" style="background:var(--success);" onclick="agregarDiagnosticoBitacora()" id="btn-add-bitacora" disabled>
-                    <i class='bx bx-message-square-add'></i> Añadir a Bitácora
-                </button>
-            </div>
-        </div>
-    </div>
+    <!-- El modal "Diagnóstico de Consumo" que vivía acá se fusionó con la Ruta de Encendido en
+         #modal-diagnostico-placa (Laboratorio). Su lógica de evaluación por etapa se conserva
+         íntegra en dpEvaluarConsumo(). -->
 
     <!-- ===== ESTUDIO DE GRABACIÓN DE REPARACIONES ===== -->
     <!-- Compone microscopio + pantalla + cámara frontal sobre un canvas con el tema OWN3D
@@ -12842,140 +12920,242 @@
                 showToast("Error al guardar: " + res.msg, "danger");
             }
         });
-        // ================= DIAGNÓSTICO DE CONSUMO =================
-        function abrirModalDiagnosticoConsumo() {
-            document.getElementById('modal-diagnostico-consumo').style.display = 'flex';
-            document.getElementById('diag-consumo').value = '';
-            document.getElementById('diag-resultado-panel').style.display = 'none';
-            document.getElementById('btn-add-bitacora').disabled = true;
-            
-            // Configurar el listener del input para validar formato decimal y que no salte el cursor
-            const inputConsumo = document.getElementById('diag-consumo');
-            inputConsumo.onkeydown = function(e) {
-                // Permitir ctrl/cmd keys y navegación
-                if ([46, 8, 9, 27, 13, 110, 190, 37, 39].indexOf(e.keyCode) !== -1 ||
-                    (e.keyCode === 65 && (e.ctrlKey === true || e.metaKey === true)) || 
-                    (e.keyCode === 67 && (e.ctrlKey === true || e.metaKey === true)) || 
-                    (e.keyCode === 86 && (e.ctrlKey === true || e.metaKey === true)) || 
-                    (e.keyCode === 88 && (e.ctrlKey === true || e.metaKey === true))) {
-                    return;
-                }
-                
-                // Prevenir múltiples puntos decimales
-                if (e.key === '.' || e.key === ',') {
-                    if (this.value.includes('.')) {
-                        e.preventDefault();
-                    }
-                    return;
-                }
-                
-                // Solo permitir números
-                if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
-                    e.preventDefault();
-                }
-            };
+        // ================= DIAGNÓSTICO DE PLACA =================
+        // Unifica lo que antes eran dos botones: "Diagnóstico de Consumo" y "Ruta de Diagnóstico
+        // de Encendido". Las dos lógicas se conservan intactas (dpEvaluarConsumo mantiene la misma
+        // tabla de siempre; la ruta de 4 pasos sigue en avanzarRuta/finalizarRuta) y encima se
+        // agrega la Fase 1 de periféricos.
+        //
+        // POR QUÉ LAS REGLAS ESTÁN ACÁ Y NO EN EL PROMPT DE LA IA:
+        // son deterministas — puro si-entonces sobre mediciones. En código dan el mismo resultado
+        // siempre, responden al instante y no gastan cuota. Un modelo de lenguaje es probabilístico
+        // y puede contradecir sus propias "reglas inmutables", que es justo lo que no se quiere en
+        // un diagnóstico. La IA se usa después, solo para redactar el paso a paso y el resumen.
 
-            inputConsumo.oninput = function() {
-                this.value = this.value.replace(/,/g, '.');
-                
-                const parts = this.value.split('.');
-                if (parts.length > 2) {
-                    this.value = parts[0] + '.' + parts.slice(1).join('');
-                }
-                evaluarConsumo();
-            };
+        function dpNum(valor) {
+            if (valor === null || valor === undefined) return null;
+            const limpio = String(valor).trim().replace(',', '.');
+            if (limpio === '') return null;
+            const n = parseFloat(limpio);
+            return Number.isFinite(n) ? n : null;
         }
 
-        function cerrarModalDiagnosticoConsumo() {
-            document.getElementById('modal-diagnostico-consumo').style.display = 'none';
+        // Apple vs Android por el nombre del modelo. Solo es una ayuda: el técnico puede cambiarlo.
+        function dpArquitecturaDeModelo(modelo) {
+            return /iphone|ipad|apple|\bip\s?\d|se\s?20|\ba\d{4}\b/i.test(String(modelo || ''))
+                ? 'apple' : 'android';
         }
 
-        function evaluarConsumo() {
-            const etapa = document.getElementById('diag-etapa').value;
-            const consumoStr = document.getElementById('diag-consumo').value;
-            const panel = document.getElementById('diag-resultado-panel');
-            const txt = document.getElementById('diag-resultado-texto');
-            const btn = document.getElementById('btn-add-bitacora');
-            
-            if (!consumoStr || isNaN(parseFloat(consumoStr))) {
-                panel.style.display = 'none';
-                btn.disabled = true;
-                return;
+        /**
+         * Las 5 reglas de diagnóstico estrictas. Devuelve los hallazgos que disparan, en orden de
+         * gravedad. Cada uno dice qué se midió, qué significa y qué NO hay que hacer.
+         * `m` = { vbat, bsi, vbusSub, vbusFpc, power, consumoAntes, consumoDespues }
+         */
+        function dpReglasDeterministas(m) {
+            const hallazgos = [];
+            const hay = (v) => v !== null && v !== undefined;
+
+            // R1 — Flex / Sub-board. Llega corriente al puerto pero no a la placa.
+            if (hay(m.vbusSub) && hay(m.vbusFpc) && m.vbusSub >= 4.5 && m.vbusFpc < 4.5) {
+                hallazgos.push({
+                    regla: 'flex-subboard',
+                    fase: 'Fase 1: Periféricos',
+                    gravedad: 'alta',
+                    detalle: `Entran ${m.vbusSub}V al puerto de carga pero solo llegan ${m.vbusFpc}V al FPC de la placa.`,
+                    veredicto: 'Reemplazo del flex de interconexión (main flex) o de la sub-board. NO tocar la placa base.'
+                });
             }
 
-            const consumo = parseFloat(consumoStr);
-            let resultado = '';
-            let color = '';
+            // R2 — Botón de encendido sin voltaje con batería sana.
+            if (hay(m.vbat) && m.vbat >= 3.7 && hay(m.power) && m.power === 0) {
+                hallazgos.push({
+                    regla: 'boton-power',
+                    fase: 'Fase 1: Periféricos',
+                    gravedad: 'alta',
+                    detalle: `Batería con ${m.vbat}V (sana) pero 0V en el botón de encendido.`,
+                    veredicto: 'El PMIC no está generando el voltaje de stand-by, o hay una pista cortada entre el PMIC y el botón.'
+                });
+            }
 
+            // R3 — Línea térmica / identificación de batería.
+            if (m.bsi === 'ol' || m.bsi === 'gnd') {
+                hallazgos.push({
+                    regla: 'bsi-termica',
+                    fase: 'Fase 1: Periféricos',
+                    gravedad: 'alta',
+                    detalle: `Líneas BSI/THM del conector de batería en ${m.bsi === 'ol' ? 'OL (circuito abierto)' : 'masa (GND)'}.`,
+                    veredicto: 'Reparar la línea térmica / de identificación de la batería. NO cambiar el IC de carga: no es el culpable.'
+                });
+            }
+
+            // R4 — Consumo en fuga: hay consumo antes de tocar Power.
+            if (hay(m.consumoAntes) && m.consumoAntes > 0) {
+                hallazgos.push({
+                    regla: 'consumo-en-fuga',
+                    fase: 'Fase 2: Placa Base',
+                    gravedad: m.consumoAntes > 0.08 ? 'alta' : 'media',
+                    detalle: `Consumo de ${m.consumoAntes}A ANTES de presionar Power.`,
+                    veredicto: m.consumoAntes > 0.08
+                        ? 'Cortocircuito en línea primaria (VDD_MAIN / VPH_PWR / B+). Inyectar tensión para localizar el componente caliente.'
+                        : 'Fuga en línea primaria (VDD_MAIN / VPH_PWR / B+). Revisar periféricos y filtros antes de ir al PMIC.'
+                });
+            }
+
+            // R5 — Consumo secundario fijo después de Power.
+            if (hay(m.consumoDespues) && m.consumoDespues > 0 && m.consumoDespues < 0.15) {
+                hallazgos.push({
+                    regla: 'consumo-secundario',
+                    fase: 'Fase 2: Placa Base',
+                    gravedad: 'media',
+                    detalle: `Consumo fijo de ${m.consumoDespues}A después de Power, sin oscilación.`,
+                    veredicto: 'Falla en líneas de datos (I2C / UART), CPU o RAM. No es la etapa de potencia.'
+                });
+            }
+
+            // Batería fuera de rango: no es una de las 5 reglas, pero invalida todo lo demás.
+            if (hay(m.vbat) && m.vbat < 3.7) {
+                hallazgos.unshift({
+                    regla: 'bateria-baja',
+                    fase: 'Fase 1: Periféricos',
+                    gravedad: 'alta',
+                    detalle: `VBAT en ${m.vbat}V, por debajo del mínimo de 3.7V.`,
+                    veredicto: 'Cargar o reemplazar la batería antes de seguir: con esta tensión el resto de las mediciones no son concluyentes.'
+                });
+            }
+
+            const orden = { alta: 0, media: 1, baja: 2 };
+            return hallazgos.sort((a, b) => orden[a.gravedad] - orden[b.gravedad]);
+        }
+
+        // La tabla de consumo de siempre, tal cual estaba. Devuelve { texto, nivel }.
+        function dpEvaluarConsumo(etapa, consumo) {
+            if (consumo === null) return null;
             if (etapa === 'antes') {
-                if (consumo === 0) {
-                    resultado = 'Normal. Esperando orden.';
-                    color = 'var(--success)';
-                } else if (consumo > 0 && consumo <= 0.080) {
-                    resultado = 'Fuga baja en línea principal (Vbat/VPH_PWR). Revisar periféricos.';
-                    color = 'var(--warning)';
-                } else if (consumo > 0.080) {
-                    resultado = 'Cortocircuito en línea principal. Inyectar tensión.';
-                    color = 'var(--danger)';
-                }
-            } else if (etapa === 'durante') {
-                if (consumo === 0) {
-                    resultado = 'Falla en botón, flex o PMIC no alimentado.';
-                    color = 'var(--warning)';
-                } else if (consumo > 0 && consumo <= 0.030) {
-                    resultado = 'Falla de Reloj Oscilador o CPU no despierta.';
-                    color = 'var(--danger)';
-                } else if (consumo > 0.030 && consumo <= 0.080) {
-                    resultado = 'Falla de RAM/Memoria (Posible soldadura fría/Reballing).';
-                    color = 'var(--warning)';
-                } else if (consumo > 0.080 && consumo <= 0.150) {
-                    resultado = 'Bloqueo de CPU o corto en salida LDO secundaria.';
-                    color = 'var(--danger)';
-                } else if (consumo > 0.150) {
-                    resultado = 'Corto secundario grave post-PMIC.';
-                    color = 'var(--danger)';
-                }
-            } else if (etapa === 'despues') {
-                if (consumo === 0) {
-                    resultado = 'Falla de retención (Falta señal PS_HOLD).';
-                    color = 'var(--danger)';
-                } else if (consumo > 0.150) {
-                    resultado = 'Secuencia de encendido normal o Bootloop.';
-                    color = 'var(--success)';
-                } else {
-                    resultado = 'Consumo anormal al soltar. Revisar PMIC.';
-                    color = 'var(--warning)';
-                }
+                if (consumo === 0) return { texto: 'Normal. Esperando orden.', nivel: 'ok' };
+                if (consumo <= 0.080) return { texto: 'Fuga baja en línea principal (Vbat/VPH_PWR). Revisar periféricos.', nivel: 'aviso' };
+                return { texto: 'Cortocircuito en línea principal. Inyectar tensión.', nivel: 'malo' };
+            }
+            if (etapa === 'durante') {
+                if (consumo === 0) return { texto: 'Falla en botón, flex o PMIC no alimentado.', nivel: 'aviso' };
+                if (consumo <= 0.030) return { texto: 'Falla de Reloj Oscilador o CPU no despierta.', nivel: 'malo' };
+                if (consumo <= 0.080) return { texto: 'Falla de RAM/Memoria (Posible soldadura fría/Reballing).', nivel: 'aviso' };
+                if (consumo <= 0.150) return { texto: 'Bloqueo de CPU o corto en salida LDO secundaria.', nivel: 'malo' };
+                return { texto: 'Corto secundario grave post-PMIC.', nivel: 'malo' };
+            }
+            if (etapa === 'despues') {
+                if (consumo === 0) return { texto: 'Falla de retención (Falta señal PS_HOLD).', nivel: 'malo' };
+                if (consumo > 0.150) return { texto: 'Secuencia de encendido normal o Bootloop.', nivel: 'ok' };
+                return { texto: 'Consumo anormal al soltar. Revisar PMIC.', nivel: 'aviso' };
+            }
+            return null;
+        }
+
+        // ---- Estado y UI del modal ----------------------------------------------------------
+        let dpUltimoInforme = null;
+
+        function dpLeerMediciones() {
+            const etapa = document.getElementById('diag-etapa').value;
+            const consumo = dpNum(document.getElementById('diag-consumo').value);
+            return {
+                modelo: document.getElementById('dp-modelo').value.trim(),
+                falla: document.getElementById('dp-falla').value.trim(),
+                arquitectura: document.getElementById('dp-arquitectura').value,
+                vbat: dpNum(document.getElementById('dp-vbat').value),
+                bsi: document.getElementById('dp-bsi').value,
+                vbusSub: dpNum(document.getElementById('dp-vbus-sub').value),
+                vbusFpc: dpNum(document.getElementById('dp-vbus-fpc').value),
+                power: dpNum(document.getElementById('dp-power').value),
+                caidas: document.getElementById('dp-caidas').value.trim(),
+                etapaConsumo: etapa,
+                consumo,
+                // El mapeo a las claves que espera el motor de reglas.
+                consumoAntes: etapa === 'antes' ? consumo : null,
+                consumoDespues: etapa === 'despues' ? consumo : null
+            };
+        }
+
+        function dpDetectarArquitectura() {
+            const modelo = document.getElementById('dp-modelo').value;
+            if (modelo.trim().length < 2) return;
+            document.getElementById('dp-arquitectura').value = dpArquitecturaDeModelo(modelo);
+        }
+
+        // Evaluación en vivo mientras el técnico carga datos: es local, instantánea y no gasta IA.
+        function dpEvaluar() {
+            const m = dpLeerMediciones();
+
+            const hallazgos = dpReglasDeterministas(m);
+            const aviso = document.getElementById('dp-fase1-aviso');
+            const deFase1 = hallazgos.filter(h => h.fase.startsWith('Fase 1'));
+            if (deFase1.length) {
+                const h = deFase1[0];
+                aviso.style.display = 'block';
+                aviso.style.background = 'rgba(239,68,68,0.10)';
+                aviso.style.border = '1px solid var(--danger)';
+                aviso.innerHTML = `<strong style="color:var(--danger);">${h.detalle}</strong><br><span style="color:#ddd;">${h.veredicto}</span>`;
+            } else {
+                aviso.style.display = 'none';
             }
 
-            if (resultado) {
+            const panel = document.getElementById('diag-resultado-panel');
+            const evaluacion = dpEvaluarConsumo(m.etapaConsumo, m.consumo);
+            if (evaluacion) {
+                const color = evaluacion.nivel === 'ok' ? 'var(--success)'
+                    : evaluacion.nivel === 'aviso' ? 'var(--warning)' : 'var(--danger)';
                 panel.style.display = 'block';
                 panel.style.borderColor = color;
-                txt.innerHTML = `<span style="color:${color}; font-weight:bold;">${consumo.toFixed(3)}A:</span> ${resultado}`;
-                btn.disabled = false;
-                
-                const etapasNombres = {
-                    'antes': 'Antes de presionar Power',
-                    'durante': 'Manteniendo Power',
-                    'despues': 'Al soltar Power'
-                };
-                
-                panel.dataset.res = `[DIAGNÓSTICO CONSUMO]\nEtapa: ${etapasNombres[etapa]}\nConsumo: ${consumo.toFixed(3)}A\nAnálisis: ${resultado}`;
+                document.getElementById('diag-resultado-texto').innerHTML =
+                    `<span style="color:${color}; font-weight:bold;">${m.consumo.toFixed(3)}A:</span> ${evaluacion.texto}`;
             } else {
                 panel.style.display = 'none';
-                btn.disabled = true;
             }
         }
 
-        function agregarDiagnosticoBitacora() {
-            const bitacora = document.getElementById('lab-bitacora');
-            const panel = document.getElementById('diag-resultado-panel');
-            if (bitacora && panel.dataset.res) {
-                const text = bitacora.value;
-                bitacora.value = text + (text.trim() ? '\n\n' : '') + panel.dataset.res;
-                showToast('Diagnóstico añadido a la bitácora', 'success');
+        function abrirDiagnosticoPlaca() {
+            document.getElementById('modal-diagnostico-placa').style.display = 'flex';
+            dpReiniciarTodo();
+            // Precargar modelo y falla del equipo que se esté reparando en el Laboratorio, para
+            // no re-tipear lo que la app ya sabe. Son <span>, no inputs: se lee textContent.
+            const leerLab = (id) => {
+                const el = document.getElementById(id);
+                if (!el) return '';
+                return (el.value !== undefined ? el.value : el.textContent || '').trim();
+            };
+            const modeloLab = leerLab('lab-modelo');
+            if (modeloLab && modeloLab !== '-') {
+                document.getElementById('dp-modelo').value = modeloLab;
+                dpDetectarArquitectura();
             }
-            cerrarModalDiagnosticoConsumo();
+            const fallaLab = leerLab('lab-falla');
+            if (fallaLab && fallaLab !== '-') document.getElementById('dp-falla').value = fallaLab;
+            dpConfigurarInputDecimal(document.getElementById('diag-consumo'));
+        }
+
+        function cerrarDiagnosticoPlaca() {
+            document.getElementById('modal-diagnostico-placa').style.display = 'none';
+        }
+
+        function dpReiniciarTodo() {
+            ['dp-modelo', 'dp-falla', 'dp-vbat', 'dp-vbus-sub', 'dp-vbus-fpc', 'dp-power', 'dp-caidas', 'diag-consumo']
+                .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            document.getElementById('dp-bsi').value = '';
+            document.getElementById('dp-fase1-aviso').style.display = 'none';
+            document.getElementById('diag-resultado-panel').style.display = 'none';
+            document.getElementById('dp-informe').style.display = 'none';
+            document.getElementById('dp-btn-bitacora').style.display = 'none';
+            dpUltimoInforme = null;
+            reiniciarRuta();
+        }
+
+        // El input de consumo acepta decimales sin que salte el cursor (comportamiento original).
+        function dpConfigurarInputDecimal(input) {
+            if (!input) return;
+            input.oninput = function () {
+                this.value = this.value.replace(/,/g, '.').replace(/[^\d.]/g, '');
+                const partes = this.value.split('.');
+                if (partes.length > 2) this.value = partes[0] + '.' + partes.slice(1).join('');
+                dpEvaluar();
+            };
         }
 
         // ================= RUTA DE DIAGNÓSTICO DE ENCENDIDO =================
@@ -13048,16 +13228,6 @@
             document.getElementById('diag-ruta-estado').innerText = exito ? 'Completado' : 'Interrumpido';
         }
 
-        function insertarRutaBitacora() {
-            const bitacora = document.getElementById('lab-bitacora');
-            if (bitacora) {
-                const text = bitacora.value;
-                const registro = `[RUTA DE ENCENDIDO]\nEstado: ${estadoRuta.falloEnPaso > 0 ? 'Falla en Paso ' + estadoRuta.falloEnPaso + ' (' + definicionPasos[estadoRuta.falloEnPaso] + ')' : 'Exitosa (4/4)'}\nConclusión: ${estadoRuta.resultadoFinal}`;
-                bitacora.value = text + (text.trim() ? '\n\n' : '') + registro;
-                showToast('Ruta de diagnóstico añadida a bitácora', 'success');
-            }
-        }
-
         function reiniciarRuta() {
             estadoRuta = { pasoActual: 1, resultadoFinal: '', falloEnPaso: 0 };
             
@@ -13083,6 +13253,118 @@
             }
             
             document.getElementById('diag-resumen').style.display = 'none';
+        }
+
+        // ---- Informe final: reglas locales + redacción con IA -------------------------------
+        // El veredicto técnico sale SIEMPRE de las reglas locales. La IA solo redacta el paso a
+        // paso y el resumen para el cliente, y nunca puede contradecir un hallazgo determinista.
+        function dpGenerarInforme() {
+            const m = dpLeerMediciones();
+
+            if (!m.modelo) { showToast('Poné el modelo del equipo', 'warning'); return; }
+
+            const hallazgos = dpReglasDeterministas(m);
+            const consumo = dpEvaluarConsumo(m.etapaConsumo, m.consumo);
+            const rutaEstado = estadoRuta.falloEnPaso > 0
+                ? `Falla en paso ${estadoRuta.falloEnPaso}: ${definicionPasos[estadoRuta.falloEnPaso]}`
+                : (estadoRuta.resultadoFinal ? 'Ruta completa sin fallas (4/4)' : 'Ruta no recorrida');
+
+            if (!hallazgos.length && !consumo && estadoRuta.falloEnPaso === 0 && !estadoRuta.resultadoFinal) {
+                showToast('Cargá al menos una medición antes de generar el diagnóstico', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById('dp-btn-generar');
+            btn.disabled = true;
+            btn.innerHTML = "<i class='bx bx-loader-alt bx-spin'></i> Analizando…";
+
+            ipcRenderer.send('diagnostico-placa-ia', {
+                modelo: m.modelo,
+                falla_reportada: m.falla,
+                arquitectura: m.arquitectura,
+                mediciones_basicas: {
+                    voltaje_bateria: m.vbat, lineas_bsi_thm: m.bsi,
+                    voltaje_vbus_sub_board: m.vbusSub, voltaje_vbus_fpc_mainboard: m.vbusFpc,
+                    voltaje_boton_power: m.power
+                },
+                mediciones_avanzadas: {
+                    etapa_consumo: m.etapaConsumo, consumo: m.consumo,
+                    lectura_tabla_consumo: consumo ? consumo.texto : null,
+                    ruta_encendido: rutaEstado,
+                    caidas_tension_lineas_clave: m.caidas
+                },
+                // Los hallazgos deterministas van como HECHOS, no como sugerencia.
+                hallazgos_deterministas: hallazgos
+            });
+        }
+
+        ipcRenderer.on('diagnostico-placa-resultado', (e, res) => {
+            const btn = document.getElementById('dp-btn-generar');
+            btn.disabled = false;
+            btn.innerHTML = "<i class='bx bx-bot'></i> Generar diagnóstico";
+
+            if (!res.success) {
+                showToast(res.msg || 'No se pudo generar el diagnóstico', 'danger');
+                const cuerpo = document.getElementById('dp-informe-cuerpo');
+                document.getElementById('dp-informe').style.display = 'block';
+                document.getElementById('dp-confianza').textContent = 'sin conexión';
+                document.getElementById('dp-confianza').style.cssText =
+                    'font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px;background:rgba(239,68,68,0.2);color:var(--danger);';
+                cuerpo.innerHTML = `<span style="color:var(--danger);">No se pudo completar el diagnóstico: ${res.msg || 'sin respuesta'}.</span>`
+                    + '<br><span style="color:#aaa;">Revisá la conexión a internet y volvé a intentar. Las mediciones que cargaste siguen acá.</span>';
+                return;
+            }
+
+            dpUltimoInforme = res.data;
+            dpPintarInforme(res.data);
+            document.getElementById('dp-btn-bitacora').style.display = 'inline-flex';
+        });
+
+        function dpPintarInforme(inf) {
+            const caja = document.getElementById('dp-informe');
+            const badge = document.getElementById('dp-confianza');
+            const cuerpo = document.getElementById('dp-informe-cuerpo');
+
+            const alta = inf.confianza === 'alta';
+            badge.textContent = alta ? 'confianza alta' : 'confianza media';
+            badge.style.cssText = 'font-size:11px;font-weight:bold;padding:2px 8px;border-radius:10px;'
+                + (alta ? 'background:rgba(16,185,129,0.2);color:var(--success);'
+                        : 'background:rgba(245,158,11,0.2);color:var(--warning);');
+
+            const pasos = (inf.paso_a_paso_reparacion || [])
+                .map((p, i) => `<li style="margin-bottom:4px;">${dpEscapar(p)}</li>`).join('');
+
+            cuerpo.innerHTML =
+                `<div style="margin-bottom:8px;"><span style="color:#888;">Fase donde está la falla:</span> <b>${dpEscapar(inf.fase_falla_detectada || '—')}</b></div>`
+                + `<div style="margin-bottom:10px; padding:8px; background:rgba(0,0,0,0.25); border-radius:6px;"><b>${dpEscapar(inf.diagnostico_tecnico_exacto || '')}</b></div>`
+                + (pasos ? `<div style="color:#888; margin-bottom:4px;">Paso a paso:</div><ol style="margin:0 0 10px 18px; padding:0;">${pasos}</ol>` : '')
+                + `<div style="color:#888; margin-bottom:4px;">Para la bitácora:</div><div style="color:#bbb;">${dpEscapar(inf.registro_bitacora || '')}</div>`;
+            caja.style.display = 'block';
+        }
+
+        function dpEscapar(t) {
+            const d = document.createElement('div');
+            d.textContent = String(t == null ? '' : t);
+            return d.innerHTML;
+        }
+
+        function dpInsertarBitacora() {
+            const bitacora = document.getElementById('lab-bitacora');
+            if (!bitacora || !dpUltimoInforme) return;
+            const inf = dpUltimoInforme;
+            const pasos = (inf.paso_a_paso_reparacion || []).map((p, i) => `  ${i + 1}. ${p}`).join('\n');
+            const registro = `[DIAGNÓSTICO DE PLACA]\n`
+                + `Fase: ${inf.fase_falla_detectada || '—'}  ·  Confianza: ${inf.confianza || 'media'}\n`
+                + `Falla: ${inf.diagnostico_tecnico_exacto || '—'}\n`
+                + (inf.analisis_mediciones ? `Periféricos: ${inf.analisis_mediciones.perifericos || '—'}\n`
+                    + `Línea de potencia: ${inf.analisis_mediciones.linea_potencia || '—'}\n`
+                    + `Protocolos: ${inf.analisis_mediciones.protocolos || '—'}\n` : '')
+                + (pasos ? `Reparación:\n${pasos}\n` : '')
+                + `Resumen: ${inf.registro_bitacora || '—'}`;
+            const texto = bitacora.value;
+            bitacora.value = texto + (texto.trim() ? '\n\n' : '') + registro;
+            showToast('Diagnóstico añadido a la bitácora', 'success');
+            cerrarDiagnosticoPlaca();
         }
 
         // ================= CALCULADORA LEY DE OHM =================

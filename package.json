@@ -9,7 +9,7 @@
     "build": "electron-builder --win",
     "mapa-codigo": "node scripts/mapa-codigo.js",
     "qa": "node test/qa-ejemplo.mjs",
-    "test": "node test/imei-decodificador.test.mjs && node test/version.test.mjs && node test/auditar-modales.mjs --fallan"
+    "test": "node test/imei-decodificador.test.mjs && node test/version.test.mjs && node test/diagnostico-placa.test.mjs && node test/auditar-modales.mjs --fallan"
   },
   "build": {
     "appId": "com.blackhouse.os",

@@ -433,6 +433,78 @@ app.whenReady().then(() => {
         console.warn('Error al buscar actualizaciones:', err.message);
     });
 
+    // Diagnóstico de placa: la IA redacta a partir de los hallazgos ya decididos por las reglas.
+    ipcMain.on('diagnostico-placa-ia', async (event, datos) => {
+        const responder = (payload) => event.reply('diagnostico-placa-resultado', payload);
+
+        if (!process.env.GROQ_API_KEY) {
+            return responder({ success: false, msg: 'Falta configurar la clave de IA en este equipo.' });
+        }
+
+        // La confianza NO la decide la IA: es alta si disparó una regla determinista.
+        const hallazgos = Array.isArray(datos.hallazgos_deterministas) ? datos.hallazgos_deterministas : [];
+        const confianza = hallazgos.length ? 'alta' : 'media';
+
+        let ultimoError = null;
+        for (const modeloIA of MODELOS_IA_CATALOGO) {
+            try {
+                const result = await openai.chat.completions.create({
+                    model: modeloIA,
+                    temperature: 0,          // mismas mediciones, mismo informe
+                    max_tokens: 900,
+                    messages: [
+                        { role: 'system', content: PROMPT_DIAGNOSTICO_PLACA },
+                        { role: 'user', content: JSON.stringify(datos) }
+                    ]
+                });
+
+                const txt = (result.choices?.[0]?.message?.content || '').trim();
+                // A veces envuelve el JSON en ``` o le pone texto delante: se recorta.
+                const j = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+
+                const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
+                const fase = /Fase 1/i.test(j.fase_falla_detectada || '') ? 'Fase 1: Periféricos'
+                    : /Fase 2/i.test(j.fase_falla_detectada || '') ? 'Fase 2: Placa Base'
+                        : (hallazgos[0]?.fase || 'Fase 2: Placa Base');
+
+                const pasos = Array.isArray(j.paso_a_paso_reparacion)
+                    ? j.paso_a_paso_reparacion.map(p => texto(p, 300)).filter(Boolean).slice(0, 6)
+                    : [];
+                if (!pasos.length) throw new Error('la respuesta no trae pasos de reparación');
+
+                return responder({
+                    success: true,
+                    data: {
+                        fase_falla_detectada: fase,
+                        confianza,
+                        analisis_mediciones: {
+                            perifericos: texto(j.analisis_mediciones?.perifericos, 500),
+                            linea_potencia: texto(j.analisis_mediciones?.linea_potencia, 500),
+                            protocolos: texto(j.analisis_mediciones?.protocolos, 500)
+                        },
+                        // Si hubo un hallazgo determinista, ESE manda: la IA no puede pisarlo.
+                        diagnostico_tecnico_exacto: hallazgos.length
+                            ? hallazgos[0].veredicto
+                            : texto(j.diagnostico_tecnico_exacto, 400),
+                        paso_a_paso_reparacion: pasos,
+                        registro_bitacora: texto(j.registro_bitacora, 800),
+                        motor: modeloIA
+                    }
+                });
+            } catch (e) {
+                ultimoError = e;   // p. ej. el modelo grande no está habilitado en la cuenta
+            }
+        }
+
+        console.error('Diagnóstico de placa falló:', ultimoError?.message);
+        responder({
+            success: false,
+            msg: /fetch|network|ENOTFOUND|ETIMEDOUT/i.test(ultimoError?.message || '')
+                ? 'Sin conexión a internet.'
+                : (ultimoError?.message || 'No se pudo generar el diagnóstico.')
+        });
+    });
+
     // Exponer versión al frontend
     ipcMain.on('pedir-version', (event) => {
         event.reply('recibir-version', app.getVersion());
@@ -1167,6 +1239,40 @@ async function candidatosDelCatalogo(marca, escrito, limite = 6) {
 // Se intenta primero con el modelo grande, que reconoce muchos más equipos; si la cuenta no lo
 // tiene habilitado se cae al mismo que ya usa el resto del programa.
 const MODELOS_IA_CATALOGO = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+
+// ===================== DIAGNÓSTICO DE PLACA =====================
+// La lógica de diagnóstico (las 5 reglas estrictas y las tablas de consumo) vive en el RENDERER,
+// en código determinista: da el mismo resultado siempre, funciona al instante y no gasta cuota.
+// Acá la IA solo REDACTA: convierte los hallazgos ya decididos en un paso a paso y un resumen
+// para el cliente. Por eso el prompt le prohíbe explícitamente contradecir un hallazgo.
+const PROMPT_DIAGNOSTICO_PLACA = `Eres ingeniero de hardware en telefonía móvil y experto en microsoldadura nivel 3.
+Recibes las mediciones que tomó un técnico y los HALLAZGOS ya determinados por el sistema.
+
+REGLA MÁS IMPORTANTE: los "hallazgos_deterministas" que recibes son HECHOS ya verificados por
+reglas de medición. NO los contradigas, no los pongas en duda y no los reinterpretes. Tu trabajo es
+explicarlos y convertirlos en un plan de reparación. Si no viene ningún hallazgo, deduce a partir de
+las mediciones, y en ese caso sé prudente.
+
+CADENA DE ALIMENTACIÓN, según arquitectura:
+- apple:   VBUS -> FPC de carga -> Tristar/Hydra -> Tigris -> VDD_MAIN (B+) -> PMIC -> CPU.
+           Líneas críticas: I2C0, I2C1, UART, PCIe.
+- android: VBUS -> FPC -> OVP -> IF PMIC -> VPH_PWR / VSYS -> PMIC -> CPU.
+           Líneas críticas: PWR_ON, CBL_PWR_N, MIPI, SPMI.
+
+CRITERIO: se evalúa de lo simple a lo complejo. Si la falla está en periféricos (flex, batería,
+botón, sub-board) NO propongas trabajo en la placa base.
+
+Respondes SOLO con este JSON, sin texto alrededor, sin \`\`\` y sin explicaciones:
+{"fase_falla_detectada":"Fase 1: Periféricos|Fase 2: Placa Base",
+ "analisis_mediciones":{"perifericos":"","linea_potencia":"","protocolos":""},
+ "diagnostico_tecnico_exacto":"",
+ "paso_a_paso_reparacion":["","",""],
+ "registro_bitacora":""}
+
+- "diagnostico_tecnico_exacto": una frase, la falla concreta. Ej: "Caída de tensión en el flex main impide que VBUS llegue al OVP".
+- "paso_a_paso_reparacion": 3 a 5 pasos accionables, en orden, empezando por lo más barato de descartar.
+- "registro_bitacora": 2 o 3 frases claras para que las lea el CLIENTE, sin jerga y sin prometer resultados.
+- Todo en español, tono profesional y directo.`;
 
 const PROMPT_CATALOGO = `Eres el control de calidad del catálogo de equipos de una cadena de talleres de celulares.
 Recibes lo que escribió un técnico y decides si es un equipo real y con qué nombre debe quedar guardado.
