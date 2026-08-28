@@ -1,0 +1,58 @@
+-- ============================================================================
+-- 037 — Quitarle a `anon` los permisos de ESCRITURA sobre `ordenes`
+-- ============================================================================
+--
+-- CONTEXTO
+-- Auditando por qué el rastreo del cliente no encontraba las órdenes (causa real:
+-- la SUPABASE_KEY cargada en Vercel dejó de ser válida, ver más abajo) apareció
+-- que el rol `anon` tiene INSERT, UPDATE, DELETE y TRUNCATE sobre `ordenes`,
+-- en TODAS las columnas — incluidas costo, saldo, estado y tracking_token.
+--
+-- OJO: esto NO es un error de configuración propio. Es el default de Supabase
+-- (`GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated`), y afecta
+-- por igual a las 38 tablas del esquema. El modelo de Supabase es que la barrera
+-- real sea el RLS, y acá el RLS está activo en todas.
+--
+-- POR QUÉ IGUAL CONVIENE REVOCARLO EN ESTA TABLA
+-- Hoy lo único que impide que una clave pública borre órdenes es que el RLS no
+-- tiene ninguna política permisiva para anon fuera del SELECT. Es una sola línea
+-- de distancia: alcanza con que alguien agregue una política `FOR ALL` mal
+-- pensada, o desactive RLS un minuto para depurar, para que una clave que está
+-- publicada en la web y en la APK pueda escribir o vaciar la tabla de órdenes.
+-- Defensa en profundidad: que el permiso tampoco esté.
+--
+-- POR QUÉ ES SEGURO
+-- El programa de escritorio NO escribe como `anon`: hace
+-- `supabase.auth.signInWithPassword()` al iniciar sesión (main.js ~línea 65), así
+-- que opera con el rol `authenticated`, que conserva todos sus permisos y su
+-- política `bh_empresa` (empresa_id = mi_empresa()). La web escribe del lado del
+-- servidor con la clave secreta vía /api/db. Ningún camino legítimo escribe en
+-- `ordenes` con la clave anónima.
+--
+-- QUÉ NO TOCA
+-- El SELECT por COLUMNAS de anon, que es lo que hace funcionar el rastreo público:
+-- `anon` sigue pudiendo leer solo id, estado, modelo, fecha_cita y created_at.
+-- Ni cliente, ni teléfono, ni imei, ni costos. Ese límite está bien puesto y se queda.
+-- ============================================================================
+
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+    ON TABLE public.ordenes FROM anon;
+
+-- ---------------------------------------------------------------------------
+-- Verificación — anon debe quedar SOLO con SELECT sobre 5 columnas
+-- ---------------------------------------------------------------------------
+--   select privilege_type, string_agg(column_name, ', ' order by column_name)
+--   from information_schema.column_privileges
+--   where table_schema='public' and table_name='ordenes' and grantee='anon'
+--   group by privilege_type;
+--   -- esperado: una sola fila, SELECT -> created_at, estado, fecha_cita, id, modelo
+--
+-- ---------------------------------------------------------------------------
+-- ROLLBACK
+-- ---------------------------------------------------------------------------
+-- GRANT INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.ordenes TO anon;
+--
+-- PENDIENTE (no incluido acá a propósito): las otras 37 tablas están igual. Hacerlo
+-- en todas de una es un cambio mucho más grande y hay que verificar tabla por tabla
+-- que ningún camino anónimo legítimo escriba. `licencias` y `usuarios` son las dos
+-- que más convendría revisar después de esta.
