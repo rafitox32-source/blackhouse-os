@@ -8,6 +8,8 @@
     "start": "electron .",
     "build": "electron-builder --win",
     "mapa-codigo": "node scripts/mapa-codigo.js",
+    "build-mobile": "node scripts/build-mobile.js",
+    "android": "node scripts/build-mobile.js && npx cap sync android && npx cap run android",
     "qa": "node test/qa-ejemplo.mjs",
     "test": "node test/imei-decodificador.test.mjs && node test/version.test.mjs && node test/diagnostico-placa.test.mjs && node test/auditar-modales.mjs --fallan"
   },
@@ -57,6 +59,8 @@
     ]
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.108.2",
     "bcryptjs": "^3.0.3",
@@ -69,6 +73,7 @@
     "png-to-ico": "^3.0.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "@semantic-release/commit-analyzer": "^11.1.0",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^9.2.6",

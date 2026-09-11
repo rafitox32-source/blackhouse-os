@@ -9,3 +9,12 @@ dist/
 cosas-que-no-uso/
 # Estado local de Obsidian (se abre el repo para leer docs/); no es del proyecto.
 .obsidian/
+
+# Salidas de build móvil (Capacitor y Android)
+www/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/capacitor-cordova-android-plugins/
+*.apk
