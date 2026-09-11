@@ -3625,40 +3625,163 @@ ipcMain.on('obtener-cierre-dia', async (event, params) => {
             });
         }
 
+        // === REPORTE AL DUEÑO DETALLADO ===
+        // Mapeo de métodos de pago desde facturas (la fuente más confiable de cobro)
+        const metodoPorOrden = {};
+        try {
+            const { data: facts } = await supabase.from('facturas')
+                .select('orden_id, metodo_pago')
+                .eq('empresa_id', empresaActual)
+                .not('orden_id', 'is', null);
+            (facts || []).forEach(f => {
+                if (f.metodo_pago) metodoPorOrden[f.orden_id] = String(f.metodo_pago).trim().toLowerCase();
+            });
+        } catch (e) { /* sin facturas */ }
+
+        const normalizarMetodo = (m) => {
+            const s = String(m || 'efectivo').toLowerCase().trim();
+            if (s.includes('yape') || s.includes('plin')) return 'yape_plin';
+            if (s.includes('tarjeta') || s.includes('pos') || s.includes('izipay') || s.includes('culqi') || s.includes('visa') || s.includes('master')) return 'tarjeta';
+            if (s.includes('transf') || s.includes('banco') || s.includes('bcp') || s.includes('bbva') || s.includes('interbank')) return 'transferencia';
+            if (s.includes('efectivo') || s === 'cash') return 'efectivo';
+            return 'otro';
+        };
+
+        const desglosePagos = {
+            efectivo: 0,
+            yape_plin: 0,
+            tarjeta: 0,
+            transferencia: 0,
+            otro: 0
+        };
+        const sumarPago = (metodo, monto) => {
+            const cat = normalizarMetodo(metodo);
+            desglosePagos[cat] = (desglosePagos[cat] || 0) + monto;
+        };
+
         // 1) Taller — adelantos cobrados hoy (órdenes creadas hoy con adelanto).
         let adelantos = 0;
+        const ordenesDetalle = [];
+        const tecnicosRendimiento = {};
+
+        const registrarTecnico = (tec, cobrado, mo, rep) => {
+            const k = tec ? String(tec).trim() : 'Sin asignar';
+            if (!tecnicosRendimiento[k]) tecnicosRendimiento[k] = { tecnico: k, ordenes: 0, cobrado: 0, manoObra: 0, repuesto: 0 };
+            tecnicosRendimiento[k].ordenes++;
+            tecnicosRendimiento[k].cobrado += cobrado;
+            tecnicosRendimiento[k].manoObra += mo;
+            tecnicosRendimiento[k].repuesto += rep;
+        };
+
         const { data: creadas } = await supabase.from('ordenes')
-            .select('adelanto')
+            .select('id, cliente, modelo, falla, adelanto, tecnico_id, metodo_pago, precio_servicio, precio_repuesto, costo')
             .eq('empresa_id', empresaActual)
             .gte('created_at', desde.toISOString())
             .lt('created_at', hasta.toISOString());
-        (creadas || []).forEach(o => { adelantos += cf(o.adelanto); });
+
+        (creadas || []).forEach(o => {
+            const a = cf(o.adelanto);
+            if (a > 0) {
+                adelantos += a;
+                const met = metodoPorOrden[o.id] || o.metodo_pago || 'efectivo';
+                sumarPago(met, a);
+                ordenesDetalle.push({
+                    tipo: 'Adelanto',
+                    id: o.id,
+                    cliente: o.cliente || 'Sin nombre',
+                    modelo: o.modelo || 'Equipo',
+                    falla: o.falla || '',
+                    tecnico: o.tecnico_id || 'Sin asignar',
+                    monto: a,
+                    metodo: met
+                });
+                const ps = cf(o.precio_servicio), pr = cf(o.precio_repuesto);
+                const base = (ps + pr) || cf(o.costo) || a;
+                const fracMO = base > 0 && ps > 0 ? (ps / base) : (pr > 0 ? 0.5 : 1);
+                registrarTecnico(o.tecnico_id, a, a * fracMO, a * (1 - fracMO));
+            }
+        });
 
         // 2) Taller — saldos cobrados hoy (órdenes ENTREGADAS hoy: costo − adelanto).
-        //    Tolerante: si falta la migración 009 (columna fecha_entregado) se omite.
         let saldosCobrados = 0;
         try {
             const { data: entregadas, error: errE } = await supabase.from('ordenes')
-                .select('costo, adelanto')
+                .select('id, cliente, modelo, falla, costo, adelanto, precio_servicio, precio_repuesto, tecnico_id, metodo_pago')
                 .eq('empresa_id', empresaActual)
                 .gte('fecha_entregado', desde.toISOString())
                 .lt('fecha_entregado', hasta.toISOString());
-            if (!errE) (entregadas || []).forEach(o => {
-                saldosCobrados += Math.max(cf(o.costo) - cf(o.adelanto), 0);
-            });
+            if (!errE && entregadas) {
+                entregadas.forEach(o => {
+                    const saldo = Math.max(cf(o.costo) - cf(o.adelanto), 0);
+                    if (saldo > 0) {
+                        saldosCobrados += saldo;
+                        const met = metodoPorOrden[o.id] || o.metodo_pago || 'efectivo';
+                        sumarPago(met, saldo);
+                        ordenesDetalle.push({
+                            tipo: 'Saldo Entrega',
+                            id: o.id,
+                            cliente: o.cliente || 'Sin nombre',
+                            modelo: o.modelo || 'Equipo',
+                            falla: o.falla || '',
+                            tecnico: o.tecnico_id || 'Sin asignar',
+                            monto: saldo,
+                            costoTotal: cf(o.costo),
+                            adelantoPrevio: cf(o.adelanto),
+                            metodo: met
+                        });
+                        const ps = cf(o.precio_servicio), pr = cf(o.precio_repuesto);
+                        const base = (ps + pr) || cf(o.costo) || saldo;
+                        const fracMO = base > 0 && ps > 0 ? (ps / base) : (pr > 0 ? 0.5 : 1);
+                        registrarTecnico(o.tecnico_id, saldo, saldo * fracMO, saldo * (1 - fracMO));
+                    }
+                });
+            }
         } catch (e) { /* sin migración 009 */ }
 
         // 3) Ventas POS de hoy.
         let ingresosPOS = 0, ventasPosCount = 0;
+        const ventasPosDetalle = [];
         try {
             const { data: ventas, error: errV } = await supabase.from('ventas_pos')
-                .select('total')
+                .select('id, total, medio_pago, vendedor_usuario, creado_en')
                 .eq('empresa_id', empresaActual)
                 .gte('creado_en', desde.toISOString())
                 .lt('creado_en', hasta.toISOString());
-            if (!errV && ventas) {
+            if (!errV && ventas && ventas.length) {
                 ventasPosCount = ventas.length;
                 ingresosPOS = ventas.reduce((s, v) => s + cf(v.total), 0);
+                ventas.forEach(v => {
+                    sumarPago(v.medio_pago || 'efectivo', cf(v.total));
+                });
+                const ids = ventas.map(v => v.id);
+                const { data: items } = await supabase.from('ventas_pos_items')
+                    .select('venta_id, nombre, cantidad, subtotal')
+                    .in('venta_id', ids);
+
+                const ventasMap = {};
+                ventas.forEach(v => { ventasMap[v.id] = v; });
+
+                const agrupadoItems = {};
+                (items || []).forEach(it => {
+                    const k = it.nombre || 'Venta varios';
+                    if (!agrupadoItems[k]) {
+                        agrupadoItems[k] = { nombre: k, cantidad: 0, subtotal: 0, vendedores: new Set() };
+                    }
+                    agrupadoItems[k].cantidad += cf(it.cantidad);
+                    agrupadoItems[k].subtotal += cf(it.subtotal);
+                    const v = ventasMap[it.venta_id];
+                    if (v && v.vendedor_usuario) agrupadoItems[k].vendedores.add(v.vendedor_usuario);
+                });
+
+                Object.values(agrupadoItems).forEach(ai => {
+                    ventasPosDetalle.push({
+                        nombre: ai.nombre,
+                        cantidad: ai.cantidad,
+                        subtotal: ai.subtotal,
+                        vendedores: Array.from(ai.vendedores).join(', ')
+                    });
+                });
+                ventasPosDetalle.sort((a, b) => b.subtotal - a.subtotal);
             }
         } catch (e) { /* POS sin migrar */ }
 
@@ -3696,7 +3819,13 @@ ipcMain.on('obtener-cierre-dia', async (event, params) => {
         } catch (e) { /* sin devoluciones */ }
 
         const ingresosTaller = adelantos + saldosCobrados;
-        const neto = ingresosTaller + ingresosPOS - gastosTotal - comprasTotal - devolucionesTotal;
+        const totalIngresos = ingresosTaller + ingresosPOS;
+        const totalSalidas = gastosTotal + comprasTotal + devolucionesTotal;
+        const neto = totalIngresos - totalSalidas;
+
+        // Efectivo físico en caja = entradas en efectivo menos salidas de dinero (gastos, compras, devoluciones)
+        const efectivoEnCaja = Math.max(0, desglosePagos.efectivo - totalSalidas);
+        const totalDigital = (desglosePagos.yape_plin || 0) + (desglosePagos.tarjeta || 0) + (desglosePagos.transferencia || 0) + (desglosePagos.otro || 0);
 
         let cierreId = null;
         if (params && params.registrar) {
@@ -3710,7 +3839,17 @@ ipcMain.on('obtener-cierre-dia', async (event, params) => {
                 compras_externas: comprasTotal,
                 devoluciones: devolucionesTotal,
                 neto,
-                detalle_json: { adelantos, saldosCobrados, ventasPosCount, gastos: listaGastos, compras: listaCompras },
+                detalle_json: {
+                    adelantos, saldosCobrados, ventasPosCount,
+                    desglosePagos,
+                    efectivoEnCaja,
+                    totalDigital,
+                    ordenes: ordenesDetalle,
+                    ventas: ventasPosDetalle,
+                    tecnicos: Object.values(tecnicosRendimiento),
+                    gastos: listaGastos,
+                    compras: listaCompras
+                },
                 usuario: usuarioActual || null
             }]).select('id').single();
             if (errReg) throw new Error('No se pudo guardar el cierre (¿falta la migración 009?): ' + errReg.message);
@@ -3724,7 +3863,15 @@ ipcMain.on('obtener-cierre-dia', async (event, params) => {
             gastos: gastosTotal, listaGastos,
             comprasExternas: comprasTotal, listaCompras,
             devoluciones: devolucionesTotal,
-            neto, registrado: !!(params && params.registrar), cierre_id: cierreId
+            totalIngresos, totalSalidas,
+            neto,
+            desglosePagos,
+            efectivoEnCaja,
+            totalDigital,
+            ordenesDetalle,
+            ventasPosDetalle,
+            rendimientoTecnicos: Object.values(tecnicosRendimiento),
+            registrado: !!(params && params.registrar), cierre_id: cierreId
         });
     } catch (err) {
         event.reply('cierre-dia-datos', { success: false, msg: err.message });

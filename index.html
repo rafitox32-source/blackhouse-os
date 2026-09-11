@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://flfhpffslhjcuvhxsnjz.supabase.co wss://flfhpffslhjcuvhxsnjz.supabase.co https://ui-avatars.com data: blob:; img-src * data: blob:;">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
@@ -15,6 +16,9 @@
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Solo hace algo en el build de Android (Capacitor): en Electron, preload.js ya
+         dejó window.ipcRenderer listo antes de esto y el shim se auto-desactiva. -->
+    <script src="capacitor-shim.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/index.min.js"></script>
     <!-- Holograma 3D del Laboratorio: three.js incluido localmente (assets/vendor/three) para que funcione sin internet -->
@@ -5690,16 +5694,23 @@
 
     <!-- Modal: Cierre del Día unificado (taller + POS − gastos − compras − devoluciones) -->
     <div id="modal-cierre-dia" class="modal-overlay">
-        <div class="modal-content" style="width: 480px;">
-            <h2 style="margin-top:0; color: #0ea5e9;">🧾 Cierre del Día</h2>
-            <div id="cierre-dia-cuerpo" style="max-height:380px; overflow-y:auto;">
+        <div class="modal-content" style="max-width: 680px; width: 95%; max-height: 85vh; display: flex; flex-direction: column; border-radius: 16px; padding: 22px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+                <h2 style="margin: 0; color: #0ea5e9; font-size: 20px; display: flex; align-items: center; gap: 8px;">
+                    <i class='bx bx-calculator'></i> <span id="cierre-dia-titulo-txt">Cierre del Día</span>
+                </h2>
+                <span id="cierre-dia-fecha-tag" style="font-size: 12px; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 4px 10px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.08);"></span>
+            </div>
+            <div id="cierre-dia-cuerpo" style="overflow-y: auto; flex: 1; padding-right: 6px;">
                 <p style="color:#aaa; text-align:center; padding:20px;">Calculando…</p>
             </div>
-            <div style="display:flex; justify-content:space-between; gap:10px; margin-top:16px;">
-                <button class="bh-btn-white" onclick="copiarCierreDia()">📋 Copiar resumen</button>
+            <div style="display:flex; justify-content:space-between; align-items: center; gap:10px; margin-top:14px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;">
+                <button class="bh-btn-white" onclick="copiarCierreDia()" style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: #22c55e;">
+                    <i class='bx bxl-whatsapp' style="font-size: 19px;"></i> Copiar para WhatsApp
+                </button>
                 <div style="display:flex; gap:10px;">
                     <button class="bh-btn-white" onclick="document.getElementById('modal-cierre-dia').style.display='none'">Cerrar</button>
-                    <button class="bh-btn-purple" id="btn-guardar-cierre-dia" style="background:#0ea5e9;" onclick="confirmarCierreDia()">Guardar cierre</button>
+                    <button class="bh-btn-purple" id="btn-guardar-cierre-dia" style="background:#0ea5e9; font-weight: 600;" onclick="confirmarCierreDia()">Guardar cierre</button>
                 </div>
             </div>
         </div>
@@ -7299,8 +7310,9 @@
                     canvas.toBlob(blob => {
                         try {
                             const item = new ClipboardItem({ "image/png": blob });
-                            navigator.clipboard.write([item]);
-                            showToast('Ticket copiado al portapapeles 📋', 'success');
+                            navigator.clipboard.write([item])
+                                .then(() => showToast('Ticket copiado al portapapeles 📋', 'success'))
+                                .catch(e => { console.error(e); showToast('No se pudo copiar el ticket', 'danger'); });
                             setTimeout(() => {
                                 const mensaje = `Hola ${ordenTemporal.cliente}, recibimos su equipo. \n💳 Saldo: S/${ordenTemporal.saldo}\n🔍 Ver estado: ${trackingUrl}`;
                                 const url = `https://wa.me/51${ordenTemporal.telefono}?text=${encodeURIComponent(mensaje)}`;
@@ -8193,32 +8205,200 @@
                 cont.innerHTML = h;
                 return;
             }
-            if (tituloEl) tituloEl.innerHTML = '🧾 Cierre del Día';
-            const fila = (lbl, val, color, extra) =>
-                `<div style="display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px;">
-                    <span style="color:#ccc;">${lbl}${extra ? ` <span style='color:#666; font-size:11px;'>${extra}</span>` : ''}</span>
-                    <strong style="color:${color};">${val}</strong></div>`;
+            if (tituloEl) tituloEl.innerHTML = '<i class="bx bx-calculator"></i> Cierre del Día';
+            const tagFecha = document.getElementById('cierre-dia-fecha-tag');
+            if (tagFecha) tagFecha.textContent = res.fecha || 'Hoy';
 
-            let html = `<div style="text-align:center; margin-bottom:12px;">
-                <div style="font-size:34px; font-weight:800; color:${res.neto >= 0 ? 'var(--success)' : 'var(--danger)'};">${f(res.neto)}</div>
-                <div style="font-size:12px; color:#aaa;">Neto del día · ${esc(res.fecha)}${res.registrado ? ' · <b style="color:#0ea5e9;">GUARDADO</b>' : ''}</div></div>`;
+            const badgeMetodo = (m) => {
+                const s = String(m || 'efectivo').toLowerCase();
+                if (s.includes('yape') || s.includes('plin')) return `<span style="background:rgba(147,51,234,0.18); color:#c084fc; border:1px solid rgba(147,51,234,0.3); font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700;">YAPE/PLIN</span>`;
+                if (s.includes('tarjeta') || s.includes('pos')) return `<span style="background:rgba(59,130,246,0.18); color:#60a5fa; border:1px solid rgba(59,130,246,0.3); font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700;">TARJETA</span>`;
+                if (s.includes('transf') || s.includes('banco')) return `<span style="background:rgba(234,179,8,0.18); color:#facc15; border:1px solid rgba(234,179,8,0.3); font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700;">TRANSF.</span>`;
+                return `<span style="background:rgba(34,197,94,0.18); color:#4ade80; border:1px solid rgba(34,197,94,0.3); font-size:10px; padding:2px 7px; border-radius:10px; font-weight:700;">EFECTIVO</span>`;
+            };
 
-            html += `<div style="font-size:11px; color:#10b981; text-transform:uppercase; letter-spacing:.05em; margin:10px 0 4px;">Entró</div>`;
-            html += fila('Taller — adelantos de hoy', f(res.adelantos), 'var(--success)');
-            html += fila('Taller — saldos de órdenes entregadas hoy', f(res.saldosCobrados), 'var(--success)');
-            html += fila('Ventas (POS)', f(res.ingresosPOS), 'var(--success)', res.ventasPosCount ? `${res.ventasPosCount} ventas` : '');
+            let html = `
+                <!-- TARJETAS PRINCIPALES DE LIQUIDACIÓN -->
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:16px;">
+                    <!-- Efectivo en caja física -->
+                    <div style="background:linear-gradient(145deg, rgba(34,197,94,0.12), rgba(16,185,129,0.04)); border:1px solid rgba(34,197,94,0.3); border-radius:12px; padding:14px 16px; text-align:left;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <span style="font-size:11px; font-weight:700; color:#86efac; text-transform:uppercase; letter-spacing:0.04em;">💵 Efectivo en Caja</span>
+                            <i class='bx bx-money' style="color:#22c55e; font-size:18px;"></i>
+                        </div>
+                        <div style="font-size:24px; font-weight:800; color:#4ade80;">${f(res.efectivoEnCaja != null ? res.efectivoEnCaja : (res.desglosePagos?.efectivo || 0) - (res.totalSalidas || 0))}</div>
+                        <div style="font-size:11px; color:#94a3b8; margin-top:2px;">Físico a entregar en mano</div>
+                    </div>
 
-            html += `<div style="font-size:11px; color:#ef4444; text-transform:uppercase; letter-spacing:.05em; margin:14px 0 4px;">Salió</div>`;
-            html += fila('Gastos operativos', '−' + f(res.gastos), '#ef4444');
-            html += fila('Compras a otros proveedores', '−' + f(res.comprasExternas), '#ef4444');
-            html += fila('Devoluciones en efectivo', '−' + f(res.devoluciones), '#ef4444');
+                    <!-- Dinero Digital / Bancos -->
+                    <div style="background:linear-gradient(145deg, rgba(14,165,233,0.12), rgba(59,130,246,0.04)); border:1px solid rgba(14,165,233,0.3); border-radius:12px; padding:14px 16px; text-align:left;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <span style="font-size:11px; font-weight:700; color:#7dd3fc; text-transform:uppercase; letter-spacing:0.04em;">📱 Digital / Cuentas</span>
+                            <i class='bx bx-mobile-alt' style="color:#0ea5e9; font-size:18px;"></i>
+                        </div>
+                        <div style="font-size:24px; font-weight:800; color:#38bdf8;">${f(res.totalDigital || 0)}</div>
+                        <div style="font-size:11px; color:#94a3b8; margin-top:2px;">Yape, Plin, Transferencias</div>
+                    </div>
 
-            const detalles = [];
-            (res.listaCompras || []).forEach(c => detalles.push(`· ${esc(c.proveedor)}${c.descripcion ? ' — ' + esc(c.descripcion) : ''}${c.orden_id ? ' (orden #' + esc(c.orden_id) + ')' : ''}: ${f(c.costo)}`));
-            (res.listaGastos || []).forEach(g => detalles.push(`· ${esc(g.categoria)}${g.descripcion ? ' — ' + esc(g.descripcion) : ''}: ${f(g.monto)}`));
-            if (detalles.length) {
-                html += `<div style="font-size:11px; color:#888; margin-top:12px; line-height:1.6;">${detalles.join('<br>')}</div>`;
+                    <!-- Neto General del Día -->
+                    <div style="background:linear-gradient(145deg, rgba(168,85,247,0.12), rgba(99,102,241,0.04)); border:1px solid rgba(168,85,247,0.3); border-radius:12px; padding:14px 16px; text-align:left;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <span style="font-size:11px; font-weight:700; color:#d8b4fe; text-transform:uppercase; letter-spacing:0.04em;">⭐ Neto Total</span>
+                            <i class='bx bx-trending-up' style="color:#a855f7; font-size:18px;"></i>
+                        </div>
+                        <div style="font-size:24px; font-weight:800; color:${res.neto >= 0 ? '#c084fc' : '#f87171'};">${f(res.neto)}</div>
+                        <div style="font-size:11px; color:#94a3b8; margin-top:2px;">Ingresos menos salidas${res.registrado ? ' · <span style="color:#38bdf8; font-weight:700;">REGISTRADO</span>' : ''}</div>
+                    </div>
+                </div>
+
+                <!-- CHIPS DE DESGLOSE POR MÉTODO DE PAGO -->
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:10px 14px; margin-bottom:16px; display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center; font-size:12px;">
+                    <div><span style="color:#888;">💵 Efectivo cobrado:</span> <strong style="color:#4ade80;">${f(res.desglosePagos?.efectivo || 0)}</strong></div>
+                    <div><span style="color:#888;">🟣 Yape / Plin:</span> <strong style="color:#c084fc;">${f(res.desglosePagos?.yape_plin || 0)}</strong></div>
+                    <div><span style="color:#888;">💳 Tarjeta:</span> <strong style="color:#60a5fa;">${f(res.desglosePagos?.tarjeta || 0)}</strong></div>
+                    <div><span style="color:#888;">🏦 Transferencia:</span> <strong style="color:#facc15;">${f(res.desglosePagos?.transferencia || 0)}</strong></div>
+                </div>
+            `;
+
+            // SECCIÓN 1: DETALLE DE ÓRDENES DE TALLER
+            const ords = res.ordenesDetalle || [];
+            html += `
+                <div style="margin-bottom:16px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:12px 14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">
+                        <span style="font-size:13px; font-weight:800; color:#0ea5e9; text-transform:uppercase; letter-spacing:0.04em;">
+                            🔧 Órdenes de Taller (${ords.length})
+                        </span>
+                        <strong style="font-size:14px; color:#4ade80;">${f(res.ingresosTaller)}</strong>
+                    </div>
+                    <div style="font-size:11px; color:#888; margin-bottom:8px; display:flex; justify-content:space-between;">
+                        <span>Adelantos hoy: <b>${f(res.adelantos)}</b></span>
+                        <span>Saldos entregados: <b>${f(res.saldosCobrados)}</b></span>
+                    </div>
+            `;
+            if (ords.length) {
+                html += `<div style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; padding-right:4px;">`;
+                ords.forEach(o => {
+                    const esAdelanto = o.tipo === 'Adelanto';
+                    html += `
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.04); border-radius:8px; padding:7px 10px; font-size:12px;">
+                            <div style="display:flex; align-items:center; gap:8px; overflow:hidden;">
+                                <span style="background:rgba(255,255,255,0.08); color:#f1f5f9; padding:2px 6px; border-radius:6px; font-weight:700; font-size:11px;">#${esc(o.id)}</span>
+                                <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                    <strong style="color:#f8fafc;">${esc(o.modelo || 'Equipo')}</strong>
+                                    <span style="color:#94a3b8; font-size:11px;"> · ${esc(o.cliente)}</span>
+                                    <span style="color:#64748b; font-size:10px;"> · Tec: ${esc(o.tecnico)}</span>
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                                <span style="font-size:10px; color:${esAdelanto ? '#38bdf8' : '#34d399'}; background:${esAdelanto ? 'rgba(56,189,248,0.12)' : 'rgba(52,211,153,0.12)'}; padding:2px 6px; border-radius:6px; font-weight:600;">${o.tipo}</span>
+                                ${badgeMetodo(o.metodo)}
+                                <strong style="color:#f8fafc; font-size:13px;">${f(o.monto)}</strong>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            } else {
+                html += `<div style="font-size:12px; color:#64748b; text-align:center; padding:10px;">No hubo movimientos de taller hoy.</div>`;
             }
+            html += `</div>`;
+
+            // SECCIÓN 2: VENTAS MOSTRADOR POS
+            const ventas = res.ventasPosDetalle || [];
+            html += `
+                <div style="margin-bottom:16px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:12px 14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">
+                        <span style="font-size:13px; font-weight:800; color:#0ea5e9; text-transform:uppercase; letter-spacing:0.04em;">
+                            🛒 Ventas Mostrador POS (${res.ventasPosCount || 0})
+                        </span>
+                        <strong style="font-size:14px; color:#4ade80;">${f(res.ingresosPOS)}</strong>
+                    </div>
+            `;
+            if (ventas.length) {
+                html += `<div style="display:flex; flex-direction:column; gap:5px; max-height:140px; overflow-y:auto; padding-right:4px;">`;
+                ventas.forEach(v => {
+                    html += `
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border-radius:6px; padding:5px 8px; font-size:12px;">
+                            <span style="color:#e2e8f0;"><b style="color:#38bdf8;">${v.cantidad}x</b> ${esc(v.nombre)} ${v.vendedores ? `<span style="color:#64748b; font-size:10px;">(${esc(v.vendedores)})</span>` : ''}</span>
+                            <strong style="color:#f8fafc;">${f(v.subtotal)}</strong>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            } else {
+                html += `<div style="font-size:12px; color:#64748b; text-align:center; padding:8px;">No se registraron ventas de mostrador hoy.</div>`;
+            }
+            html += `</div>`;
+
+            // SECCIÓN 3: SALIDAS Y COMPRAS DE REPUESTOS
+            const totalSal = res.totalSalidas || (res.gastos + res.comprasExternas + res.devoluciones);
+            html += `
+                <div style="margin-bottom:16px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:12px 14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">
+                        <span style="font-size:13px; font-weight:800; color:#ef4444; text-transform:uppercase; letter-spacing:0.04em;">
+                            📉 Salidas y Compras
+                        </span>
+                        <strong style="font-size:14px; color:#f87171;">−${f(totalSal)}</strong>
+                    </div>
+            `;
+            const haySalidas = (res.listaCompras && res.listaCompras.length) || (res.listaGastos && res.listaGastos.length) || res.devoluciones > 0;
+            if (haySalidas) {
+                html += `<div style="display:flex; flex-direction:column; gap:5px; max-height:140px; overflow-y:auto; padding-right:4px;">`;
+                (res.listaCompras || []).forEach(c => {
+                    html += `
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.12); border-radius:6px; padding:5px 8px; font-size:12px;">
+                            <span style="color:#fca5a5;">🏷️ <b>${esc(c.proveedor)}</b>: ${esc(c.descripcion || 'Repuesto')}${c.orden_id ? ' <span style="color:#94a3b8;">(Orden #' + esc(c.orden_id) + ')</span>' : ''}</span>
+                            <strong style="color:#f87171;">−${f(c.costo)}</strong>
+                        </div>
+                    `;
+                });
+                (res.listaGastos || []).forEach(g => {
+                    html += `
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.12); border-radius:6px; padding:5px 8px; font-size:12px;">
+                            <span style="color:#fca5a5;">🧾 <b>${esc(g.categoria)}</b>${g.descripcion ? ' — ' + esc(g.descripcion) : ''}</span>
+                            <strong style="color:#f87171;">−${f(g.monto)}</strong>
+                        </div>
+                    `;
+                });
+                if (res.devoluciones > 0) {
+                    html += `
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.12); border-radius:6px; padding:5px 8px; font-size:12px;">
+                            <span style="color:#fca5a5;">↩️ Reembolso en efectivo a cliente</span>
+                            <strong style="color:#f87171;">−${f(res.devoluciones)}</strong>
+                        </div>
+                    `;
+                }
+                html += `</div>`;
+            } else {
+                html += `<div style="font-size:12px; color:#64748b; text-align:center; padding:8px;">No hubo egresos ni compras registradas hoy.</div>`;
+            }
+            html += `</div>`;
+
+            // SECCIÓN 4: RENDIMIENTO POR TÉCNICO
+            const tecs = res.rendimientoTecnicos || [];
+            if (tecs.length) {
+                html += `
+                    <div style="margin-bottom:12px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:12px 14px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:6px;">
+                            <span style="font-size:13px; font-weight:800; color:#0ea5e9; text-transform:uppercase; letter-spacing:0.04em;">
+                                👥 Rendimiento del Personal
+                            </span>
+                        </div>
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:8px;">
+                `;
+                tecs.forEach(t => {
+                    html += `
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:8px 10px; font-size:12px;">
+                            <div style="font-weight:700; color:#f8fafc; margin-bottom:4px;">👤 ${esc(t.tecnico)}</div>
+                            <div style="color:#94a3b8; font-size:11px;">Órdenes: <b style="color:#e2e8f0;">${t.ordenes}</b></div>
+                            <div style="color:#94a3b8; font-size:11px;">Cobrado: <b style="color:#4ade80;">${f(t.cobrado)}</b></div>
+                            <div style="color:#94a3b8; font-size:11px;">Mano de obra: <b style="color:#38bdf8;">${f(t.manoObra)}</b></div>
+                        </div>
+                    `;
+                });
+                html += `</div></div>`;
+            }
+
             cont.innerHTML = html;
 
             const btn = document.getElementById('btn-guardar-cierre-dia');
@@ -8242,24 +8422,77 @@
                     `\nTOTAL EN CAJA (a entregar): ${f(r.neto)}\n` +
                     `\n— — — nota personal (aparte de la cuenta) — — —\n` +
                     `Comisión ≈ ${r.porcentaje || 50}% de la mano de obra = ${f(r.comision || 0)}`;
-                try { navigator.clipboard.writeText(txtT); showToast('Resumen copiado 📋', 'success'); }
-                catch (e) { showToast('No se pudo copiar', 'danger'); }
+                navigator.clipboard.writeText(txtT)
+                    .then(() => showToast('Resumen copiado 📋', 'success'))
+                    .catch(e => { console.error(e); showToast('No se pudo copiar', 'danger'); });
                 return;
             }
-            const txt = `CIERRE DEL DÍA — ${r.fecha}\n` +
-                `ENTRÓ:\n` +
-                `  Taller (adelantos): ${f(r.adelantos)}\n` +
-                `  Taller (saldos entregados): ${f(r.saldosCobrados)}\n` +
-                `  Ventas POS: ${f(r.ingresosPOS)}\n` +
-                `SALIÓ:\n` +
-                `  Gastos: ${f(r.gastos)}\n` +
-                `  Compras a proveedores: ${f(r.comprasExternas)}\n` +
-                `  Devoluciones: ${f(r.devoluciones)}\n` +
-                `NETO DEL DÍA: ${f(r.neto)}`;
-            try {
-                navigator.clipboard.writeText(txt);
-                showToast('Resumen copiado 📋', 'success');
-            } catch (e) { showToast('No se pudo copiar', 'danger'); }
+
+            const sep = '────────────────────────────';
+            const efCaja = r.efectivoEnCaja != null ? r.efectivoEnCaja : (r.desglosePagos?.efectivo || 0) - (r.totalSalidas || 0);
+
+            let txt = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `📊 *REPORTE DE CIERRE DE CAJA*\n` +
+                `📅 Fecha: ${r.fecha}\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                `💰 *LIQUIDACIÓN DE CAJA:*\n` +
+                `• 💵 Efectivo en mano: ${f(efCaja)} (en caja física)\n` +
+                `• 📱 Dinero Digital:   ${f(r.totalDigital || 0)}\n`;
+
+            if (r.desglosePagos) {
+                if (r.desglosePagos.yape_plin) txt += `   - Yape / Plin:    ${f(r.desglosePagos.yape_plin)}\n`;
+                if (r.desglosePagos.tarjeta) txt += `   - Tarjeta / POS:  ${f(r.desglosePagos.tarjeta)}\n`;
+                if (r.desglosePagos.transferencia) txt += `   - Transferencia:  ${f(r.desglosePagos.transferencia)}\n`;
+            }
+
+            txt += `${sep}\n` +
+                `📥 TOTAL INGRESOS:    ${f(r.totalIngresos || (r.ingresosTaller + r.ingresosPOS))}\n` +
+                `📤 TOTAL SALIDAS:    -${f(r.totalSalidas || (r.gastos + r.comprasExternas + r.devoluciones))}\n` +
+                `⭐ *NETO DEL DÍA:      ${f(r.neto)}*\n\n`;
+
+            if (r.ordenesDetalle && r.ordenesDetalle.length) {
+                txt += `🔧 *SERVICIO TÉCNICO (${r.ordenesDetalle.length} órdenes):*\n`;
+                r.ordenesDetalle.forEach(o => {
+                    const met = o.metodo ? ` [${o.metodo.toUpperCase()}]` : '';
+                    const tec = o.tecnico ? ` (${o.tecnico})` : '';
+                    txt += `• #${o.id} ${o.modelo || 'Equipo'} - ${o.cliente || 'Cliente'}: ${f(o.monto)}${met}${tec} (${o.tipo})\n`;
+                });
+                txt += `Subtotal Taller: ${f(r.ingresosTaller)}\n\n`;
+            }
+
+            if (r.ventasPosDetalle && r.ventasPosDetalle.length) {
+                txt += `🛒 *VENTAS MOSTRADOR POS:*\n`;
+                r.ventasPosDetalle.forEach(v => {
+                    txt += `• ${v.cantidad}x ${v.nombre}: ${f(v.subtotal)}${v.vendedores ? ' (' + v.vendedores + ')' : ''}\n`;
+                });
+                txt += `Subtotal POS: ${f(r.ingresosPOS)}\n\n`;
+            }
+
+            const haySal = (r.listaCompras && r.listaCompras.length) || (r.listaGastos && r.listaGastos.length) || r.devoluciones > 0;
+            if (haySal) {
+                txt += `📉 *SALIDAS Y COMPRAS:*\n`;
+                (r.listaCompras || []).forEach(c => {
+                    txt += `• Repuesto ext: ${c.proveedor} (${c.descripcion || ''}${c.orden_id ? ' #' + c.orden_id : ''}) ➔ -${f(c.costo)}\n`;
+                });
+                (r.listaGastos || []).forEach(g => {
+                    txt += `• Gasto: ${g.categoria} (${g.descripcion || ''}) ➔ -${f(g.monto)}\n`;
+                });
+                if (r.devoluciones > 0) txt += `• Devolución efectivo: -${f(r.devoluciones)}\n`;
+                txt += `Total Salidas: -${f(r.totalSalidas || (r.gastos + r.comprasExternas + r.devoluciones))}\n\n`;
+            }
+
+            if (r.rendimientoTecnicos && r.rendimientoTecnicos.length) {
+                txt += `👥 *RENDIMIENTO POR PERSONAL:*\n`;
+                r.rendimientoTecnicos.forEach(t => {
+                    txt += `• ${t.tecnico}: ${t.ordenes} orden(es) | Total: ${f(t.cobrado)} (Mano de obra: ${f(t.manoObra)})\n`;
+                });
+                txt += `\n`;
+            }
+
+            txt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+            navigator.clipboard.writeText(txt)
+                .then(() => showToast('Resumen copiado para WhatsApp 📋', 'success'))
+                .catch(e => { console.error(e); showToast('No se pudo copiar', 'danger'); });
         }
 
         // === REPONER STOCK: agotados y por agotarse, por categoría (usa el inventario ya cargado) ===
@@ -8303,10 +8536,9 @@
         }
 
         function copiarListaReposicion() {
-            try {
-                navigator.clipboard.writeText(listaReposicionTexto);
-                showToast('Lista copiada 📋 — pégala en WhatsApp del proveedor', 'success');
-            } catch (e) { showToast('No se pudo copiar', 'danger'); }
+            navigator.clipboard.writeText(listaReposicionTexto)
+                .then(() => showToast('Lista copiada 📋 — pégala en WhatsApp del proveedor', 'success'))
+                .catch(e => { console.error(e); showToast('No se pudo copiar', 'danger'); });
         }
 
         // === MÁS VENDIDOS por categoría (según el período activo de Métricas) ===
@@ -9106,8 +9338,9 @@
                 btn.style.color = "var(--success)";
             }
 
-            navigator.clipboard.writeText(nuevoCodigo);
-            showToast("¡Código generado! Listo para enviar por WhatsApp.", "success");
+            navigator.clipboard.writeText(nuevoCodigo)
+                .then(() => showToast("¡Código generado! Listo para enviar por WhatsApp.", "success"))
+                .catch(e => { console.error(e); showToast("Código generado (no se pudo copiar automáticamente)", "warning"); });
         });
 
         // NUEVO: Función para copiar el código manualmente con un solo clic
@@ -9116,14 +9349,14 @@
                 return showToast("Primero debes generar un código", "warning");
             }
 
-            navigator.clipboard.writeText(codigoActualParaCopiar);
+            navigator.clipboard.writeText(codigoActualParaCopiar)
+                .then(() => showToast("Código copiado al portapapeles", "success"))
+                .catch(e => { console.error(e); showToast("No se pudo copiar", "danger"); });
 
             const btn = document.getElementById('btn-copiar-licencia');
             btn.innerText = "✅ ¡Copiado!";
             btn.style.background = "rgba(16, 185, 129, 0.15)";
             btn.style.color = "#10b981";
-
-            showToast("Código copiado al portapapeles", "success");
 
             setTimeout(() => {
                 btn.innerText = "📋 Copiar";
@@ -10403,6 +10636,7 @@
         // (manual con los chips, o automático leyendo la falla reportada).
         // =====================================================================
         let holoInit = false;
+        let holoWebglNoDisponible = false;
         let holoScene, holoCamera, holoRenderer, holoControls, holoGroup, holoLuzKey;
         // Ya no hay una lista fija de piezas: el técnico va nombrando y fotografiando
         // cada pieza real mientras desarma el equipo (tapa, flex de carga, flex de
@@ -10439,6 +10673,7 @@
             const wrap = document.getElementById('holo-canvas-wrap');
             const canvas = document.getElementById('holo-canvas');
             if (!wrap || !canvas || typeof THREE === 'undefined') return;
+            if (holoWebglNoDisponible) return; // ya se avisó una vez, no reintentar en cada visita a la pestaña
 
             if (!holoInit) {
                 holoInit = true;
@@ -10447,7 +10682,22 @@
                 holoCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
                 holoCamera.position.set(0, 0.3, 5.2);
 
-                holoRenderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+                // Puede fallar por GPU/drivers sin WebGL (RDP, hardware acceleration
+                // desactivada, etc.) — sin este try/catch la excepción quedaba sin
+                // capturar y el resto del Laboratorio (fotos, notas, historial) se
+                // veía roto también, cuando en realidad solo el holograma no puede armarse acá.
+                try {
+                    holoRenderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+                } catch (e) {
+                    console.error('No se pudo crear el contexto WebGL para el holograma:', e);
+                    holoWebglNoDisponible = true;
+                    canvas.style.display = 'none';
+                    const aviso = document.createElement('div');
+                    aviso.style.cssText = 'position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:20px; color:#f59e0b; font-size:13px;';
+                    aviso.textContent = '⚠️ Esta PC no puede mostrar el holograma 3D (WebGL no disponible). El resto del Laboratorio funciona normal.';
+                    wrap.appendChild(aviso);
+                    return;
+                }
                 holoRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
                 holoRenderer.outputEncoding = THREE.sRGBEncoding;
 
