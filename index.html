@@ -2050,22 +2050,54 @@
                 </button>
             </div>
 
-            <div id="recuperar-password-container" class="hidden" style="display: none;">
-                <div style="text-align: center; margin-bottom: 20px;">
+            <div id="recuperar-password-container" class="hidden" style="display: none; text-align: left;">
+                <div style="text-align: center; margin-bottom: 16px;">
                     <h3 style="color: white; font-size: 18px; margin-bottom: 5px;">Recuperar Acceso</h3>
-                    <p style="color: #aaa; font-size: 12px;">Ingresa tu correo y te enviaremos un enlace seguro para
-                        restablecer tu contraseña.</p>
+                    <p id="recuperar-subtitulo" style="color: #aaa; font-size: 12px; margin: 0;">Ingresa tu correo y te enviaremos un código para restablecer tu contraseña aquí mismo.</p>
                 </div>
 
-                <div style="text-align: left; margin-bottom: 20px;">
-                    <label style="color: #aaa; font-size: 12px;">CORREO ELECTRÓNICO REGISTRADO</label>
-                    <input type="email" id="recuperar-email" class="bh-input" placeholder="taller@ejemplo.com">
+                <div id="recuperar-paso-1">
+                    <div style="margin-bottom: 16px;">
+                        <label style="color: #aaa; font-size: 12px;">CORREO ELECTRÓNICO REGISTRADO</label>
+                        <input type="email" id="recuperar-email" class="bh-input" placeholder="taller@ejemplo.com"
+                            onkeypress="if(event.key === 'Enter') enviarCorreoRecuperacion(event)">
+                    </div>
+
+                    <button id="btn-enviar-recuperacion" onclick="enviarCorreoRecuperacion(event)" class="bh-btn-purple"
+                        style="width: 100%; height: 40px; margin-bottom: 10px;">
+                        Enviar Código al Correo
+                    </button>
+
+                    <button type="button" onclick="mostrarPasoRecuperarCodigo(true)"
+                        style="width: 100%; height: 34px; background: transparent; border: none; color: #a78bfa; font-size: 12px; cursor: pointer; margin-bottom: 8px;">
+                        Ya tengo un código o enlace del correo
+                    </button>
                 </div>
 
-                <button onclick="enviarCorreoRecuperacion(event)" class="bh-btn-purple"
-                    style="width: 100%; height: 40px; margin-bottom: 10px;">
-                    Enviar Enlace de Acceso
-                </button>
+                <div id="recuperar-paso-2" style="display: none;">
+                    <div style="margin-bottom: 12px;">
+                        <label style="color: #aaa; font-size: 12px;">CÓDIGO O ENLACE DEL CORREO</label>
+                        <input type="text" id="recuperar-codigo" class="bh-input" placeholder="Código de 6 dígitos o pega el enlace">
+                    </div>
+
+                    <div style="margin-bottom: 12px;">
+                        <label style="color: #aaa; font-size: 12px;">NUEVA CONTRASEÑA (MÍN. 6 CARACTERES)</label>
+                        <input type="password" id="recuperar-nueva-pass" class="bh-input" placeholder="••••••••">
+                    </div>
+
+                    <div style="margin-bottom: 12px;">
+                        <label style="color: #aaa; font-size: 12px;">CONFIRMAR NUEVA CONTRASEÑA</label>
+                        <input type="password" id="recuperar-confirmar-pass" class="bh-input" placeholder="••••••••"
+                            onkeypress="if(event.key === 'Enter') confirmarRecuperacionCorreo(event)">
+                    </div>
+
+                    <button id="btn-confirmar-recuperacion" onclick="confirmarRecuperacionCorreo(event)" class="bh-btn-purple"
+                        style="width: 100%; height: 40px; margin-bottom: 10px;">
+                        Cambiar Contraseña
+                    </button>
+                </div>
+
+                <p id="recuperar-error" style="color: var(--danger); font-size: 12px; min-height: 16px; margin: 4px 0 8px;"></p>
 
                 <button onclick="toggleRecuperarPassword(false)"
                     style="width: 100%; height: 40px; background: transparent; border: 1px solid #333; color: #aaa; border-radius: 8px; cursor: pointer;">
@@ -2218,6 +2250,9 @@
                             <div id="menu-config-btn" class="p-item"
                                 onclick="document.getElementById('user-menu').classList.remove('show'); showView('config', document.getElementById('nav-config'))">
                                 <i class='bx bx-cog' style="margin-right:8px;"></i> Configuración</div>
+                            <div id="menu-cambiar-pass-btn" class="p-item"
+                                onclick="document.getElementById('user-menu').classList.remove('show'); abrirModalCambiarPassword()">
+                                <i class='bx bx-key' style="margin-right:8px;"></i> Cambiar contraseña</div>
                             <div class="p-item" style="color:var(--danger);"
                                 onclick="document.getElementById('user-menu').classList.remove('show'); cerrarSesion()">
                                 <i class='bx bx-log-out' style="margin-right:8px;"></i> Cerrar sesión</div>
@@ -4489,6 +4524,8 @@
                 </div>
                 <div class="input-group"><label>Contraseña</label><input type="password" id="new-user-pass"
                         class="bh-input"></div>
+                <div class="input-group" style="grid-column:span 2"><label>Correo electrónico</label><input type="email"
+                        id="new-user-email" class="bh-input" placeholder="correo@ejemplo.com"></div>
                 <div class="input-group" style="grid-column:span 2"><label>Rol de Acceso</label>
                     <select id="new-user-role" class="bh-input" style="background:#222;">
                         <option value="vendedor">Vendedor</option>
@@ -5768,6 +5805,36 @@
         </div>
     </div>
 
+    <!-- Modal: Cambiar Contraseña dentro de la app -->
+    <div id="modal-cambiar-password" class="modal-overlay">
+        <div class="modal-content" style="width: 420px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h2 style="margin:0; font-size:18px;">🔑 Cambiar Contraseña</h2>
+                <button type="button" onclick="cerrarModalCambiarPassword()"
+                    style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✖</button>
+            </div>
+            <div class="grid-inputs" style="grid-template-columns: 1fr;">
+                <div class="input-group">
+                    <label>Contraseña Actual</label>
+                    <input type="password" id="modal-pass-actual" class="bh-input" placeholder="••••••••">
+                </div>
+                <div class="input-group">
+                    <label>Nueva Contraseña (mín. 6 caracteres)</label>
+                    <input type="password" id="modal-pass-nueva" class="bh-input" placeholder="••••••••">
+                </div>
+                <div class="input-group">
+                    <label>Confirmar Nueva Contraseña</label>
+                    <input type="password" id="modal-pass-confirmar" class="bh-input" placeholder="••••••••"
+                        onkeypress="if(event.key === 'Enter') cambiarMiPassword()">
+                </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+                <button type="button" class="bh-btn-white" onclick="cerrarModalCambiarPassword()">Cancelar</button>
+                <button type="button" id="btn-guardar-mi-password" class="bh-btn-purple" onclick="cambiarMiPassword()">Actualizar Contraseña</button>
+            </div>
+        </div>
+    </div>
+
     <div id="chat-panel">
         <!-- Cabecera con info del canal activo -->
         <div class="chat-header" style="padding:0;flex-direction:column;gap:0;">
@@ -6551,6 +6618,8 @@
                 cont.innerHTML = `<div style="text-align:center; padding:20px; color:#999;">No hay errores registrados${monitorErroresFiltroEstado ? ' con ese filtro' : ''}. 🎉</div>`;
                 return;
             }
+            window._cajaErroresCache = {};
+            res.filas.forEach(f => { window._cajaErroresCache[f.id] = f; });
             cont.innerHTML = res.filas.map(f => `
                 <div class="bh-card" style="margin-bottom:10px; border-left:3px solid ${f.estado === 'pendiente' ? 'var(--danger)' : 'var(--success)'};">
                     <div style="display:flex; justify-content:space-between; align-items:start; gap:10px; flex-wrap:wrap;">
@@ -6558,12 +6627,16 @@
                             <div style="font-weight:600; color:${f.estado === 'pendiente' ? '#ef4444' : '#10b981'};">${f.estado === 'pendiente' ? '🟡 Pendiente' : '✅ Resuelto'} — ${esc(f.origen)}</div>
                             <div style="font-size:11px; color:#999; margin-top:2px;">${new Date(f.creado_en).toLocaleString()} · Empresa ${f.empresa_id ?? '—'} · ${esc(f.usuario || 'sin sesión')}</div>
                         </div>
-                        ${f.estado === 'pendiente' ? `<button type="button" class="bh-btn-purple" style="white-space:nowrap;" onclick="marcarErrorResuelto(${f.id})">✅ Marcar resuelto</button>` : ''}
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button type="button" class="bh-btn-white" style="white-space:nowrap;" onclick="analizarErrorIA(${f.id})">🤖 Traducir y explicar</button>
+                            ${f.estado === 'pendiente' ? `<button type="button" class="bh-btn-purple" style="white-space:nowrap;" onclick="marcarErrorResuelto(${f.id})">✅ Marcar resuelto</button>` : ''}
+                        </div>
                     </div>
                     <div style="margin-top:8px; font-size:13px;">${esc(f.mensaje)}</div>
                     ${f.stack ? `<pre style="margin-top:6px; font-size:10.5px; color:#888; white-space:pre-wrap; max-height:120px; overflow:auto; background:rgba(0,0,0,0.2); padding:8px; border-radius:6px;">${esc(f.stack)}</pre>` : ''}
                     ${f.contexto ? `<div style="margin-top:6px; font-size:11px; color:#888;">${esc(JSON.stringify(f.contexto))}</div>` : ''}
                     ${f.nota_resolucion ? `<div style="margin-top:6px; font-size:11.5px; color:#10b981;">Nota: ${esc(f.nota_resolucion)}</div>` : ''}
+                    <div id="analisis-ia-error-${f.id}" style="display:none; margin-top:10px; padding:10px 12px; border-radius:8px; background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.35); font-size:12.5px; line-height:1.5;"></div>
                 </div>
             `).join('');
         });
@@ -6572,6 +6645,39 @@
             const nota = prompt('Nota de la solución (opcional):') || '';
             ipcRenderer.send('resolver-error-app', { id, nota });
         }
+
+        function analizarErrorIA(id) {
+            const f = (window._cajaErroresCache || {})[id];
+            const box = document.getElementById(`analisis-ia-error-${id}`);
+            if (!f || !box) return;
+            box.style.display = 'block';
+            box.innerHTML = '<span style="color:#a78bfa;">⏳ Traduciendo y analizando el error con IA...</span>';
+            ipcRenderer.send('analizar-error-ia', {
+                id: f.id,
+                origen: f.origen,
+                mensaje: f.mensaje,
+                stack: f.stack,
+                contexto: f.contexto
+            });
+        }
+
+        ipcRenderer.on('analizar-error-ia-respuesta', (event, res) => {
+            if (!res || !res.id) return;
+            const box = document.getElementById(`analisis-ia-error-${res.id}`);
+            if (!box) return;
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            if (!res.ok) {
+                box.innerHTML = `<span style="color:#ef4444;">⚠️ ${esc(res.msg || 'No se pudo analizar el error')}</span>`;
+                return;
+            }
+            const a = res.analisis || {};
+            box.innerHTML = `
+                <div style="font-weight:600; color:#c4b5fd; margin-bottom:4px;">🤖 Resumen en español</div>
+                <div style="color:#e4e4e7; margin-bottom:6px;">${esc(a.resumen)}</div>
+                ${a.causa ? `<div style="margin-bottom:6px;"><strong style="color:#fbbf24;">Causa probable:</strong> <span style="color:#d4d4d8;">${esc(a.causa)}</span></div>` : ''}
+                <div><strong style="color:#34d399;">Cómo resolverlo:</strong> <span style="color:#d4d4d8;">${esc(a.solucion)}</span></div>
+            `;
+        });
 
         ipcRenderer.on('error-app-resuelto', (event, res) => {
             if (res && res.ok) { showToast('Error marcado como resuelto', 'success'); cargarCajaErrores(); }
@@ -7224,11 +7330,13 @@
 
         function crearUsuario() {
             const data = {
-                usuario: document.getElementById('new-user-name').value,
+                usuario: document.getElementById('new-user-name').value.trim(),
                 password: document.getElementById('new-user-pass').value,
+                email: document.getElementById('new-user-email').value.trim(),
                 rol: document.getElementById('new-user-role').value
             };
-            if (!data.usuario || !data.password) return showToast("Completa campos", "warning");
+            if (!data.usuario || !data.password || !data.email) return showToast("Completa todos los campos", "warning");
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) return showToast("Ingresa un correo válido", "warning");
             ipcRenderer.send('crear-usuario-nuevo', data);
         }
 
@@ -7347,7 +7455,14 @@
         });
 
         ipcRenderer.on('resultado-usuario', (e, res) => {
-            if (res.success) { showToast(res.msg, 'success'); document.getElementById('modal-usuario').style.display = 'none'; ipcRenderer.send('obtener-usuarios'); }
+            if (res.success) {
+                showToast(res.msg, 'success');
+                document.getElementById('modal-usuario').style.display = 'none';
+                document.getElementById('new-user-name').value = '';
+                document.getElementById('new-user-pass').value = '';
+                document.getElementById('new-user-email').value = '';
+                ipcRenderer.send('obtener-usuarios');
+            }
             else { showToast(res.msg, 'danger'); }
         });
 
@@ -15018,51 +15133,79 @@
             if (badge) badge.style.display = 'none';
         }
         // ==========================================
-        // MÓDULO: RECUPERACIÓN DE CONTRASEÑA
+        // MÓDULO: RECUPERACIÓN POR CORREO Y CAMBIO DE CONTRASEÑA EN LA APP
         // ==========================================
 
+        function mostrarPasoRecuperarCodigo(mostrar) {
+            const paso1 = document.getElementById('recuperar-paso-1');
+            const paso2 = document.getElementById('recuperar-paso-2');
+            const sub = document.getElementById('recuperar-subtitulo');
+            const errEl = document.getElementById('recuperar-error');
+            if (errEl) errEl.innerText = '';
+            if (mostrar) {
+                if (paso1) paso1.style.display = 'none';
+                if (paso2) paso2.style.display = 'block';
+                if (sub) sub.innerText = 'Ingresa el código (o enlace) que llegó a tu correo y define tu nueva contraseña.';
+                setTimeout(() => document.getElementById('recuperar-codigo')?.focus(), 60);
+            } else {
+                if (paso1) paso1.style.display = 'block';
+                if (paso2) paso2.style.display = 'none';
+                if (sub) sub.innerText = 'Ingresa tu correo y te enviaremos un código para restablecer tu contraseña aquí mismo.';
+            }
+        }
+
         function toggleRecuperarPassword(mostrar) {
-            // Usamos TU id exacto: 'login-section'
             const loginContainer = document.getElementById('login-section');
             const recuperarContainer = document.getElementById('recuperar-password-container');
 
             if (mostrar) {
                 loginContainer.style.display = 'none';
                 recuperarContainer.style.display = 'block';
+                mostrarPasoRecuperarCodigo(false);
+                setTimeout(() => document.getElementById('recuperar-email')?.focus(), 60);
             } else {
                 loginContainer.style.display = 'block';
                 recuperarContainer.style.display = 'none';
-                document.getElementById('recuperar-email').value = '';
+                mostrarPasoRecuperarCodigo(false);
+                ['recuperar-email', 'recuperar-codigo', 'recuperar-nueva-pass', 'recuperar-confirmar-pass'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
             }
         }
 
         async function enviarCorreoRecuperacion(event) {
+            if (event) event.preventDefault();
             const email = document.getElementById('recuperar-email').value.trim();
-            const btnEnviar = event.currentTarget;
+            const btnEnviar = document.getElementById('btn-enviar-recuperacion');
+            const errEl = document.getElementById('recuperar-error');
+            if (errEl) errEl.innerText = '';
 
             if (!email) {
-                // Usamos tu sistema de notificaciones estético (Warning)
                 showToast("Por favor, ingresa tu correo electrónico.", "warning");
+                return;
+            }
+            if (!supabaseChat) {
+                showToast("Servicio de correo no disponible. Verifica tu conexión.", "danger");
                 return;
             }
 
             const textoOriginal = btnEnviar.innerHTML;
-            btnEnviar.innerHTML = 'Procesando...';
+            btnEnviar.innerHTML = 'Enviando...';
             btnEnviar.disabled = true;
 
             try {
-                const { data, error } = await supabaseChat.auth.resetPasswordForEmail(email, {
+                const { error } = await supabaseChat.auth.resetPasswordForEmail(email, {
                     redirectTo: 'https://blackhouse-os-web.vercel.app/actualizar-password.html',
                 });
 
                 if (error) {
                     console.error("Error de Supabase:", error.message);
-                    // Notificación estética de Error
+                    if (errEl) errEl.innerText = error.message || "No se pudo enviar el correo.";
                     showToast("Error al enviar el correo. Verifica que esté bien escrito.", "danger");
                 } else {
-                    // Notificación estética de Éxito
-                    showToast("¡Enlace enviado! Revisa tu bandeja de entrada o SPAM.", "success");
-                    toggleRecuperarPassword(false); // Volver al login
+                    showToast("¡Correo enviado! Revisa tu bandeja o SPAM e ingresa el código aquí.", "success");
+                    mostrarPasoRecuperarCodigo(true);
                 }
             } catch (err) {
                 console.error("Error interno:", err);
@@ -15072,6 +15215,150 @@
                 btnEnviar.disabled = false;
             }
         }
+
+        async function confirmarRecuperacionCorreo(event) {
+            if (event) event.preventDefault();
+            const email = document.getElementById('recuperar-email').value.trim();
+            const codigoOEnlace = document.getElementById('recuperar-codigo').value.trim();
+            const nuevaPassword = document.getElementById('recuperar-nueva-pass').value.trim();
+            const confirmar = document.getElementById('recuperar-confirmar-pass').value.trim();
+            const errEl = document.getElementById('recuperar-error');
+            const btn = document.getElementById('btn-confirmar-recuperacion');
+            if (errEl) errEl.innerText = '';
+
+            if (!codigoOEnlace || !nuevaPassword || !confirmar) {
+                const msg = 'Completa el código del correo y tu nueva contraseña.';
+                if (errEl) errEl.innerText = msg;
+                return showToast(msg, 'warning');
+            }
+            if (nuevaPassword.length < 6) {
+                const msg = 'La nueva contraseña debe tener al menos 6 caracteres.';
+                if (errEl) errEl.innerText = msg;
+                return showToast(msg, 'warning');
+            }
+            if (nuevaPassword !== confirmar) {
+                const msg = 'Las contraseñas no coinciden.';
+                if (errEl) errEl.innerText = msg;
+                return showToast(msg, 'warning');
+            }
+            if (!supabaseChat) return showToast('Servicio no disponible.', 'danger');
+
+            btn.disabled = true;
+            btn.innerText = 'Actualizando...';
+
+            try {
+                let authData = null;
+
+                // Soporta pegar el enlace del correo (access_token o token_hash) o escribir el código OTP.
+                if (codigoOEnlace.includes('access_token=')) {
+                    const hashPart = codigoOEnlace.split('#')[1] || codigoOEnlace.split('?')[1] || '';
+                    const params = new URLSearchParams(hashPart);
+                    const access_token = params.get('access_token');
+                    const refresh_token = params.get('refresh_token') || '';
+                    const { data, error } = await supabaseChat.auth.setSession({ access_token, refresh_token });
+                    if (error) throw error;
+                    authData = data;
+                } else if (codigoOEnlace.includes('token_hash=') || codigoOEnlace.includes('token=')) {
+                    const queryPart = codigoOEnlace.split('?')[1] || codigoOEnlace;
+                    const params = new URLSearchParams(queryPart);
+                    const token_hash = params.get('token_hash') || params.get('token');
+                    const { data, error } = await supabaseChat.auth.verifyOtp({ token_hash, type: 'recovery' });
+                    if (error) throw error;
+                    authData = data;
+                } else {
+                    if (!email) {
+                        const msg = 'Ingresa también tu correo electrónico para validar el código.';
+                        if (errEl) errEl.innerText = msg;
+                        mostrarPasoRecuperarCodigo(false);
+                        return showToast(msg, 'warning');
+                    }
+                    const { data, error } = await supabaseChat.auth.verifyOtp({
+                        email,
+                        token: codigoOEnlace,
+                        type: 'recovery'
+                    });
+                    if (error) throw error;
+                    authData = data;
+                }
+
+                const { error: errUpd } = await supabaseChat.auth.updateUser({ password: nuevaPassword });
+                if (errUpd) throw errUpd;
+
+                const sesion = authData && authData.session;
+                if (sesion && sesion.access_token && sesion.user) {
+                    ipcRenderer.send('sincronizar-password-recuperada', {
+                        accessToken: sesion.access_token,
+                        refreshToken: sesion.refresh_token || '',
+                        authId: sesion.user.id,
+                        nuevaPassword
+                    });
+                }
+
+                try { await supabaseChat.auth.signOut(); } catch (e) {}
+                showToast('¡Contraseña actualizada! Ya puedes iniciar sesión.', 'success');
+                toggleRecuperarPassword(false);
+                document.getElementById('pass-login')?.focus();
+            } catch (err) {
+                console.error('Error confirmando recuperación:', err);
+                const msg = (err && err.message) || 'Código o enlace inválido o vencido.';
+                if (errEl) errEl.innerText = msg;
+                showToast(msg, 'danger');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Cambiar Contraseña';
+            }
+        }
+
+        function abrirModalCambiarPassword() {
+            if (window.isDemoMode) return showToast('No disponible en Modo Beta', 'warning');
+            ['modal-pass-actual', 'modal-pass-nueva', 'modal-pass-confirmar'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            document.getElementById('modal-cambiar-password').style.display = 'flex';
+            setTimeout(() => document.getElementById('modal-pass-actual')?.focus(), 60);
+        }
+
+        function cerrarModalCambiarPassword() {
+            document.getElementById('modal-cambiar-password').style.display = 'none';
+        }
+
+        function cambiarMiPassword() {
+            if (window.isDemoMode) return showToast('No disponible en Modo Beta', 'warning');
+            const passwordActual = document.getElementById('modal-pass-actual')?.value || '';
+            const nuevaPassword = document.getElementById('modal-pass-nueva')?.value.trim() || '';
+            const confirmar = document.getElementById('modal-pass-confirmar')?.value.trim() || '';
+
+            if (!passwordActual || !nuevaPassword || !confirmar) {
+                return showToast('Completa la contraseña actual y la nueva.', 'warning');
+            }
+            if (nuevaPassword.length < 6) {
+                return showToast('La nueva contraseña debe tener al menos 6 caracteres.', 'warning');
+            }
+            if (nuevaPassword !== confirmar) {
+                return showToast('Las contraseñas nuevas no coinciden.', 'warning');
+            }
+
+            const btn = document.getElementById('btn-guardar-mi-password');
+            if (btn) { btn.disabled = true; btn.innerText = 'Actualizando...'; }
+
+            ipcRenderer.send('cambiar-mi-password', { passwordActual, nuevaPassword });
+        }
+
+        ipcRenderer.on('cambiar-mi-password-respuesta', (e, res) => {
+            const btn = document.getElementById('btn-guardar-mi-password');
+            if (btn) { btn.disabled = false; btn.innerText = 'Actualizar Contraseña'; }
+
+            if (res && res.success) {
+                cerrarModalCambiarPassword();
+                if (res.nuevaPassword && typeof supabaseChat !== 'undefined' && supabaseChat) {
+                    supabaseChat.auth.updateUser({ password: res.nuevaPassword }).catch(() => {});
+                }
+                showToast(res.msg || 'Contraseña actualizada correctamente.', 'success');
+            } else {
+                showToast((res && res.msg) || 'No se pudo actualizar la contraseña.', 'danger');
+            }
+        });
 
         // ==========================================
         // MÓDULO: SEGURIDAD DE DOBLE PASO (2FA)

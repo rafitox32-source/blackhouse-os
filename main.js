@@ -171,7 +171,7 @@ const otpMemoryCache = new Map(); // Fallback en memoria si faltan columnas de b
 // cualquier canal que se dispare — igual que un middleware.
 const CANALES_SIN_ACTIVIDAD = new Set([
     // Autenticación: no hay empresaActual todavía (se descartarían solos) y son sensibles.
-    'iniciar-sesion', 'iniciar-sesion-token', 'verificar-2fa', 'cerrar-sesion-token',
+    'iniciar-sesion', 'iniciar-sesion-token', 'verificar-2fa', 'cerrar-sesion-token', 'sincronizar-password-recuperada',
     // Polling frecuente: no aportan al historial y lo inundarían de ruido.
     'listar-pedidos-accesorios-pendientes',
     // Se registra aparte, como error, no como actividad (ver más abajo).
@@ -431,6 +431,61 @@ app.whenReady().then(() => {
 
     autoUpdater.on('error', (err) => {
         console.warn('Error al buscar actualizaciones:', err.message);
+    });
+
+    // Analizar error de Caja de Errores con IA: traduce al español, resume y sugiere solución.
+    ipcMain.on('analizar-error-ia', async (event, datos) => {
+        const responder = (payload) => event.reply('analizar-error-ia-respuesta', { id: datos?.id, ...payload });
+        if (rolActual !== 'dueno' || String(empresaActual) !== '1') {
+            return responder({ ok: false, msg: 'Acceso denegado.' });
+        }
+        if (!process.env.GROQ_API_KEY) {
+            return responder({ ok: false, msg: 'Falta configurar GROQ_API_KEY en este equipo.' });
+        }
+
+        const promptSistema = `Eres un asistente técnico de soporte para una app Electron + Supabase llamada BlackHouse OS.
+Recibirás un error técnico (origen, mensaje, stack, contexto).
+Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con exactamente estas 3 claves en español claro y directo:
+{
+  "resumen": "Traducción y resumen en 1-2 oraciones simples de qué significa el error",
+  "causa": "Causa probable en 1 oración",
+  "solucion": "Pasos concretos para resolverlo en 1-3 oraciones"
+}`;
+
+        for (const modeloIA of MODELOS_IA_CATALOGO) {
+            try {
+                const result = await openai.chat.completions.create({
+                    model: modeloIA,
+                    temperature: 0.1,
+                    max_tokens: 450,
+                    messages: [
+                        { role: 'system', content: promptSistema },
+                        {
+                            role: 'user',
+                            content: JSON.stringify({
+                                origen: datos?.origen || '',
+                                mensaje: String(datos?.mensaje || '').slice(0, 800),
+                                stack: String(datos?.stack || '').slice(0, 1000),
+                                contexto: datos?.contexto || null
+                            })
+                        }
+                    ]
+                });
+                const txt = (result.choices?.[0]?.message?.content || '').trim();
+                const j = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+                return responder({
+                    ok: true,
+                    analisis: {
+                        resumen: String(j.resumen || '').trim(),
+                        causa: String(j.causa || '').trim(),
+                        solucion: String(j.solucion || '').trim()
+                    }
+                });
+            } catch (e) {
+                // Intentar con el siguiente modelo del catálogo
+            }
+        }
+        return responder({ ok: false, msg: 'No se pudo obtener respuesta de la IA en este momento.' });
     });
 
     // Diagnóstico de placa: la IA redacta a partir de los hallazgos ya decididos por las reglas.
@@ -836,6 +891,92 @@ ipcMain.on('cerrar-sesion-token', async (event, data) => {
     rolActual = null;
     usuarioActual = null;
     usoModelosSincronizado = false;
+});
+
+// === 2.0D CAMBIO Y SINCRONIZACIÓN DE CONTRASEÑA DENTRO DE LA APP ===
+ipcMain.on('cambiar-mi-password', async (event, data) => {
+    try {
+        if (!empresaActual || !usuarioActual) {
+            return event.reply('cambiar-mi-password-respuesta', { success: false, msg: 'No hay sesión activa.' });
+        }
+        const passwordActual = String((data && data.passwordActual) || '');
+        const nuevaPassword = String((data && data.nuevaPassword) || '').trim();
+
+        if (!passwordActual || !nuevaPassword) {
+            return event.reply('cambiar-mi-password-respuesta', { success: false, msg: 'Completa la contraseña actual y la nueva.' });
+        }
+        if (nuevaPassword.length < 6) {
+            return event.reply('cambiar-mi-password-respuesta', { success: false, msg: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+        }
+
+        const { data: verif, error: errVerif } = await supabase.rpc('login_verificar', {
+            p_usuario: usuarioActual,
+            p_password: passwordActual
+        });
+        if (errVerif) throw errVerif;
+        if (!verif || !verif.ok) {
+            return event.reply('cambiar-mi-password-respuesta', {
+                success: false,
+                msg: (verif && verif.msg) || 'La contraseña actual es incorrecta.'
+            });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(nuevaPassword, salt);
+        const { error: errUpd } = await supabase
+            .from('usuarios')
+            .update({ password: hashedPassword })
+            .eq('usuario', usuarioActual)
+            .eq('empresa_id', empresaActual);
+        if (errUpd) throw errUpd;
+
+        try {
+            const { data: authUpd } = await supabase.auth.updateUser({ password: nuevaPassword });
+            if (authUpd && authUpd.session && authUpd.session.refresh_token) {
+                guardarRefreshAuth(authUpd.session.refresh_token);
+            }
+        } catch (e) { /* el disparador de 024 sincroniza auth.users al actualizar usuarios */ }
+
+        event.reply('cambiar-mi-password-respuesta', {
+            success: true,
+            msg: 'Contraseña actualizada correctamente.',
+            nuevaPassword
+        });
+    } catch (err) {
+        console.error('Error en cambiar-mi-password:', err);
+        event.reply('cambiar-mi-password-respuesta', { success: false, msg: err.message || 'No se pudo actualizar la contraseña.' });
+    }
+});
+
+ipcMain.on('sincronizar-password-recuperada', async (event, data) => {
+    try {
+        const accessToken = data && data.accessToken;
+        const refreshToken = data && data.refreshToken;
+        const authId = data && data.authId;
+        const nuevaPassword = String((data && data.nuevaPassword) || '').trim();
+        if (!accessToken || !authId || nuevaPassword.length < 6) {
+            return event.reply('sincronizar-password-recuperada-respuesta', { success: false });
+        }
+
+        const clienteTemp = createClient(
+            process.env.SUPABASE_URL || 'https://placeholder.supabase.co',
+            process.env.SUPABASE_KEY || 'missing-supabase-key'
+        );
+        await clienteTemp.auth.setSession({ access_token: accessToken, refresh_token: refreshToken || '' });
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(nuevaPassword, salt);
+        const { error } = await clienteTemp
+            .from('usuarios')
+            .update({ password: hashedPassword })
+            .eq('auth_id', authId);
+
+        try { await clienteTemp.auth.signOut(); } catch (e) {}
+        event.reply('sincronizar-password-recuperada-respuesta', { success: !error });
+    } catch (e) {
+        console.warn('No se pudo sincronizar tabla usuarios tras recuperación:', e.message);
+        event.reply('sincronizar-password-recuperada-respuesta', { success: false });
+    }
 });
 
 // === 2.1 VERIFICACIÓN DE 2FA (SEGUNDO PASO DE ACCESO) ===
@@ -3960,13 +4101,16 @@ ipcMain.on('crear-usuario-nuevo', async (event, data) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(data.password, salt);
 
-        const { error } = await supabase.from('usuarios').insert([{
+        const nuevoUsuario = {
             usuario: data.usuario,
             password: hashedPassword, // Usamos la contraseña encriptada
             rol: data.rol,
             estado: 'activo',
             empresa_id: empresaActual
-        }]);
+        };
+        if (data.email) nuevoUsuario.email = data.email.trim().toLowerCase();
+
+        const { error } = await supabase.from('usuarios').insert([nuevoUsuario]);
 
         if (error) throw error;
 
