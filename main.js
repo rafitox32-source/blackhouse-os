@@ -452,6 +452,7 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con exact
   "solucion": "Pasos concretos para resolverlo en 1-3 oraciones"
 }`;
 
+        let ultimoError = '';
         for (const modeloIA of MODELOS_IA_CATALOGO) {
             try {
                 const result = await openai.chat.completions.create({
@@ -472,7 +473,10 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con exact
                     ]
                 });
                 const txt = (result.choices?.[0]?.message?.content || '').trim();
-                const j = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+                const inicio = txt.indexOf('{');
+                const fin = txt.lastIndexOf('}');
+                if (inicio === -1 || fin === -1) throw new Error('Respuesta sin JSON');
+                const j = JSON.parse(txt.slice(inicio, fin + 1));
                 return responder({
                     ok: true,
                     analisis: {
@@ -482,10 +486,11 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con exact
                     }
                 });
             } catch (e) {
-                // Intentar con el siguiente modelo del catálogo
+                ultimoError = e?.message || String(e);
+                console.error(`[analizar-error-ia] Falló ${modeloIA}:`, ultimoError);
             }
         }
-        return responder({ ok: false, msg: 'No se pudo obtener respuesta de la IA en este momento.' });
+        return responder({ ok: false, msg: `No se pudo obtener respuesta de la IA (${ultimoError || 'error desconocido'}).` });
     });
 
     // Diagnóstico de placa: la IA redacta a partir de los hallazgos ya decididos por las reglas.
@@ -2914,7 +2919,7 @@ ipcMain.handle('ajustar-stock-manual', async (event, params) => {
         nota: motivo
     }]);
 
-    if (histErr) throw histErr;
+    if (histErr) console.warn('No se pudo registrar movimiento de stock:', histErr.message);
 
     return prodData;
 });
@@ -5242,6 +5247,28 @@ ipcMain.on('marcar-asistencia-manual', async (event, data) => {
     } catch (err) {
         console.error("Error al marcar asistencia:", err);
         event.reply('asistencia-respuesta', { success: false, msg: err.message });
+    }
+});
+
+ipcMain.on('obtener-monitor-jornada', async (event, filtros) => {
+    if (rolActual !== 'dueno') {
+        return event.reply('monitor-jornada-respuesta', { ok: false, msg: 'Solo el dueño puede ver el monitor de jornada.' });
+    }
+    try {
+        let q = supabase.from('asistencia')
+            .select('*')
+            .eq('empresa_id', empresaActual)
+            .order('fecha', { ascending: false })
+            .order('hora_entrada', { ascending: false })
+            .limit(200);
+        if (filtros && filtros.fecha) q = q.eq('fecha', filtros.fecha);
+        if (filtros && filtros.usuario) q = q.ilike('usuario', `%${filtros.usuario}%`);
+        const { data, error } = await q;
+        if (error) throw error;
+        event.reply('monitor-jornada-respuesta', { ok: true, filas: data || [] });
+    } catch (err) {
+        console.error("Error leyendo monitor de jornada:", err);
+        event.reply('monitor-jornada-respuesta', { ok: false, msg: err.message });
     }
 });
 

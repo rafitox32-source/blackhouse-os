@@ -4516,6 +4516,30 @@
         </div>
     </div>
 
+    <!-- Modal Agregar Modelo Nuevo -->
+    <div id="modal-agregar-modelo" class="modal-overlay">
+        <div class="modal-content" style="width: 400px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <h2 style="margin:0;">Agregar Modelo Nuevo</h2>
+                <button type="button" onclick="cerrarModalAgregarModelo()"
+                    style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✖</button>
+            </div>
+            <div class="input-group">
+                <label>Marca</label>
+                <input type="text" id="nuevo-modelo-marca" class="bh-input" placeholder="Ej: Motorola, Samsung, Xiaomi">
+            </div>
+            <div class="input-group">
+                <label>Nombre del modelo</label>
+                <input type="text" id="nuevo-modelo-nombre" class="bh-input" placeholder="Ej: Moto G84 5G"
+                    onkeyup="if(event.key==='Enter') confirmarAgregarModeloNuevo()">
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+                <button type="button" class="bh-btn-white" onclick="cerrarModalAgregarModelo()">Cancelar</button>
+                <button type="button" class="bh-btn-purple" onclick="confirmarAgregarModeloNuevo()">Agregar</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-usuario" class="modal-overlay">
         <div class="modal-content">
             <h2 style="margin-top:0;">Crear Nuevo Usuario</h2>
@@ -15739,13 +15763,28 @@
         }
 
         function agregarModeloNuevo() {
-            let marca = marcaActiva;
-            if (!marca) {
-                marca = (window.prompt('¿Marca del modelo nuevo? (ej: Samsung, Xiaomi, Motorola)') || '').trim();
-                if (!marca) return;
-            }
-            const modelo = (window.prompt(`Nombre del modelo nuevo para ${marca}:`) || '').trim();
-            if (!modelo) return;
+            const modal = document.getElementById('modal-agregar-modelo');
+            const marcaEl = document.getElementById('nuevo-modelo-marca');
+            const modeloEl = document.getElementById('nuevo-modelo-nombre');
+            if (!modal || !marcaEl || !modeloEl) return;
+            marcaEl.value = marcaActiva || '';
+            modeloEl.value = '';
+            modal.style.display = 'flex';
+            setTimeout(() => { (marcaActiva ? modeloEl : marcaEl).focus(); }, 50);
+        }
+
+        function cerrarModalAgregarModelo() {
+            const modal = document.getElementById('modal-agregar-modelo');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function confirmarAgregarModeloNuevo() {
+            const marca = (document.getElementById('nuevo-modelo-marca').value || '').trim();
+            const modelo = (document.getElementById('nuevo-modelo-nombre').value || '').trim();
+            if (!marca) return showToast('Ingresa la marca del equipo', 'warning');
+            if (!modelo) return showToast('Ingresa el nombre del modelo', 'warning');
+
+            cerrarModalAgregarModelo();
 
             if (!marcasModelosCache[marca]) marcasModelosCache[marca] = [];
             if (!marcasModelosCache[marca].includes(modelo)) marcasModelosCache[marca].push(modelo);
